@@ -1,0 +1,4 @@
+# Normalize line endings: Markdown and text files use LF in the repo and working tree
+* text=auto
+*.md text eol=lf
+LICENSE text eol=lf

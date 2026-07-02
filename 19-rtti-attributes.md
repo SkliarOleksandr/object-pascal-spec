@@ -146,7 +146,7 @@ type
 
 | | |
 |---|---|
-| **Introduced** | `[Ref]` ~XE2; `[weak]`/`[unsafe]`/`[volatile]` XE4-era, general 10.4+ |
+| **Introduced** | `[Ref]` ~XE2; `[weak]`/`[unsafe]`/`[volatile]` XE4 (mobile ARC), **all compilers 10.1 Berlin** |
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 
@@ -177,6 +177,10 @@ type
     full semantics in ch.14 §14.3.2 / ch.20 §20.6.
 - Matching is by attribute-class identity in `System` (`VolatileAttribute` etc.),
   not raw string — but a lightweight parser may match by name.
+- *Related toolchain attributes:* `[HPPGEN('C++ decl')]` (emit a custom C++Builder
+  header declaration — hundreds of uses in `System.pas`/`System.Types.pas`) and
+  `[Align(N)]` are likewise compiler-consumed. Ordinary attribute syntax; no
+  grammar impact.
 - *AST:* same attribute nodes; tag `magic: ref|volatile|weak|unsafe` after resolution.
 
 ---

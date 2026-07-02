@@ -19,10 +19,12 @@ ImplName    = Ident [ GenericArgs ] { "." Ident [ GenericArgs ] } ;
               (* implementation headers of generic types carry the type params
                  per segment: procedure TList<T>.Add / TDict<K,V>.TEnum.MoveNext *)
 FormalParams = FormalParam { ";" FormalParam } ;
-FormalParam  = [ AttributeGroup ] [ ParamModifier ] IdentList
+FormalParam  = [ AttributeGroup ] [ ParamModifier ] [ AttributeGroup ] IdentList
                [ ":" ParamType ] [ "=" ConstExpr ] ;
-               (* AttributeGroup: e.g. const [Ref] X: T — see §6.2.3 / ch.19 §19.3.3 *)
-ParamModifier = "var" | "const" | "out" | "constref" ;
+               (* [Ref] may precede or follow the modifier:
+                  "[Ref] const X: T" and "const [Ref] X: T" are both legal —
+                  see §6.2.3 / ch.19 §19.3.3 *)
+ParamModifier = "var" | "const" | "out" ;
 ```
 
 ---
@@ -130,29 +132,34 @@ procedure Swap(var A, B: Integer);
 - ⚠️ The argument **must be an assignable lvalue** of the *exact* type (no implicit
   conversion) — enforce in the type-checker.
 
-### 6.2.3 `const` parameters (and `constref`)
+### 6.2.3 `const` parameters (and `const [Ref]`)
 
 | | |
 |---|---|
-| **Introduced** | `const` Delphi 1; `constref` Delphi XE2-era |
+| **Introduced** | `const` Delphi 1; `[Ref]` attribute ~XE2 |
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 
 `const` = read-only parameter; the compiler may pass by reference for efficiency.
-`constref` forces by-reference passing.
+The `[Ref]` attribute forces by-reference passing.
 
 ```pascal
 function Hash(const Data: TBytes): Cardinal;
+procedure Draw(const [Ref] R: TRect);      // guaranteed by-reference
 ```
 
 **Semantics & parsing notes**
 
 - Assigning to a `const` parameter inside the body is a **compile error**.
-- `const [Ref]` / `constref` guarantee reference passing (relevant for large
-  records / interop). `[Ref]` is a compiler-recognized **parameter attribute**
-  (ch.19 §19.3.3) — the grammar allows an `AttributeGroup` before any formal
-  parameter; the RTL uses it heavily in COM/DirectX headers
-  (`const [Ref] ppResources: ID3D11Resource`).
+- `const [Ref]` guarantees reference passing (relevant for large records /
+  interop). `[Ref]` is a compiler-recognized **parameter attribute**
+  (ch.19 §19.3.3) and may be written **before or after** `const`
+  (`[Ref] const X` / `const [Ref] X`). The RTL uses it heavily in COM/DirectX
+  headers (`const [Ref] ppResources: ID3D11Resource`).
+- ⚠️ *Not Delphi:* FreePascal's `constref` keyword is the FPC equivalent of
+  `const [Ref]` — it is **not accepted by the Delphi compiler** (the D13 sources
+  contain it only inside `{$IFDEF FPC…}` branches, e.g. `System.Skia.pas`). A
+  Delphi parser must reject it.
 
 ### 6.2.4 `out` parameters
 

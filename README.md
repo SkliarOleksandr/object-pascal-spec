@@ -222,11 +222,22 @@ case-insensitive for identifiers and keywords); the lexer normalises case.
       `[Ref]`/`[Volatile]` (§19.3.3), `out` form of managed-record operators
       (§9.4.1), `{$IFOPT}` + directive-families table (§1.3.1–1.3.2),
       `dependency` on external declarations (§6.7.1).
+- [x] **Version verification pass** — all `(verify)` tags resolved against
+      official sources: XE3 intrinsic-type helpers confirmed; 10.1 Berlin =
+      `[weak]`/`[unsafe]`/`[volatile]` on all compilers; class ctors = 2010;
+      13.1 = no new syntax (Arm64EC + fixes + W1080). Removed `constref` —
+      it is FreePascal-only; Delphi uses `const [Ref]` (§6.2.3).
+- [x] **Full D13 source sweep** (VCL/FMX/SOAP/XML/Indy/ToolsAPI/…) — added:
+      string-literal→`TGUID` const initializers (§3.2.2), `@@` double
+      address-of (§4.8), nested variant parts (§9.1.3), `exports` inside units
+      (§1.1.3), `automated` legacy visibility (§11.2.1), `[HPPGEN]`/`[Align]`
+      (§19.3.3), `{$LEGACYIFEND}` `{$IF}`-terminator rules (§1.3.2), plus
+      Output/Codegen directive families (§1.3.1).
 
-**First full draft complete** — all 20 chapters + appendices A & B populated
-against the parser template and cross-checked against the RTL 13.0 sources.
-Next pass: verify `(verify)`-tagged version numbers (esp. 12/13 minor releases),
-cross-check grammar productions for consistency, and expand any feature the
+**First full draft complete and source-validated** — all 20 chapters +
+appendices A & B populated against the parser template, cross-checked against
+the complete Delphi 13.0 source tree, and version-verified against official
+release documentation. Next: build the AST parser; expand any feature the
 parser work surfaces as under-specified.
 
 ---

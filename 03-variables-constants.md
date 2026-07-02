@@ -253,6 +253,12 @@ const
   directive-dependent semantic, so the directive state at the declaration matters.
 - Structured typed constants use **parenthesised aggregate** initializers:
   records `(Field: val; …)`, arrays `(a, b, c)`, sets `[…]`.
+- ⚠️ *String-literal → `TGUID` magic:* a typed constant (or initialized variable)
+  of type `TGUID` may be initialized from a **GUID string literal** —
+  `const IID_IFoo: TGUID = '{00000000-…-000046}';` — a compiler-special implicit
+  conversion that exists *only* in constant-initializer position. Used throughout
+  the D13 sources (`Vcl.AxCtrls`, tethering, Winapi headers). The parser sees an
+  ordinary string initializer; the constant-evaluator must handle the conversion.
 - *AST:* `TypedConstDecl { name, type, value, writeable }`.
 
 ### 3.2.3 `resourcestring`

@@ -148,6 +148,11 @@ type
   Allowed member types are constrained (e.g. method pointers for events, ordinal/
   string/class properties). See ch.13/19.
 - `strict` is a **directive** (B.4.2) preceding `private`/`protected`.
+- ⚠️ *Legacy fifth visibility — `automated`:* old OLE-Automation code may declare an
+  `automated` section (like `published` but generating Automation dispatch info).
+  Unused in the D13 sources, but still accepted by the compiler — the parser should
+  accept it as a visibility keyword (it is a directive, B.4.2) and may flag it
+  legacy.
 - *AST:* tag each member with `{ visibility, strict }`.
 
 ---

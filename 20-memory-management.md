@@ -142,7 +142,7 @@ broke cycles.
 
 | | |
 |---|---|
-| **Introduced** | Delphi XE4-era; retained 10.4+ for interfaces |
+| **Introduced** | Delphi XE4 (mobile ARC); **all compilers 10.1 Berlin**; retained after ARC removal (10.4) |
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 

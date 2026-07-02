@@ -134,6 +134,10 @@ ContainsClause = "contains" IdentList ";" ;
 
 - `exports` (reserved word) lists routines exposed from a library, with directive
   modifiers `index`/`name` (directives, B.4.2).
+- ⚠️ *`exports` is also legal inside a **unit*** (interface or implementation
+  section) — the entries take effect when the unit is linked into a library. The
+  RTL uses this (`System.Internal.MachExceptions.pas`). The parser must accept
+  `ExportsClause` as a declaration in units, not only in library files.
 - `requires`/`contains` are package-only clauses; their identifier lists name other
   packages/units.
 - *AST:* `LibraryNode` / `PackageNode`.
@@ -262,7 +266,9 @@ the RTL):
 | Packaging | `{$WEAKPACKAGEUNIT}`, `{$DENYPACKAGEUNIT}`, `{$IMPLICITBUILD}` | package/BPL behaviour |
 | C++Builder interop | `{$HPPEMIT}`, `{$EXTERNALSYM}`, `{$NODEFINE}`, `{$OBJTYPENAME}` | .hpp header generation only (System.pas alone has ~340) — safe to skip |
 | IDE-only | `{$REGION 'x'}` / `{$ENDREGION}` | code folding; no compile effect |
-| RTTI & layout | `{$RTTI}` (ch.19), `{$M}`, `{$ALIGN}`, `{$MINENUMSIZE}` | metadata & memory layout |
+| RTTI & layout | `{$RTTI}` (ch.19), `{$M}`, `{$METHODINFO}`, `{$ALIGN}`, `{$MINENUMSIZE}` | metadata & memory layout |
+| Output/binary | `{$APPTYPE CONSOLE\|GUI}`, `{$SETPEFLAGS}`, `{$IMAGEBASE}`, `{$SONAME}`/`{$SOPREFIX}`/`{$SOVERSION}` (Linux), `{$E ext}` | executable/library output shaping |
+| Codegen misc | `{$EXCESSPRECISION}` (x64 floats), `{$VARPROPSETTER}` (COM Variant setters), `{$LEGACYIFEND}` (see 1.3.2 ⚠️) | target-specific codegen / grammar switches |
 
 ### 1.3.2 Conditional compilation
 
@@ -307,6 +313,11 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   (e.g. `{$IFOPT R-}` = "if range checking is off") — ties the conditional
   pre-pass to the switch-state stack of 1.3.1. Used in the RTL (`System.pas`,
   `System.Variants`).
+- ⚠️ *`{$IF}` terminator rules & `{$LEGACYIFEND}`:* historically `{$IF}` had to be
+  closed with `{$IFEND}` (not `{$ENDIF}`). Modern compilers accept `{$ENDIF}` for
+  `{$IF}` **unless** `{$LEGACYIFEND ON}` is in effect, which re-imposes the strict
+  pairing. The conditional pre-pass must implement both modes (D13 sources set it:
+  `Xml.*`, DUnit).
 - Symbols come from `{$DEFINE}`, project options, and built-ins (`MSWINDOWS`,
   `CPUX64`, `CONSOLE`, etc.).
 - *AST:* conditional structure is usually resolved away before the syntax tree;

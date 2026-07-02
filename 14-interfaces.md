@@ -166,7 +166,7 @@ object self-destructs when the count hits zero (when implemented via
 
 | | |
 |---|---|
-| **Introduced** | `[weak]`/`[unsafe]` Delphi XE4-era (ARC); generalized 10.4 |
+| **Introduced** | `[weak]`/`[unsafe]` Delphi XE4 (mobile ARC); **all compilers 10.1 Berlin** |
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 

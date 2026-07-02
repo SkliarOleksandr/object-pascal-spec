@@ -120,7 +120,7 @@ class function Make: TFoo; static;
 
 | | |
 |---|---|
-| **Introduced** | Delphi 2009/2010 |
+| **Introduced** | Delphi 2010 |
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 

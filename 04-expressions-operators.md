@@ -189,6 +189,10 @@ Inc(P);         // pointer math when enabled
 - ⚠️ `^` is **both** a prefix type-constructor (`^T` = pointer-to-T, ch.10) and a
   **postfix** dereference (`p^`). Position decides — track which in the AST.
 - `@` result type depends on `{$TYPEDADDRESS}` (typed vs. untyped pointer).
+- ⚠️ *`@@` double address-of:* for a **procedural variable**, `@P` yields the
+  routine address stored in it, while `@@P` yields the address **of the variable
+  itself**. Grammatically it is just `@` applied twice (`"@" Factor` recursion) —
+  no new token; the VCL uses it (`LPARAM(@@Hook)` in `Vcl.ActnMenus`).
 - `{$POINTERMATH ON}` enables `+`/`-`/`[]` on typed pointers (treating them
   array-like) — a directive-gated semantic; `PByte`/`PAnsiChar` enable it locally.
 

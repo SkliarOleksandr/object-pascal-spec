@@ -82,7 +82,8 @@ optionally tagged.
 
 ```ebnf
 VariantPart   = "case" [ Ident ":" ] OrdinalType "of" VariantField { ";" VariantField } ;
-VariantField  = ConstExpr { "," ConstExpr } ":" "(" [ FieldList ] ")" ;
+VariantField  = ConstExpr { "," ConstExpr } ":" "(" [ FieldList ] [ VariantPart ] ")" ;
+(* a variant branch may itself end with a nested variant part *)
 ```
 
 **Example**

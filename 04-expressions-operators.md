@@ -293,6 +293,11 @@ Built-in routines treated specially by the compiler (some accept **types** as
 arguments, which ordinary functions cannot). The parser must recognise these
 because their argument grammar differs from normal calls.
 
+> The **complete intrinsic catalog** (≈85 routines, grouped by parser-behavior
+> class, with version tags) lives in
+> [Appendix B §B.4.3](B-lexical-grammar.md#the-complete-intrinsic-catalog).
+> This section covers only the grammar-relevant forms.
+
 **Examples & forms**
 
 ```pascal

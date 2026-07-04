@@ -196,9 +196,33 @@ layer gives them special treatment only *after* name resolution.
 | Type-argument intrinsics | `SizeOf`, `TypeInfo`, `Default`, `Low`, `High`, `GetTypeKind`, `IsManagedType` | accept a *type* where an expression is expected (§4.11) |
 | By-ref intrinsics | `Inc`, `Dec`, `New`, `Dispose`, `GetMem`, `FreeMem`, `SetLength`, `SetString`, `Include`, `Exclude`, `Val` | first arg must be an lvalue (§4.11) |
 | Special-grammar intrinsics | `Write`, `Writeln`, `Read`, `Readln`, `Str` (colon-formatted args §4.11.2), `Slice` (open-array args only §4.11), `NameOf` (identifier arg §4.11.1), `Assert` | non-standard argument grammar |
-| Ordinary intrinsics | `Ord`, `Chr`, `Pred`, `Succ`, `Length`, `Assigned`, `Addr`, `Abs`, `Odd`, `Copy`, `Concat`, … | normal calls, compiler-folded |
+| Ordinary intrinsics | `Ord`, `Chr`, `Pred`, `Succ`, `Length`, `Assigned`, `Addr`, `Abs`, `Odd`, `Copy`, `Concat` — full catalog below | normal calls, compiler-folded |
 | Predefined types | `Integer`, `Boolean`, `Char`, `Byte`, `Double`, `TObject`, `TClass`, `IInterface`, `Pointer`, `Variant`, … | type identifiers from `System` (ch.02); note `string`/`file`/`set` are *reserved words* instead |
 | Predefined constants | `True`, `False`, `MaxInt`, `CompilerVersion`, … | constant folding; `nil` is a *reserved word* instead |
+
+#### The complete intrinsic catalog
+
+Verified against the official "Delphi Intrinsic Routines" list and the D13
+`System.pas`. **Behavior class** drives the parser/semantic treatment:
+*plain* = ordinary call (compiler may fold), *type-arg* = accepts a type
+identifier as an argument, *by-ref* = argument(s) must be lvalues,
+*special* = non-standard argument grammar.
+
+| Group | Intrinsics (introduced, when not original) |
+|---|---|
+| Flow (plain) | `Break` `Continue` `Exit` (`Exit(v)` 2009) `Halt` `RunError` |
+| Ordinal & numeric (plain, const-foldable) | `Abs` `Chr` `Hi` `Lo` `Odd` `Ord` `Pi` `Pred` `Round` `Sqr` `Succ` `Swap` `Trunc` |
+| Type queries (type-arg, compile-time const) | `SizeOf` `TypeInfo` `TypeHandle` ⚠️legacy `Default` (2009) `GetTypeKind` (XE7) `IsManagedType` (XE7) `IsConstValue` (XE7) `HasWeakRef` (XE7) — the XE7 four fold `if`/`case` branches at compile time |
+| Bounds (type-arg or value) | `High` `Low` |
+| Memory (by-ref) | `New` `Dispose` `GetMem` `FreeMem` `ReallocMem` `Initialize` `Finalize` `FillChar` |
+| Strings & dynamic arrays (by-ref where mutating) | `Length` `SetLength` `SetString` `Copy` `Concat` `Delete` `Insert` `Pos`❌(RTL, not intrinsic) — `Insert`/`Delete`/`Concat`/`Copy` work on **dynamic arrays since XE7** |
+| Sets (by-ref) | `Include` `Exclude` |
+| Pointers & addresses (plain) | `Addr` `Assigned` `Ptr` `ReturnAddress` (~XE2) `AddressOfReturnAddress` (~XE2) |
+| Atomics (plain; XE3) | `AtomicIncrement` `AtomicDecrement` `AtomicExchange` `AtomicCmpExchange` |
+| Special grammar | `Write` `WriteLn` `Read` `ReadLn` `Str` (colon-formatted args, §4.11.2; optional leading file var) `Val` (by-ref out params) `Slice` (open-array args only, §4.11) `Assert` `NameOf` (13.0, identifier arg §4.11.1) |
+| Classic file I/O (by-ref file var) | `Append` `Assign`/`AssignFile` `BlockRead` `BlockWrite` `Close`/`CloseFile` `Eof` `Eoln` `Erase` `FilePos` `FileSize` `Flush` `Rename` `Reset` `Rewrite` `Seek` `SeekEof` `SeekEoln` |
+| Variants (plain) | `VarCast` `VarCopy` |
+| Legacy (old `object` model) | `TypeOf` ⚠️; `Fail` (TP-era, verify current acceptance) |
 
 **Semantics & parsing notes**
 

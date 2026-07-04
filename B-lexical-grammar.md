@@ -108,6 +108,10 @@ IdentChar  = IdentStart | "0".."9" ;
 - ⚠️ *`&`-escape:* a leading `&` lets a **reserved word be used as an identifier**
   (e.g. `&begin`, `&type`). The `&` is not part of the name. Essential for
   interop and code generation.
+- ⚠️ *Undocumented: `&` before a numeric literal is accepted* — `X := &1;`
+  compiles (verified against dcc64 37.0) and the RTL ships it
+  (`System.Beacon.pas`: `FMDataMask[…] := &1`). The `&` is ignored. A parser
+  should accept `&` + integer literal, not just `&` + identifier.
 - Identifiers may contain Unicode letters; the leading char is a letter or `_`.
 
 ## B.4 Reserved words, directives & predefined identifiers

@@ -81,6 +81,13 @@ var
 - ⚠️ Only one identifier may be initialized — `var A, B: Integer = 0;` is illegal.
   The parser should reject an `=` initializer when `IdentList` has more than one
   name.
+- ⚠️ *Hint directives may sit BETWEEN the type and the initializer:*
+  `Default8087CW: Word platform = $033F;` (System.pas). Parse hints in both
+  positions.
+- ⚠️ *Procedural-type variables put the calling convention after the `;`, and
+  may still carry an initializer after it:*
+  `SSL_COMP_free_compression_methods : procedure; cdecl = nil;`
+  (IdSSLOpenSSLHeaders.pas).
 - Uninitialized globals are zero-filled; uninitialized **locals** are *not*
   (except managed types) — a semantics/codegen concern.
 
@@ -99,8 +106,9 @@ is **inferred**.
 **Grammar**
 
 ```ebnf
-InlineVarStmt = "var" Ident [ ":" TypeRef ] [ ":=" Expression ] ";" ;
-(* note ':=' here, an executable initializer, vs '=' for a section ConstExpr *)
+InlineVarStmt = "var" IdentList [ ":" TypeRef ] [ ":=" Expression ] ";" ;
+(* note ':=' here, an executable initializer, vs '=' for a section ConstExpr.
+   Multiple names are legal: `var V, S: string;` — System.SysUtils.pas *)
 ```
 
 **Example**

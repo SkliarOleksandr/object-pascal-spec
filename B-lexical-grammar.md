@@ -443,12 +443,19 @@ semantics live in the cited chapters; here we fix the *syntax* and the *names*.
 IdentList      = Ident { "," Ident } ;
 QualifiedIdent = Ident { "." Ident } ;                 (* unit.scope.name *)
 
-Designator     = ( Ident [ GenericArgs ] | "inherited" [ Ident ] )
+Designator     = ( Ident [ GenericArgs ] | Literal | "inherited" [ Ident ] )
                  { Selector } ;
-Selector       = "." Ident [ GenericArgs ]              (* member access; args → 16.3 *)
+(* Literal heads are legal: helper calls bind to literals —
+   '.amazonaws.com'.Length, 42.ToString, and even nil^ (all shipped in
+   the D13 sources). `inherited` may be selected directly: inherited.Foo. *)
+Selector       = "." MemberName [ GenericArgs ]         (* member access; args → 16.3 *)
                | "[" ExprList "]"                       (* index / array prop *)
                | "(" [ ExprList ] ")"                   (* call *)
                | "^" ;                                  (* pointer dereference *)
+MemberName     = Ident | ?any reserved word? ;
+(* ⚠️ Member position is unambiguous, so dcc accepts RESERVED WORDS as
+   member names: FMX declares `TAnimationType = (&In, ...)` but call sites
+   write `TAnimationType.In` — no &-escape needed after '.'. *)
 ExprList       = Expression { "," Expression } ;
 ```
 

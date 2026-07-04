@@ -127,6 +127,14 @@ P := TPair<string, Integer>.Create('a', 1);
     after `>` is `(` , `.` , or another expected continuation, treat it as a generic
     instantiation; otherwise treat `<` as comparison.
   - The construct `TList<Integer>.Create` works because `>` is followed by `.`.
+  - *Refined follower rule (corpus-validated by PasTree):* accept generic args
+    whenever the token after `>` **cannot start an operand** (`;` `)` `]` `,`
+    `=` `then` `do` `and`…). Provably safe: the comparison reading
+    `(a < X) > ⟨follower⟩` would lack a right operand — a guaranteed syntax
+    error — so no valid comparison is ever stolen. Real cases:
+    `Value.AsType<TBytes>;`, `AsType<char> = #0`, `if X.AsType<Boolean> then`,
+    `@Proc<T>;`. `(` remains the genuinely ambiguous follower and reads as a
+    call, matching dcc.
 - Practical implementations keep a speculative parse / backtracking path for this.
   **Document the heuristic in the parser** — this is where most hand-written
   Object Pascal parsers get it wrong.

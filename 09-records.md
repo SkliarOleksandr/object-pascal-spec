@@ -66,6 +66,11 @@ type
 
 - `packed` is a **reserved word** prefix. Alignment affects layout/`SizeOf`, not
   parsing — but record-compatibility for interop depends on it.
+- ⚠️ *Semi-documented `end align N` clause:* a record may end with
+  `end align 16;` — the RTL ships it with a conditional operand:
+  `end align {$IFDEF CPU64BITS} 16 {$ELSE} 8 {$ENDIF};`
+  (System.SysUtils.pas). The operand is a constant expression; a parser must
+  accept `align` (contextual word) after the closing `end`.
 
 ### 9.1.3 Variant records (`case` part)
 
@@ -214,6 +219,10 @@ type
   (`Add`, `Equal`, `Implicit`…), not the symbolic tokens. Each maps to a
   symbolic/relational operator or conversion. The **use site** (ch.04) is
   unchanged; resolution dispatches to the matching `class operator`.
+- ⚠️ *Operator names may be reserved words:* `class operator In(...)` and its
+  implementation header `class operator TFontStyleExt.In(...)` ship in
+  FMX.Graphics.pas — the name position after `operator` (and after `.` in the
+  qualified form) must accept keywords.
 - `Implicit`/`Explicit` define conversions to/from other types — they drive
   implicit/explicit cast resolution.
 - *AST:* `OperatorDecl { opName, params[], resultType }` as a record member.

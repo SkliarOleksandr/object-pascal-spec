@@ -138,6 +138,8 @@ ContainsClause = "contains" IdentList ";" ;
   section) — the entries take effect when the unit is linked into a library. The
   RTL uses this (`System.Internal.MachExceptions.pas`). The parser must accept
   `ExportsClause` as a declaration in units, not only in library files.
+- ⚠️ *A library may omit the main `begin`-block entirely:*
+  `library X; ... exports Foo name 'Test'; end.` (DUnit's testXpgenLib.dpr).
 - `requires`/`contains` are package-only clauses; their identifier lists name other
   packages/units.
 - *AST:* `LibraryNode` / `PackageNode`.
@@ -320,6 +322,10 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   `Xml.*`, DUnit).
 - Symbols come from `{$DEFINE}`, project options, and built-ins (`MSWINDOWS`,
   `CPUX64`, `CONSOLE`, etc.).
+- ⚠️ *`{$DEFINE}`/`{$UNDEF}` (and switch changes) are LOCAL to the unit being
+  compiled* — a batch preprocessor must reset to the project define-set per
+  file. Leaking one unit's defines into the next mis-branches conditional
+  chains (empirically: System.ObjAuto.pas selects the wrong ASM variant).
 - ⚠️ *Undocumented dcc tolerances* (all shipped in `System.ObjAuto.pas`,
   verified against RTL 13.0 — a conforming parser must accept them):
   1. **Multiple `{$ELSE}` in one chain** — `{$IF}…{$ELSE}…{$ELSE OTHERCPU}…{$ENDIF}`

@@ -76,6 +76,8 @@ end;
 - ⚠️ *Bare `inherited`* (no name) calls the ancestor method of the **same name**,
   forwarding the **same arguments** — the resolver must reconstruct the current
   method's signature. `inherited Foo(x)` names an explicit ancestor method.
+- ⚠️ *Bare `inherited` takes selectors directly:* `inherited.AsExtended`
+  (FMX.Grid.Style.pas) — allow a selector chain on the bare form.
 - `inherited` is a **reserved word** (§B.4.1) and may appear as the head of a
   `Designator` (§B.8).
 - *AST:* `InheritedExpr { methodName?, args? }`.

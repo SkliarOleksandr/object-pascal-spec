@@ -19,11 +19,13 @@ ImplName    = Ident [ GenericArgs ] { "." Ident [ GenericArgs ] } ;
               (* implementation headers of generic types carry the type params
                  per segment: procedure TList<T>.Add / TDict<K,V>.TEnum.MoveNext *)
 FormalParams = FormalParam { ";" FormalParam } ;
-FormalParam  = [ AttributeGroup ] [ ParamModifier ] [ AttributeGroup ] IdentList
+FormalParam  = [ AttributeGroup ] [ ParamModifier ]
+               AttrName { "," AttrName }
                [ ":" ParamType ] [ "=" ConstExpr ] ;
-               (* [Ref] may precede or follow the modifier:
-                  "[Ref] const X: T" and "const [Ref] X: T" are both legal —
-                  see §6.2.3 / ch.19 §19.3.3 *)
+AttrName     = [ AttributeGroup ] Ident ;
+               (* [Ref] may precede or follow the modifier, and may precede
+                  EACH name in the list: "const [REF] CLSID, [REF] IID: TGUID"
+                  (Datasnap.DSIntf.pas) — see §6.2.3 / ch.19 §19.3.3 *)
 ParamModifier = "var" | "const" | "out" ;
 ```
 
@@ -333,6 +335,12 @@ CallConv = "register" | "stdcall" | "cdecl" | "pascal" | "safecall" | "winapi" |
 
 - All are **directives** (B.4.2). `register` is the Delphi default; `winapi` maps to
   the platform's native API convention (`stdcall` on Win32, etc.).
+- ⚠️ *Placement is loose (all corpus-shipped):* the convention may follow the
+  heading **without** a separating semicolon (`function F(...): Bool stdcall;`,
+  System.SysUtils.pas), appear inside anonymous-method literals before the body
+  (`function(...): HResult stdcall begin`, Vcl.Edge.pas), and several directives
+  may run together after one `;` without separators
+  (`...; cdecl varargs;`, System.Curl.pas).
 - `safecall` additionally wraps the routine in HRESULT/exception marshalling (COM).
 - Mostly codegen, but the parser must accept them in the directive list after a
   heading.

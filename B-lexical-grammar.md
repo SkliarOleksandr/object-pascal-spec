@@ -110,9 +110,16 @@ IdentChar  = IdentStart | "0".."9" ;
   interop and code generation.
 - Identifiers may contain Unicode letters; the leading char is a letter or `_`.
 
-## B.4 Reserved words vs. directives
+## B.4 Reserved words, directives & predefined identifiers
 
-This split is **critical for the lexer**.
+Object Pascal words fall into **three lexical categories**, and getting the
+split right is critical for the lexer:
+
+| Category | Lexer emits | Can be a user identifier? | Who interprets |
+|---|---|---|---|
+| **Reserved words** (B.4.1) | keyword token | only with `&`-escape | parser (grammar) |
+| **Directives** (B.4.2) | identifier token | yes, freely | parser (by position) |
+| **Predefined identifiers** (B.4.3) | identifier token | yes (shadowing) | semantic resolution |
 
 ### B.4.1 Reserved words (always keywords — cannot be identifiers without `&`)
 
@@ -135,14 +142,15 @@ type       unit       until      uses       var        while      with       xor
 ### B.4.2 Directives (context-sensitive — legal as identifiers elsewhere)
 
 ```
-absolute   abstract   assembler  automated  cdecl      contains   default
-delayed    deprecated dispid     dynamic    experimental export    external
-far        final      forward    helper     implements index      local
-message    name       near       nodefault  noreturn   operator   out
-overload   override   package    pascal     platform   private    protected
-public     published  read       readonly   reference  register   reintroduce
-requires   resident   safecall   sealed     static     stdcall    stored
-strict     unsafe     varargs    virtual    winapi     write      writeonly
+absolute   abstract   assembler  at         automated  cdecl      contains
+default    delayed    dependency deprecated dispid     dynamic    experimental
+export     external   far        final      forward    helper     implements
+index      local      message    name       near       nodefault  noreturn
+on         operator   out        overload   override   package    pascal
+platform   private    protected  public     published  read       readonly
+reference  register   reintroduce requires  resident   safecall   sealed
+static     stdcall    stored     strict     unsafe     varargs    virtual
+winapi     write      writeonly
 ```
 
 **Semantics & parsing notes**
@@ -152,9 +160,52 @@ strict     unsafe     varargs    virtual    winapi     write      writeonly
   their grammatical position** (e.g. `read`/`write` inside a property
   declaration). The lexer emits them as plain identifiers; the **parser**
   interprets them contextually.
-- *`noreturn`* (13.0) is a new directive on procedure declarations.
-- `NameOf` (13.0) is an **intrinsic function identifier**, not a reserved word —
-  it parses as a normal call and is resolved by the compiler.
+- ⚠️ *`on` is a directive, not reserved* — the exception-handler keyword
+  (`except on E: EFoo do`, ch.18) is context-parsed; `var on: Boolean;` is legal.
+  Same for *`at`* (`raise E at Addr`, ch.18 §18.3.1).
+- ⚠️ *Dual status of `inline` and `library`:* both appear in the reserved-word
+  list (B.4.1) **and** behave like directives — `inline` as a routine directive
+  (ch.06 §6.4.1), `library` as a hint directive (ch.02 §2.5.2). They are still
+  reserved (cannot be identifiers); the dual role only affects the parser's
+  grammar positions, not the lexer.
+- *`noreturn`* (13.0) is a new directive on procedure declarations;
+  *`dependency`* modifies `external` declarations (ch.06 §6.7.1).
+
+### B.4.3 Predefined (compiler-known) identifiers — the third category
+
+| | |
+|---|---|
+| **Introduced** | Pascal/D1 core; extended over time (see per-feature tags) |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+Beyond reserved words and directives there is a third lexical category: **plain
+identifiers that the compiler knows specially**. The lexer must NOT tokenize
+them as keywords — they are ordinary identifiers, can be **shadowed** by user
+declarations, and bind to scope `System` unless overridden. The parser/semantic
+layer gives them special treatment only *after* name resolution.
+
+| Group | Names | Special treatment (where) |
+|---|---|---|
+| Implicit locals | `Result`, `Self` | injected into scope (§6.1.1, §11.3.3, §15.1.1) |
+| Flow intrinsics | `Break`, `Continue`, `Exit` | flow statements (§5.6) |
+| Type-argument intrinsics | `SizeOf`, `TypeInfo`, `Default`, `Low`, `High`, `GetTypeKind`, `IsManagedType` | accept a *type* where an expression is expected (§4.11) |
+| By-ref intrinsics | `Inc`, `Dec`, `New`, `Dispose`, `GetMem`, `FreeMem`, `SetLength`, `SetString`, `Include`, `Exclude`, `Val` | first arg must be an lvalue (§4.11) |
+| Special-grammar intrinsics | `Write`, `Writeln`, `Read`, `Readln`, `Str` (colon-formatted args §4.11.2), `Slice` (open-array args only §4.11), `NameOf` (identifier arg §4.11.1), `Assert` | non-standard argument grammar |
+| Ordinary intrinsics | `Ord`, `Chr`, `Pred`, `Succ`, `Length`, `Assigned`, `Addr`, `Abs`, `Odd`, `Copy`, `Concat`, … | normal calls, compiler-folded |
+| Predefined types | `Integer`, `Boolean`, `Char`, `Byte`, `Double`, `TObject`, `TClass`, `IInterface`, `Pointer`, `Variant`, … | type identifiers from `System` (ch.02); note `string`/`file`/`set` are *reserved words* instead |
+| Predefined constants | `True`, `False`, `MaxInt`, `CompilerVersion`, … | constant folding; `nil` is a *reserved word* instead |
+
+**Semantics & parsing notes**
+
+- ⚠️ *Shadowing is legal:* `var Exit: Integer;` compiles and hides the intrinsic
+  in that scope — a correct parser keeps these as identifiers and lets scope
+  resolution decide. This is the key difference from B.4.1 words.
+- ⚠️ *Boundary cases:* `string`, `file`, `set`, `nil` look like predefined names
+  but are **reserved words** (B.4.1); `Boolean`/`Integer`/`True` look like
+  keywords but are **identifiers**. Get these eight right and the rest follows.
+- The intrinsics' special argument grammars are specified in the sections
+  referenced above; this table is the lexer-facing index.
 
 ## B.5 Numeric literals
 

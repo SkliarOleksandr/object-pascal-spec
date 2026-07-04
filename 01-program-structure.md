@@ -320,6 +320,19 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   `Xml.*`, DUnit).
 - Symbols come from `{$DEFINE}`, project options, and built-ins (`MSWINDOWS`,
   `CPUX64`, `CONSOLE`, etc.).
+- ⚠️ *Undocumented dcc tolerances* (all shipped in `System.ObjAuto.pas`,
+  verified against RTL 13.0 — a conforming parser must accept them):
+  1. **Multiple `{$ELSE}` in one chain** — `{$IF}…{$ELSE}…{$ELSE OTHERCPU}…{$ENDIF}`
+     compiles; each `$ELSE` activates iff no earlier branch was taken.
+  2. **Trailing junk after a `{$IF}` expression** is ignored —
+     `{$IF SizeOf(Extended) >= 10)}` (stray `)`) compiles.
+  3. Trailing text after `{$ELSE}`/`{$ENDIF}`/`{$IFEND}` is an ignored
+     comment (`{$ENDIF OTHERCPU}`, `{$ELSE !CPUX86}`) — widely used.
+- ⚠️ *`{$IF}` sees unit constants:* the real compiler evaluates `$IF` with
+  visibility of constants/enums (`{$IF Ord(soBeginning) = STREAM_SEEK_SET}`,
+  `Xml.adomxmldom.pas`) — full evaluation is only possible **after** semantic
+  analysis. A standalone preprocessor must define a fallback policy for such
+  expressions (e.g. evaluate to False and flag).
 - *AST:* conditional structure is usually resolved away before the syntax tree;
   optionally retained as trivia for tooling.
 

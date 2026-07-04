@@ -524,6 +524,11 @@ end;
   hex, `//` and `{ }` comments still valid. A parser should treat the body as an
   opaque token stream: scan for the closing `end` at nesting level 0, honouring
   string/comment boundaries. Do **not** try to parse it as Pascal.
+- ⚠️ *Closing-`end` detection must treat `@` as a word character:* BASM labels
+  may be NAMED `END` — `JS @@END` / `@@END:` ship in Vcl.Graphics.pas — so the
+  scan for the closing `end` must require the preceding character to be neither
+  an identifier character **nor `@`**. BASM also accepts double-quoted strings
+  (`CMP AL,"'"`, System.SysUtils.pas).
 - Pascal identifiers (locals, params, globals) may be referenced from BASM —
   symbol resolution *into* the asm body is a semantic/codegen concern; the parser
   only needs to capture the raw text/tokens.

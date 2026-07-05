@@ -22,7 +22,7 @@ Four precedence levels, all binary operators left-associative. Full table in
   (levels 2/3) bind **tighter than the relational operators** (level 4), so
   `a = b and c` parses as `a = (b and c)`. The AST follows the table; never
   special-case it.
-- *AST:* `BinaryExpr { op, left, right }`, `UnaryExpr { op, operand }`.
+- *AST:* `BinaryOp { op, left, right }`, `UnaryOp { op, operand }`.
 
 ---
 
@@ -241,7 +241,7 @@ if Obj is not TButton then Exit;
 **Semantics & parsing notes**
 
 - Parsed as the `is`+`not` token pair at relational level (no new token, §B.4.1).
-- *AST:* either a `BinaryExpr { op: isNot }` or `UnaryExpr(not, IsExpr)` — pick one
+- *AST:* either a `BinaryOp { op: isNot }` or `UnaryOp(not, IsExpr)` — pick one
   representation and normalise.
 
 ---
@@ -389,7 +389,7 @@ Str(Val:0, S);          // RTL itself uses this (System.pas)
 - `:precision` is only meaningful for floating-point values.
 - Additionally, `Write`/`Writeln`/`Read`/`Readln` accept an optional leading file
   variable — their arity/typing is fully compiler-magical.
-- *AST:* `WriteArg { value, width?, precision? }` within the intrinsic call node.
+- *AST:* `FormattedArg { value, width?, precision? }` within the intrinsic call node.
 
 ---
 

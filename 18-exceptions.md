@@ -84,7 +84,7 @@ end;
 - The bound identifier `E` is scoped to that handler's `Statement`; the instance is
   **freed automatically** when the handler exits (do **not** `Free` it).
 - `else` (no type) catches anything unmatched.
-- *AST:* `ExceptionHandler { varName?, excType, body }`.
+- *AST:* `ExceptOn { varName?, excType, body }`.
 
 ---
 

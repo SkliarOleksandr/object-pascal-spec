@@ -60,7 +60,7 @@ end.
 - The legacy `(Input, Output)` program parameter list is accepted and ignored.
 - ⚠️ The file ends with `end.` — the trailing **`.`** terminates the compilation
   unit; tokens after it are ignored.
-- *AST:* `ProgramNode { name, uses, block }`.
+- *AST:* `Program { name, uses, block }`.
 
 ### 1.1.2 The unit file
 
@@ -108,7 +108,7 @@ end.
   `implementation`; the interface declaration acts as an implicit forward.
 - `initialization`/`finalization` are reserved words; the legacy bare `begin … end`
   before `end.` is an older equivalent of `initialization`.
-- *AST:* `UnitNode { name, interfaceDecls, implDecls, init?, final? }`.
+- *AST:* `Unit { name, interfaceDecls, implDecls, init?, final? }`.
 
 ### 1.1.3 Library & package files
 
@@ -142,7 +142,7 @@ ContainsClause = "contains" IdentList ";" ;
   `library X; ... exports Foo name 'Test'; end.` (DUnit's testXpgenLib.dpr).
 - `requires`/`contains` are package-only clauses; their identifier lists name other
   packages/units.
-- *AST:* `LibraryNode` / `PackageNode`.
+- *AST:* `Library` / `Package`.
 
 ---
 

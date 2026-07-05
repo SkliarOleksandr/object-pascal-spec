@@ -62,7 +62,7 @@ begin Result := A + B; end;
   the body. `Exit(value)` also sets it (ch.05 §5.6.3).
 - A function whose `Result` is never assigned returns an undefined value (managed
   types excepted) — a hint/warning, not a parse error.
-- *AST:* `RoutineDecl { kind, name, params[], resultType?, directives[], body? }`.
+- *AST:* `Routine { kind, name, params[], resultType?, directives[], body? }`.
 
 ### 6.1.2 Forward declarations
 
@@ -430,7 +430,7 @@ function MessageBox(hWnd: HWND; lpText, lpCaption: PChar; uType: UINT): Integer;
 - `dependency` (directive) lists additional libraries the import needs at link
   time — used mainly by the mobile/posix toolchains
   (`external libc name 'dlopen' dependency 'dl'`).
-- *AST:* `RoutineDecl { …, external: { lib, symbol?, index?, delayed } }`.
+- *AST:* `Routine { …, external: { lib, symbol?, index?, delayed } }`.
 
 ---
 
@@ -482,7 +482,7 @@ begin Inner; end;
 
 - Nested routines create a lexical scope chain — the resolver must allow `Inner`
   to see `Outer`'s locals (captured via a static link / frame pointer).
-- *AST:* nested `RoutineDecl` within the parent's declaration sections.
+- *AST:* nested `Routine` within the parent's declaration sections.
 
 ---
 
@@ -541,4 +541,4 @@ end;
 - Platform-gated: x86/x64 only; ARM/ARM64 compilers reject `asm` (RTL guards these
   blocks with `{$IFDEF}`s — 53 uses in RTL 13 sources). The old `assembler`
   directive on headings is accepted and ignored (legacy).
-- *AST:* `AsmBlock { rawTokens / sourceRange }` as a statement node or routine body.
+- *AST:* `AsmStmt { rawTokens / sourceRange }` as a statement node or routine body.

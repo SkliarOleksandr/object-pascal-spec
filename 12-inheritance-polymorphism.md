@@ -80,7 +80,7 @@ end;
   (FMX.Grid.Style.pas) — allow a selector chain on the bare form.
 - `inherited` is a **reserved word** (§B.4.1) and may appear as the head of a
   `Designator` (§B.8).
-- *AST:* `InheritedExpr { methodName?, args? }`.
+- *AST:* `Inherited { methodName?, args? }`.
 
 ---
 

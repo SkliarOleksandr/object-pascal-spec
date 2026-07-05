@@ -34,7 +34,10 @@ construct:
 - **Static semantics** — scope & name resolution, type/assignment compatibility,
   overload & operator resolution, evaluation order, what is legal where.
 - **AST shape hints** — the node kind(s) the construct should lower to and the
-  meaningful children/attributes a tree-builder needs to retain.
+  meaningful children/attributes a tree-builder needs to retain. The `*AST:*`
+  hint names the actual implemented PasTree kind (e.g. `Call`, `BinaryOp`); a few
+  spec concepts intentionally fold into one kind (documented as aliases in
+  `object-pascal-tree/tools/KindsCheck`, which cross-checks the two vocabularies).
 
 Prose descriptions stay short; the **Grammar** and **Semantics & parsing notes**
 blocks are where the value lives.
@@ -132,7 +135,7 @@ var Max := if A > B then A else B;
   problem; both branch expressions must be assignment-compatible to a common type.
 - *Evaluation:* only the selected branch is evaluated (short-circuit), unlike the
   `IfThen` RTL functions.
-- *AST:* `ConditionalExpr { cond, thenExpr, elseExpr }`. Result type = common type
+- *AST:* `InlineIf { cond, thenExpr, elseExpr }`. Result type = common type
   of the two branches.
 ````
 

@@ -133,7 +133,7 @@ end;
   not just the block.
 - *Type inference:* with `:=` and no `: TypeRef`, the type is the static type of the
   initializer expression. `var X := 1` ⇒ `Integer`.
-- *AST:* `InlineVarDecl { name, type?, init?, pos }` as a statement node.
+- *AST:* `InlineVar { name, type?, init?, pos }` as a statement node.
 
 ### 3.1.4 `absolute` variables (overlay)
 

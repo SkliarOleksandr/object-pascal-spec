@@ -273,7 +273,7 @@ const
   the prefix — treat such cases as lex errors.
 - *Value type:* the literal's type is the smallest predefined integer type that
   holds it (up to `Int64`/`UInt64`); see ch.02 for the integer type ladder.
-- *AST:* `IntLiteral { value, radix, rawText }` (keep `rawText` for fidelity).
+- *AST:* `IntLit { value, radix, rawText }` (keep `rawText` for fidelity).
 
 ### B.5.2 Real (floating-point) literals
 
@@ -337,7 +337,7 @@ C := 'A';                   // a 1-char string literal; Char if context demands
   `string`. Carry this as a "char-or-string literal" until typing.
 - `#n` gives the character with ordinal `n` (decimal or `$hex`). `^X` caret
   notation (e.g. `^M` = `#13`) is also accepted.
-- *AST:* `StringLiteral { segments[] }` or a folded constant value.
+- *AST:* `StrLit { segments[] }` or a folded constant value.
 
 ### B.6.2 Caret control characters
 
@@ -395,7 +395,7 @@ const SQL =
 - *Trailing newline:* the line break immediately before the closing `'''` is
   **omitted** from the value; add a blank line to force a trailing newline.
 - *Embedding quotes:* use a larger odd run (`'''''`) to embed a literal `'''`.
-- *AST:* lower to the same `StringLiteral` node as B.6.1 after de-indentation; keep
+- *AST:* lower to the same `StrLit` node as B.6.1 after de-indentation; keep
   a flag/raw text if source fidelity is needed.
 
 ## B.7 Operators & punctuation tokens

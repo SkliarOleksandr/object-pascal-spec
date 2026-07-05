@@ -102,7 +102,7 @@ end;
   in `implementation`. The resolver pairs them.
 - Method directives (`virtual`, `override`, `overload`, `abstract`, `reintroduce`,
   `static`, `dynamic`, `message`, `inline`, …) follow the header — see ch.12/15.
-- *AST:* `MethodDecl` header + linked body `RoutineDecl`.
+- *AST:* `MethodDecl` header + linked body `Routine`.
 
 ---
 

@@ -210,7 +210,7 @@ type
   set constructors (B.9), `case` labels, and array bounds. The `..` token is the
   marker; the surrounding context determines the production.
 - Bounds must be compile-time constants of the same ordinal base type.
-- *AST:* `SubrangeType { lo, hi, baseType }`.
+- *AST:* `Subrange { lo, hi, baseType }`.
 
 ---
 

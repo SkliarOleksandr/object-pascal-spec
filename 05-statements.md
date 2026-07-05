@@ -68,7 +68,7 @@ PNode^.Value := 1;
   target is a property so later passes can expand it.
 - *Type rule:* RHS must be assignment-compatible with the LHS type (implicit
   conversions per ch.04; otherwise error).
-- *AST:* `AssignStmt { target: Designator, value: Expression }`.
+- *AST:* `Assign { target: Designator, value: Expression }`.
 
 ### 5.1.2 Procedure / method call statement
 
@@ -106,7 +106,7 @@ Obj.Method;
   analysis with the operand type known.
 - *`@` operator:* `@Foo` / `Foo` distinctions interact with `{$M}`/typed-`@`
   modes — note for ch.04.
-- *AST:* `CallExpr { callee, args[] }` used in statement position
+- *AST:* `Call { callee, args[] }` used in statement position
   (`ExprStmt`). Record whether parentheses were present (empty arg list vs.
   no arg list) — relevant for the reference-vs-call decision.
 
@@ -275,7 +275,7 @@ Caption := if Connected then 'Online' else 'Offline';
   result type; that common type is the type of the whole expression.
 - *Evaluation:* short-circuit — only the selected branch is evaluated (contrast
   with the `IfThen` RTL functions, which evaluate both arguments).
-- *AST:* `ConditionalExpr { cond, thenExpr, elseExpr }`.
+- *AST:* `InlineIf { cond, thenExpr, elseExpr }`.
 
 ---
 
@@ -453,7 +453,7 @@ for I := 0 to Count - 1 do
 **Semantics & parsing notes**
 
 - *Binds to* the innermost loop; error if used outside any loop.
-- *AST:* may stay `CallExpr("Break")` until a lowering pass rewrites it to
+- *AST:* may stay `Call("Break")` until a lowering pass rewrites it to
   `BreakStmt { targetLoop }`.
 
 ### 5.6.2 `Continue`
@@ -602,3 +602,4 @@ end;
   rewrite each unqualified member access to an explicit `target.member`. Multiple
   targets desugar to nested single-target `with`s (right-to-left).
 - *Targets* must be record/object/interface-typed designators.
+- *AST:* `WithStmt { targets: Designator[], body }`.

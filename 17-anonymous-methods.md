@@ -83,7 +83,7 @@ P(42);
   **after** the literal's `end`. The parser must keep the argument-list nesting
   open across the whole embedded `Block` — a classic source of confusing syntax
   errors when hand-written parsers close the call too early.
-- *AST:* `AnonMethodExpr { kind, params[], resultType?, body, captured[] }`.
+- *AST:* `AnonMethod { kind, params[], resultType?, body, captured[] }`.
 
 ---
 
@@ -125,4 +125,4 @@ end;
   single shared variable — a frequent bug. A semantic-analysis warning candidate.
 - The resolver must compute the **capture set** (which enclosing locals/`Self` are
   referenced) to model lifetime; record it on the AST node.
-- *AST:* `captured[]` listing captured symbols on the `AnonMethodExpr`.
+- *AST:* `captured[]` listing captured symbols on the `AnonMethod`.

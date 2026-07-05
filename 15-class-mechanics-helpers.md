@@ -183,7 +183,7 @@ end;
   polymorphic factory. The resolver must allow constructor calls on metaclass
   values.
 - `TObject`'s `ClassType`/`ClassName`/`InheritsFrom` operate on metaclasses.
-- *AST:* `ClassRefType { baseClass }`.
+- *AST:* `ClassOf { baseClass }`.
 
 ---
 

@@ -153,6 +153,13 @@ type
   Unused in the D13 sources, but still accepted by the compiler — the parser should
   accept it as a visibility keyword (it is a directive, B.4.2) and may flag it
   legacy.
+- ⚠️ *Visibility words vs. member names (dcc-verified):* at **member-start**
+  position, a bare `private`/`protected`/`public`/`published` is ALWAYS a
+  section marker — `protected: string;` does not declare a field (E2029). But
+  in identifier-list **continuation** the same words are ordinary names:
+  `on, protected, sealed, abstract: string;` compiles. Every NON-visibility
+  directive word is a valid field name even at list start
+  (`default, index: Integer;` compiles). Disambiguation is purely positional.
 - *AST:* tag each member with `{ visibility, strict }`.
 
 ---

@@ -341,6 +341,12 @@ CallConv = "register" | "stdcall" | "cdecl" | "pascal" | "safecall" | "winapi" |
   (`function(...): HResult stdcall begin`, Vcl.Edge.pas), and several directives
   may run together after one `;` without separators
   (`...; cdecl varargs;`, System.Curl.pas).
+- ⚠️ *The semicolon after the LAST directive in a run is OPTIONAL* (dcc-verified):
+  `procedure A; stdcall` followed directly by the next declaration compiles, as
+  do `procedure P; platform deprecated` + `procedure`/`begin`, and
+  `function F; external shell32 name 'X'` + newline + the next `function`.
+  A parser must treat any following declaration keyword (or body `begin`) as a
+  valid terminator for a directive run and for the `external` clause.
 - `safecall` additionally wraps the routine in HRESULT/exception marshalling (COM).
 - Mostly codegen, but the parser must accept them in the directive list after a
   heading.

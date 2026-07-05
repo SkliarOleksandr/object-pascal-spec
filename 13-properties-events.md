@@ -58,6 +58,10 @@ type
 - `read`/`write`/`index`/`stored`/`default`/`nodefault`/`implements` are
   **directives** (B.4.2), keyword only inside a property declaration — elsewhere
   valid identifiers.
+- ⚠️ *A property may be NAMED by any directive word* — including the specifier
+  words themselves: `property default: string read FData;`,
+  `property on: string ...`, `property index: ...` all compile (dcc-verified).
+  Only the parse position distinguishes the name from a specifier.
 - *AST:* `PropertyDecl { name, type, reader?, writer?, index?, … }`.
 
 ### 13.1.2 Array properties

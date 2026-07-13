@@ -318,7 +318,10 @@ for var J := High(A) downto Low(A) do   // inline counter, 10.3+
   limit expression per iteration).
 - ⚠️ *Counter is read-only in the body:* assigning to the loop variable inside the
   body is a compile error; its value **after** normal completion is undefined.
-- *Scope of inline counter:* limited to the loop statement.
+- ⚠️ *Scope of inline counter:* limited to **the loop statement** — an exception
+  to the general to-end-of-enclosing-block rule of 03 §3.1.3. Sibling loops may
+  reuse the same counter name; a resolver that declares the counter into the
+  enclosing block scope produces false E2004 redeclarations (dcc-verified).
 - *AST:* `ForStmt { counter, inlineDecl?, startExpr, limitExpr, dir: to|downto, body }`.
 
 ### 5.5.2 `for … in` (for-in loop)
@@ -354,6 +357,10 @@ for var Item in MyList do Process(Item);
   **semantic analysis** resolves `GetEnumerator` (including via class/record
   helpers) and the element type.
 - *Distinguish from 5.5.1* by the `in` keyword vs. `:=`.
+- ⚠️ *Scope of inline element:* same rule as the 5.5.1 counter — the `for var E`
+  element is scoped to **the loop statement**, not the enclosing block; sibling
+  for-in loops may reuse the element name (dcc-verified: two consecutive
+  `for var LWord in ...` loops over different arrays).
 - *AST:* `ForInStmt { elementVar, inlineDecl?, collection, body }`.
 
 ### 5.5.3 `while … do`

@@ -118,8 +118,8 @@ clashes between multiple interfaces.
 **Grammar**
 
 ```ebnf
-MethodResolution = "procedure" InterfaceName "." Method "=" ClassMethod ";"
-                 | "function"  InterfaceName "." Method "=" ClassMethod ";" ;
+MethodResolution = "procedure" InterfaceName [ TypeArgs ] "." Method "=" ClassMethod ";"
+                 | "function"  InterfaceName [ TypeArgs ] "." Method "=" ClassMethod ";" ;
 ```
 
 **Example**
@@ -136,6 +136,14 @@ type
 
 - The `IFace.Method = ClassMethod` form appears in the class member list — parse it
   distinctly from a normal method declaration (it has `=` and dotted LHS).
+- ⚠️ *Generic interface on the LHS:* the interface name may carry **type
+  arguments** — dcc-verified in the RTL: `function IEnumerable<string>.
+  GetEnumerator = GetEnumeratorStr;` (System.IOUtils), `IEnumerable<T>` variants
+  (System.JSON). The `<...>` here is a type-argument REFERENCE to the implemented
+  interface — semantic analysis must NOT treat it as generic parameter
+  declarations the way it does for a qualified method implementation header
+  (`TList<T>.Add` in 16 §16.3); doing so declares bogus symbols (`string`, `T`)
+  into the class scope and yields false E2004.
 
 ---
 

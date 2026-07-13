@@ -127,7 +127,8 @@ bundle of units (BPL).
 ExportsClause = "exports" ExportEntry { "," ExportEntry } ";" ;
 ExportEntry   = Ident [ "index" ConstExpr ] [ "name" ConstExpr ] [ "resident" ] ;
 RequiresClause = "requires" IdentList ";" ;
-ContainsClause = "contains" IdentList ";" ;
+ContainsClause = "contains" ContainsEntry { "," ContainsEntry } ";" ;
+ContainsEntry  = QualifiedIdent [ "in" StringLiteral ] ;   (* uses-like paths *)
 ```
 
 **Semantics & parsing notes**
@@ -140,8 +141,12 @@ ContainsClause = "contains" IdentList ";" ;
   `ExportsClause` as a declaration in units, not only in library files.
 - ⚠️ *A library may omit the main `begin`-block entirely:*
   `library X; ... exports Foo name 'Test'; end.` (DUnit's testXpgenLib.dpr).
-- `requires`/`contains` are package-only clauses; their identifier lists name other
-  packages/units.
+- `requires`/`contains` are package-only clauses: `requires` names other
+  PACKAGES (semantic analysis must not resolve them as units); `contains` names
+  units and — like a program's `uses` — may bind each to a source path with
+  `in 'path'` (dcc-verified: the RTL's own BuildWinRTL.dpk,
+  `System.SysUtils in 'sys\System.SysUtils.pas'`). A `.dpk`'s contains-list is
+  therefore a full uses-like dependency graph, analyzable like a program's.
 - *AST:* `Library` / `Package`.
 
 ---
@@ -183,6 +188,12 @@ uses
   visible considerations for circular-reference rules; `implementation` uses break
   interface circular dependencies.
 - The `in 'file'` form binds a unit name to a source path (program/`.dpr` only).
+- ⚠️ *A declaration may hide a used unit's name:* declaring a type/var/const with
+  the same name as a used unit's (leaf) name is legal and HIDES the bare unit
+  name from that point on — the unit stays reachable via its fully-qualified
+  name. dcc-verified in the RTL: Winapi.WinSock2 declares
+  `QOS = _QualityOfService` while using Winapi.Qos (leaf name `Qos`). A resolver
+  that treats this as a redeclaration produces false E2004.
 - *AST:* ordered `uses[]` per section, each `{ qualifiedName, path? }`.
 
 ### 1.2.2 Dotted (namespaced) unit names

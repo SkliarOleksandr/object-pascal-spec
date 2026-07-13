@@ -131,6 +131,12 @@ end;
   enclosing block** — not the whole routine. This is a block-scope rule absent from
   classic Pascal; the name-resolution pass must track declaration order/position,
   not just the block.
+- ⚠️ *For-header exception:* a `for var K := ...` counter / `for var E in ...`
+  element is scoped to **the loop statement itself**, NOT to the enclosing block —
+  two sibling loops may reuse the same name without a redeclaration error
+  (dcc-verified: two consecutive `for var LWord in ...` loops compile fine). A
+  resolver applying the general to-end-of-block rule to for-header declarations
+  produces false E2004. See 05 §5.5.1/§5.5.2.
 - *Type inference:* with `:=` and no `: TypeRef`, the type is the static type of the
   initializer expression. `var X := 1` ⇒ `Integer`.
 - *AST:* `InlineVar { name, type?, init?, pos }` as a statement node.

@@ -123,6 +123,16 @@ end;
   ref count.
 - ⚠️ *Loop-variable capture gotcha:* capturing a `for`-loop counter captures the
   single shared variable — a frequent bug. A semantic-analysis warning candidate.
+- ⚠️ *Own scope, own `Result`:* an anonymous method body owns its locals and its
+  OWN implicit `Result` (typed by the literal's result type). Two sibling
+  literals may declare the same local name (dcc-verified:
+  System.JSON.Serializers has two adjacent literals each with `var LSer`), and
+  `Result :=` inside a `function: Boolean` literal binds to the LITERAL's
+  Boolean result even when the enclosing function returns `string`
+  (System.SysUtils TraverseDirectory callbacks). The enclosing routine's
+  `Result` is NOT capturable (dcc E2555 "Cannot capture symbol 'Result'") — a
+  resolver that lets the enclosing `Result` leak into the literal's body
+  produces false E2010.
 - The resolver must compute the **capture set** (which enclosing locals/`Self` are
   referenced) to model lifetime; record it on the AST node.
 - *AST:* `captured[]` listing captured symbols on the `AnonMethod`.

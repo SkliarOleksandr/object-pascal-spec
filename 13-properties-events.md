@@ -120,7 +120,7 @@ property Top:    Integer index 1 read GetCoord write SetCoord;
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 
-One array property per class may be marked `default`, allowing `Obj[i]` shorthand
+An array property may be marked `default`, allowing `Obj[i]` shorthand
 for `Obj.Prop[i]`.
 
 **Example**
@@ -137,6 +137,14 @@ property Items[I: Integer]: TItem read GetItem; default;
   Disambiguate by position/operand: bare `default;` = default array property;
   `default 0;` = default value. The parser must not conflate them.
 - `Obj[i]` on a class with a default array property lowers to the property access.
+- ⚠️ *Overloaded default array properties:* a class may declare **several** array
+  properties under the SAME name, each marked `default`, differing by index
+  signature — indexing picks the overload by index type. dcc-verified in the RTL:
+  `System.RegularExpressions.TGroupCollection` has `property Item[const Index:
+  Integer]` and `property Item[const Index: string]`, both `default`. A resolver
+  must treat a same-name property redeclaration as an overload, not an E2004.
+  (An earlier revision of this section said "one array property per class may be
+  marked default" — that was wrong.)
 - *AST:* `isDefaultArrayProp: true`.
 
 ### 13.1.5 Streaming specifiers: `default`, `nodefault`, `stored`

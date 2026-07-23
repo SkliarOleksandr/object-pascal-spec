@@ -87,6 +87,19 @@ property Items[Index: Integer]: TItem read GetItem write SetItem;
   be field-backed — `read`/`write` must be methods.
 - The `[ ... ]` here is a parameter list in the *declaration*, but indexing at the
   *use* site (shares `Selector` `[ExprList]`, §B.8).
+- ⚠️ *The index parameter's NAME is a pure signature placeholder with no
+  scope of its own* (dcc-verified: `System.Actions.pas`'s
+  `TCustomShortCutList.ShortCuts`, whose getter is `function
+  GetShortCuts(Index: Integer): TShortCut`) — nothing in the language can
+  ever reference this name, anywhere, including inside the getter/setter:
+  `Obj.Items[3]` lowers to the getter/setter by parameter POSITION, per the
+  general call-binding rule (ch.06) — Pascal has no named-argument call
+  syntax, so the property's own stated name is never matched against the
+  getter's. (Every array property surveyed in the RTL happens to reuse the
+  same name on both sides by convention — this is a STYLE choice, not a
+  language requirement; nothing enforces it.) The resolver must still give
+  this name a declaration somewhere reachable only from within the
+  property's own bracket list, or it misreads as an undeclared reference.
 
 ### 13.1.3 Indexed properties (`index` directive)
 

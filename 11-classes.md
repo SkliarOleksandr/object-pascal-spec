@@ -100,6 +100,9 @@ end;
 
 - The in-class declaration is a header; the body uses `TClass.Method` qualification
   in `implementation`. The resolver pairs them.
+- The qualified body MAY omit the parameter list when it matches the
+  declared header exactly — same rule as a forward-declared global routine,
+  see ch.06 §6.1.2 (dcc-verified in the RTL).
 - Method directives (`virtual`, `override`, `overload`, `abstract`, `reintroduce`,
   `static`, `dynamic`, `message`, `inline`, …) follow the header — see ch.12/15.
 - *AST:* `MethodDecl` header + linked body `Routine`.
@@ -277,6 +280,13 @@ var C: TGrid.TCell;     // qualified access
 
 - Nested types are referenced `OuterClass.NestedType`; they obey the enclosing
   class's visibility section.
+- A nested CLASS's own methods are implemented with the FULL qualified chain,
+  one segment per nesting level: `procedure TGrid.TCell.Method;` (not just
+  `TCell.Method;`) — resolve each segment inside the PREVIOUS segment's member
+  scope (`TGrid` at unit scope, `TCell` inside `TGrid`'s scope), not all at
+  unit scope, or a nested class's own name is invisible outside its outer
+  class. See `06-routines.md` `ImplName` (arbitrary dotted chain) and
+  `16-generics.md` §"nested generic" for the same rule under generics.
 - *AST:* nested `TypeDecl`/`ConstDecl` as class members.
 
 ---

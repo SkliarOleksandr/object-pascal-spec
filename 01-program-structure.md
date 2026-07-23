@@ -216,6 +216,12 @@ Unit names may be dotted (`System.SysUtils`); the leading segments form a
 - *Unit scope names* (a project setting) let `Classes` resolve to `System.Classes`
   implicitly. This is configuration the resolver consults; the parser just records
   the dotted name.
+- *Unit aliases* (dcc `-A` / project setting `DCC_UnitAlias`, e.g.
+  `WinTypes=Winapi.Windows`) rewrite a `uses` name to a different real unit
+  BEFORE any file/namespace resolution runs — a whole-name match, applied at
+  most once (aliases do not chain). Distinct from unit scope names: an alias
+  changes WHICH unit a name means; a unit scope name only supplies a missing
+  namespace prefix for a name that would otherwise be ambiguous/unqualified.
 
 ### 1.2.3 Qualified name resolution
 

@@ -85,6 +85,16 @@ ForwardOrExternal = "forward" ";" | ExternalDecl ;
 
 - The later definition may omit the parameter list (it is taken from the forward
   declaration). `interface`-section routine headers are implicitly forward (ch.01).
+- ⚠️ *Applies equally to a QUALIFIED method implementation* — `procedure
+  TFoo.Bar;` may drop the parameter list of a class-declared `procedure
+  Bar(AParam: Integer);` exactly like a plain forward-declared global routine
+  (dcc-verified: `Vcl.CheckLst.pas`'s `TCustomCheckListBox.ToggleClickCheck`
+  is declared with `(Index: Integer)` and implemented as bare
+  `ToggleClickCheck;`, using `Index` freely in the body). The resolver must
+  pull the parameter NAMES (not just count) from the matched declaration into
+  the implementation's own body scope in this case — omitting them is not
+  the same as the routine having zero parameters. See ch.11 §11.1.3 for the
+  method-pairing rule this interacts with.
 - *AST:* link the forward header to its later body; one logical routine.
 
 ---

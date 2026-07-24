@@ -178,6 +178,30 @@ type
   `{$SCOPEDENUMS ON}` they must be qualified (`TSuit.Clubs`). This changes
   name resolution — the parser/semantic layer must honour the directive state at
   the type's declaration site.
+- ⚠️ *"Enclosing scope" for a TYPE nested inside a class/record/interface is NOT
+  that struct's own member scope — it is the struct's OWN enclosing scope,
+  climbing past every level of nesting, all the way to the `interface`/
+  `implementation` SECTION the outermost struct sits in.* Nesting an enum
+  inside a class only namespaces the TYPE name (`TFoo.TInner`); it never
+  namespaces the VALUES, no matter how many classes deep the enum sits, and
+  regardless of `private`/`protected`/`public` on the enum or its container.
+  dcc-verified:
+  - A `private type TInner = (ivOne, ...)` nested in class `A` resolves
+    `ivOne` bare inside a method of a completely UNRELATED class `B` in the
+    same unit.
+  - The same nested enum, declared in the `interface` section, resolves
+    `ivOne` bare from a DIFFERENT unit that merely `uses` this one — even
+    though the enum's own visibility is `private` (unit-private normally
+    blocks cross-unit access to the TYPE name itself — `TA.TInner` from
+    outside correctly gets `E2361 Cannot access private symbol` — but the
+    literal VALUES leak regardless, as if injected at the interface section
+    directly).
+  - The same shape declared in the `implementation` section instead stays
+    unit-local (no cross-unit leak) — ordinary implementation-section
+    privacy, unaffected by the nesting quirk above.
+  - A LOCAL nested type inside a routine body is the one case that stays
+    properly scoped: its enum's values are NOT visible outside that routine
+    (real E2003) — a routine is not a struct, so the climb never starts.
 - *AST:* `EnumType { elements: [ { name, explicitValue? } ], scoped: bool }`.
 
 ### 2.2.5 Subrange types

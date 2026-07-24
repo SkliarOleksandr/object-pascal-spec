@@ -241,6 +241,42 @@ disambiguate.
   unit-name matches greedily, then falls back to member access. Keep the raw
   dotted token list on the AST so the resolver can re-segment.
 
+### 1.2.4 Implicit units (`System`, `SysInit`)
+
+| | |
+|---|---|
+| **Introduced** | Turbo Pascal (`System`); `SysInit` early 32-bit Delphi |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+Every unit's interface scope is seeded with **two** units it never names in a
+`uses` clause: `System` and `SysInit`.
+
+**Semantics & parsing notes**
+
+- `System` is the well-known case (every RTL/VCL identifier not otherwise
+  qualified — `TObject`, `Integer`, `sLineBreak`, ... — resolves through it).
+  Less obvious: `SysInit` gets the exact same treatment, silently, for a
+  smaller set of linker/startup globals — `HInstance`, `ModuleIsLib`,
+  `ModuleIsPackage`, `DllProc`, and a few more (`rtl/sys/SysInit.pas`). RTL
+  code (`System.Classes.pas`'s `InternalReadComponentRes`, among others)
+  reads `HInstance` bare with no `uses SysInit` anywhere in the file.
+- dcc-verified: a unit with an **empty** `uses` clause (or none at all) still
+  compiles a function body that reads `HInstance` or `ModuleIsLib`. Naming
+  either unit explicitly (`uses System;` / `uses SysInit;`) is itself a
+  compile error — `E2004 Identifier redeclared` — the exact same failure
+  mode for both, confirming they're implemented the same way.
+- Neither unit implicitly uses itself, and `SysInit` does not implicitly gain
+  `System` some OTHER way than every other unit does — it has no `uses`
+  clause of its own and relies on the same blanket `System` seeding.
+- A resolver: after normal local/`uses` lookup misses, fall back to `System`
+  first, then `SysInit`, before reporting an undeclared identifier — mirror
+  this order for BOTH plain references and inherited-member lookups inside
+  method bodies (both are ordinary last-resort scopes, not just an
+  expression-level special case).
+- *AST:* no node — this is pure resolver seeding, invisible in the parse
+  tree; a `uses[]` list never gains a `System`/`SysInit` entry.
+
 ---
 
 ## 1.3 Compiler directives

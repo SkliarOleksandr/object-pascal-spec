@@ -267,6 +267,17 @@ const
   directive-dependent semantic, so the directive state at the declaration matters.
 - Structured typed constants use **parenthesised aggregate** initializers:
   records `(Field: val; …)`, arrays `(a, b, c)`, sets `[…]`.
+- ⚠️ *A record aggregate's `Field` names are NOT ordinary identifier
+  references* — resolved structurally against the declared type's own
+  fields, not by scope lookup (a semantic layer that treats `Field` in
+  `(Field: val; …)` as a normal reference and looks it up in the enclosing
+  scope chain will false-E2003 on it, since a field name generally isn't
+  declared anywhere reachable that way — real bug, found on
+  `UtilWindowClass: TWndClass = (style: 0; lpfnWndProc: ...)`,
+  System.Classes.pas). Applies equally to a `var` with an initializer
+  (3.1.2), not just `const` — the same aggregate grammar. A nested aggregate
+  (record-typed field) resolves against THAT field's own type, recursively;
+  array/set elements have no names and need no special handling.
 - ⚠️ *String-literal → `TGUID` magic:* a typed constant (or initialized variable)
   of type `TGUID` may be initialized from a **GUID string literal** —
   `const IID_IFoo: TGUID = '{00000000-…-000046}';` — a compiler-special implicit

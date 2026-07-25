@@ -108,6 +108,28 @@ type
   parentheses, not statements. The leading token is `case` inside a record body
   (vs. statement context). The tag field is optional (`case OrdinalType of` with no
   name).
+- ⚠️ *A named tag is a REAL FIELD, not an annotation on the type.* `case Tag:
+  T of` **declares** `Tag` as an ordinary field of the record: it occupies
+  storage and is freely readable and assignable (`R.Tag := 1`). dcc-verified
+  both ways — the assignment compiles, and naming the tag grows `SizeOf` by
+  the tag type's width (12 vs 8 for the same record with an anonymous `case
+  Integer of`). A semantic layer must therefore DECLARE the name; treating it
+  as a reference makes it read as an undeclared identifier (real bug, found
+  on `System.Curl.pas`'s `case data: Integer of` and 7 more RTL tag names,
+  one of them an *escaped* reserved word: `case &type: POINTER_INPUT_TYPE of`
+  in `Winapi.Windows`).
+- ⚠️ *Whether the tag is named cannot be decided from the node kind* — an
+  anonymous `case Integer of` also leads with a plain identifier (the type
+  name). The `:` after it is the only discriminator.
+- ⚠️ *The tag type is a full `OrdinalType`, not merely a type NAME:* besides a
+  named reference it may be an **inline anonymous enum** — as in the example
+  above, `case Kind: (skCircle, skRect) of` — or a **subrange** (`case Tag:
+  0..9 of`). A parser that accepts only a type name here fails on the `(` and
+  then desynchronises: the branch LABELS get read as field names and
+  `(Radius: Double)` as an enum type.
+- Branch fields belong to the **enclosing record**, not to a sub-scope — every
+  branch's fields, at every nesting depth, are members of the same record and
+  must collect into its one member scope.
 - All variant branches **overlay the same memory** (a union); no runtime checking.
 - *AST:* `VariantPart { tagField?, tagType, branches: [ { labels[], fields[] } ] }`.
 

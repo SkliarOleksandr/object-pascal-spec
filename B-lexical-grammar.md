@@ -198,6 +198,7 @@ layer gives them special treatment only *after* name resolution.
 | Special-grammar intrinsics | `Write`, `Writeln`, `Read`, `Readln`, `Str` (colon-formatted args §4.11.2), `Slice` (open-array args only §4.11), `NameOf` (identifier arg §4.11.1), `Assert` | non-standard argument grammar |
 | Ordinary intrinsics | `Ord`, `Chr`, `Pred`, `Succ`, `Length`, `Assigned`, `Addr`, `Abs`, `Odd`, `Copy`, `Concat` — full catalog below | normal calls, compiler-folded |
 | Predefined types | `Integer`, `Boolean`, `Char`, `Byte`, `Double`, `TObject`, `TClass`, `IInterface`, `Pointer`, `Variant`, … | type identifiers from `System` (ch.02); note `string`/`file`/`set` are *reserved words* instead |
+| Compiler-only type | `OpenString` | legal **only** as a `var` parameter's type (classic open-string param); anywhere else dcc gives `E2005 'OpenString' is not a type identifier`. Not declared in `System.pas` at all |
 | Predefined constants | `True`, `False`, `MaxInt`, `CompilerVersion`, … | constant folding; `nil` is a *reserved word* instead |
 
 #### The complete intrinsic catalog
@@ -220,8 +221,9 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
 | Pointers & addresses (plain) | `Addr` `Assigned` `Ptr` `ReturnAddress` (~XE2) `AddressOfReturnAddress` (~XE2) |
 | Atomics (plain; XE3) | `AtomicIncrement` `AtomicDecrement` `AtomicExchange` `AtomicCmpExchange` |
 | Special grammar | `Write` `WriteLn` `Read` `ReadLn` `Str` (colon-formatted args, §4.11.2; optional leading file var) `Val` (by-ref out params) `Slice` (open-array args only, §4.11) `Assert` `NameOf` (13.0, identifier arg §4.11.1) |
-| Classic file I/O (by-ref file var) | `Append` `Assign`/`AssignFile` `BlockRead` `BlockWrite` `Close`/`CloseFile` `Eof` `Eoln` `Erase` `FilePos` `FileSize` `Flush` `Rename` `Reset` `Rewrite` `Seek` `SeekEof` `SeekEoln` |
-| Variants (plain) | `VarCast` `VarCopy` |
+| Classic file I/O (by-ref file var) | `Append` `Assign`/`AssignFile` `BlockRead` `BlockWrite` `Close`/`CloseFile` `Eof` `Eoln` `Erase` `FilePos` `FileSize` `Rename` `Reset` `Rewrite` `Seek` `SeekEof` `SeekEoln` `Truncate` — `Flush`❌(RTL, not intrinsic) |
+| Directories | `GetDir` only — `ChDir` `MkDir` `RmDir`❌(RTL, not intrinsic) |
+| Variants (plain) | `VarCast` `VarCopy` `VarClear` `VarArrayRedim` — NOT `VarCastOle`/`VarCopyNoInd`/`VarArrayGet`/`VarArrayPut` (see note) |
 | Legacy (old `object` model) | `TypeOf` ⚠️; `Fail` (TP-era, verify current acceptance) |
 
 **Semantics & parsing notes**
@@ -234,6 +236,32 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
   keywords but are **identifiers**. Get these eight right and the rest follows.
 - The intrinsics' special argument grammars are specified in the sections
   referenced above; this table is the lexer-facing index.
+- ⚠️ *A semantic layer must seed exactly this catalog into its implicit
+  `System` scope — no more, no less.* Both errors are real:
+  - **Missing** an intrinsic false-E2003s correct code. The whole classic
+    file-I/O family above plus `GetMem`/`FreeMem`/`ReallocMem`, `Halt`,
+    `GetDir`, `CompilerVersion` and the `Var*` four have **no declaration
+    anywhere** — nothing else can ever resolve them.
+  - **Over-including** silently accepts code dcc rejects. `Abort` is the
+    trap: it looks like a flow intrinsic next to `Exit`/`Halt`, but it is an
+    ordinary `System.SysUtils` routine, so code using it without that unit
+    must still be an error.
+- ⚠️ *Do not decide membership by grepping `System.pas`* — that misreads the
+  source three separate ways, each of which makes a real intrinsic look
+  declared: `GetMem`/`FreeMem`/`ReallocMem` appear only as **fields** of the
+  deprecated `TMemoryManager` record; `VarClear`/`VarCast`/`VarCopy`/
+  `VarArrayRedim` only as fields of `TVariantManager`; and
+  `CompilerVersion`'s `const CompilerVersion = 0.0;` sits inside a
+  `(* … *)` **comment** ("assigned a value by the compiler when the system
+  unit is compiled"). Conversely `Close`/`Halt` appear in the file, but only
+  as *calls*.
+- ✅ *The reliable test, per name:* compile a unit whose `uses` clause is
+  **empty** and which merely mentions the name (`procedure P; begin X end;`).
+  `E2003` ⇒ not compiler-known (needs a unit — `Abort`, `VarCastOle`,
+  `MemAvail`, …); any *other* diagnostic, or none, ⇒ the name resolved, so it
+  is either an intrinsic or a real `System`/`SysInit` declaration — separate
+  those two by whether the unit actually declares it. This is how the ❌
+  annotations above (`Pos`, `Flush`, `ChDir`/`MkDir`/`RmDir`) were settled.
 
 ## B.5 Numeric literals
 

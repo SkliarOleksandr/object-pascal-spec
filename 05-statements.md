@@ -609,4 +609,25 @@ end;
   rewrite each unqualified member access to an explicit `target.member`. Multiple
   targets desugar to nested single-target `with`s (right-to-left).
 - *Targets* must be record/object/interface-typed designators.
+- ⚠️ *The target's type is very often declared in ANOTHER unit* — in practice
+  that is the common case, not the exception (`with LTZ.StandardDate do`,
+  where the field's type comes from `Winapi.Windows` —
+  `System.DateUtils.pas`). An implementation that opens the with scope by
+  *joining* the target type's member scope therefore only covers same-unit
+  targets, since a scope reference is meaningful only inside its own unit's
+  model; cross-unit members have to be bound the same way any other
+  cross-unit reference is. Getting this wrong makes every member of such a
+  body read as an undeclared identifier (464 of them across the D13 RTL).
+- ⚠️ *A target designator is evaluated in the ENCLOSING scope, not its own
+  with scope* — the scope covers the body only. `with A.B do` resolves `A`
+  and `B` outside, so an identifier inside a target expression must not be
+  looked up among the target's own members.
+- *Full precedence order for an unqualified name in the body:* innermost
+  `with` before outer ones; within one `with`, targets right-to-left; then —
+  because the with scope is opened *inside* the enclosing body — the
+  enclosing method's own and inherited members; then used units; then the
+  implicit `System`/`SysInit` units.
+- A target may be any designator, not just a variable: a field
+  (`with Rec.Field do`), or a parameterless function call
+  (`with GetRecord do`), whose type is the routine's result type.
 - *AST:* `WithStmt { targets: Designator[], body }`.

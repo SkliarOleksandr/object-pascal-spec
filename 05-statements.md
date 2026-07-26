@@ -604,6 +604,15 @@ end;
   the `with` targets, **then** against the enclosing scope. With multiple targets
   `with A, B do`, resolution goes **right-to-left** (the last/innermost target
   wins). This silently shadows locals/fields and is the classic `with` bug.
+- ⚠️ *A target member outranks EVERYTHING else in scope* — "first" above is
+  absolute, not merely "before the unit scope". dcc-verified: a member wins
+  over an enclosing class's own field, a routine local, a **parameter**, a
+  unit-level global, and even an **inline `var` declared inside the with body
+  itself** (`with GR do begin var Shared: Integer; Shared := 42; end` is an
+  error when `GR.Shared` is a `string` — the member still won). So a semantic
+  layer must not treat a member hit as a fallback for names it failed to bind:
+  when the target's type is only known later (cross-unit — see below), an
+  earlier best-effort binding has to be **overridden**, not just gap-filled.
 - *Parser/AST guidance:* **do not** flatten `with` during parsing — keep
   `WithStmt { targets: Designator[], body }` so a later name-resolution pass can
   rewrite each unqualified member access to an explicit `target.member`. Multiple

@@ -62,6 +62,18 @@ type
   words themselves: `property default: string read FData;`,
   `property on: string ...`, `property index: ...` all compile (dcc-verified).
   Only the parse position distinguishes the name from a specifier.
+- ⚠️ *A specifier may name an INHERITED accessor, including one declared in
+  another unit* — `property StatusBar: WordBool index 403 read GetWordBoolProp
+  write SetWordBoolProp` where both accessors belong to an ancestor
+  (`System.Win.InternetExplorer`'s `TWebBrowser` over
+  `System.Win.OleControls`' `TOleControl` — the D13 RTL does this 47 times in
+  those two units alone). A resolver that only runs its ancestor walk for
+  method BODIES misses these: the specifier sits in the type DECLARATION, yet
+  must resolve through the full cross-unit ancestor chain like any bare
+  member reference. Note the ordering hazard for a deferred/multi-pass
+  design: the ancestor walk reads the heritage clause of this same
+  declaration, so heritage references must be resolved in an earlier round
+  than the specifiers that depend on them.
 - *AST:* `PropertyDecl { name, type, reader?, writer?, index?, … }`.
 
 ### 13.1.2 Array properties

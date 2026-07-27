@@ -178,6 +178,21 @@ type
   `{$SCOPEDENUMS ON}` they must be qualified (`TSuit.Clubs`). This changes
   name resolution — the parser/semantic layer must honour the directive state at
   the type's declaration site.
+  - The state is **positional**, not per-unit: one unit routinely toggles it
+    around a group of declarations, so "honour at the declaration site" means
+    tracking WHERE each `{$SCOPEDENUMS}` directive sits in the token stream,
+    not keeping a single flag.
+  - `{$PUSHOPT}`/`{$POPOPT}` (1.3.4) save and restore it along with the
+    letter switches. dcc-verified: `{$SCOPEDENUMS ON} … {$PUSHOPT}
+    {$SCOPEDENUMS OFF} TOpen = (Gamma,…) {$POPOPT} TAfter = (Epsilon,…)` —
+    bare `Gamma` compiles, bare `Epsilon` is E2003.
+  - ⚠️ *Ignoring the directive is worse than a missing diagnostic* — a leaked
+    value can SHADOW a type visible through the implicit `System` scope or a
+    used unit, silently corrupting resolution downstream: `System.Threading`
+    (whole unit under `{$SCOPEDENUMS ON}`) declares `TLoopStateFlags =
+    (Exception, …)`; injected, that `Exception` VALUE captures the heritage
+    reference in `EAggregateException = class(Exception)`, and every
+    inherited-member lookup below it fails.
 - ⚠️ *"Enclosing scope" for a TYPE nested inside a class/record/interface is NOT
   that struct's own member scope — it is the struct's OWN enclosing scope,
   climbing past every level of nesting, all the way to the `interface`/

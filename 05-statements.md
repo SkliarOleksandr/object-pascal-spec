@@ -636,7 +636,19 @@ end;
   because the with scope is opened *inside* the enclosing body — the
   enclosing method's own and inherited members; then used units; then the
   implicit `System`/`SysInit` units.
-- A target may be any designator, not just a variable: a field
-  (`with Rec.Field do`), or a parameterless function call
-  (`with GetRecord do`), whose type is the routine's result type.
+- A target may be any designator, not just a variable — and a resolver must
+  type every form, or the whole body reads as undeclared (each was a real
+  false-E2003 source in the D13 RTL):
+  - a field: `with Rec.Field do`;
+  - a parameterless function call: `with GetRecord do` — the routine's
+    RESULT type;
+  - a **typecast**: `with TVarData(ParamValues[I]) do VType := ...`
+    (`System.ObjAuto.pas`) — the cast's TYPE itself, not the callee's
+    declared type (syntactically identical to a call; disambiguate by what
+    the name resolves to);
+  - a **pointer dereference**: `with LVarData^ do` (`System.Variants.pas`) —
+    the POINTEE type, chasing pointer-type aliases (`PAlias = PVarData =
+    ^TVarData`);
+  - and compositions: `with FindVarData(V)^ do` (call → pointer result →
+    dereference), also `System.Variants.pas`.
 - *AST:* `WithStmt { targets: Designator[], body }`.

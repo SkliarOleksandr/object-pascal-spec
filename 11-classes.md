@@ -53,6 +53,14 @@ type
 
 - ⚠️ *Reference semantics:* assignment copies the **reference**, not the object;
   two variables can alias one instance. Contrast records (ch.09, value types).
+- ⚠️ *"All classes descend from `TObject`" includes classes with NO heritage
+  clause* — `TFoo = class … end;` is `class(TObject)`. Consequence for name
+  resolution: `TObject`'s members resolve **bare** inside such a class's own
+  methods (`ClassName`, `Free`, `InitInstance` — the RTL does this
+  constantly), so an ancestor walk must not stop where the heritage clause is
+  merely absent. Records and legacy `object` types have no implicit ancestor;
+  an interface's implicit `IInterface` contributes no implementation, so its
+  members need no such walk.
 - A class declared `class;` or `class(TParent);` with no member block is a
   **forward declaration** (completed later in the same type section) — used for
   mutually referencing classes.
@@ -287,6 +295,15 @@ var C: TGrid.TCell;     // qualified access
   unit scope, or a nested class's own name is invisible outside its outer
   class. See `06-routines.md` `ImplName` (arbitrary dotted chain) and
   `16-generics.md` §"nested generic" for the same rule under generics.
+- ⚠️ *The body of such a method sees the members of EVERY qualifier segment —
+  and of each segment's ANCESTORS.* Not just the innermost class's own
+  inheritance chain: `TParallel.TLoopState32.TLoopStateFlag32.ShouldExit`
+  (`System.Threading.pas`) freely uses `TLoopStateFlagSet`, a private nested
+  type of `TLoopState` — the ancestor of the MIDDLE segment (`TLoopState32 =
+  class sealed(TLoopState)`). Precedence stays innermost-first: the inner
+  segment's own ancestry is searched before the outer segments'. A resolver
+  that walks only the innermost segment's ancestors mis-reports these
+  (16 false undeclared-identifiers in that one RTL unit).
 - *AST:* nested `TypeDecl`/`ConstDecl` as class members.
 
 ---

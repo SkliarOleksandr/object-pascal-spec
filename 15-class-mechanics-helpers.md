@@ -271,3 +271,85 @@ recently in scope (latest `uses` / nearest declaration) wins; others are hidden.
   source position (`uses`-order dependent, ch.01 §1.2.1).
 - This single-helper rule is a frequent source of "method not found" confusion —
   worth a diagnostic.
+
+### 15.3.4 Where a helper is active (activation scope)
+
+| | |
+|---|---|
+| **Introduced** | Delphi 2006 (with helpers) |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+§15.3.3 says *which* helper wins when several are in scope. This section says
+what "in scope" means in the first place — and the answer is not the helper
+type's own name visibility. A helper activates for the **whole enclosing
+non-structured scope**, regardless of how deeply the helper type is nested
+inside other types, and regardless of the visibility section it sits in. What
+does bound it is the **interface/implementation split**.
+
+This is the same shape as the nested-enum element-name injection rule
+([ch.02](02-fundamental-types.md) §2.2.4) — nesting namespaces the TYPE NAME
+only (see [ch.11](11-classes.md) §11.4.1); the EFFECT lands at the enclosing
+scope. Two different constructs, one law.
+
+**Example**
+
+```pascal
+unit A;
+interface
+type
+  TMatrix = record m11: Single; end;
+
+  TOwner = class
+  strict private                                  // visibility is irrelevant
+    type
+      TMatrixHelper = record helper for TMatrix
+        const Identity = 42;
+      end;
+  end;
+
+procedure P;
+
+implementation
+
+procedure P;
+var
+  M: TMatrix;
+begin
+  Writeln(TMatrix.Identity);   // OK — active at unit scope, and `TOwner` is
+end;                           // never named (its own name is strict private)
+
+end.
+```
+
+**Semantics & parsing notes**
+
+- ⚠️ *Nesting does not confine a helper.* A helper declared as a nested type
+  inside another class is active throughout the enclosing scope, exactly as if
+  it had been declared there directly. Only its own TYPE NAME is namespaced
+  (`TOwner.TMatrixHelper`) — and nothing ever has to spell that name for the
+  helper to apply.
+- ⚠️ *Visibility does not gate activation.* A `strict private` nested helper
+  still applies outside its owner class. Visibility governs access to the
+  helper type's NAME, never whether the helper is in scope for its target
+  type. A resolver keyed on member visibility will wrongly reject these.
+- The **interface/implementation** split is the real boundary, same as for any
+  other declaration (ch.01 §1.2.1): a helper declared in the interface section
+  is active in every unit that `uses` this one; a helper declared in (or nested
+  inside a type declared in) the **implementation** section stays unit-local,
+  and a cross-unit use of its members is a genuine `E2003`.
+- Consequently the "active helper" set at a source position is: every helper
+  for that type declared in this unit, plus every interface-section helper of
+  every used unit — resolved down to ONE by §15.3.3's last-in-scope rule.
+- dcc-verified (dcc32 37.0 / Delphi 13.1), each point separately: a nested
+  interface-section helper resolves both bare inside the extended type's own
+  methods and qualified as `T.Member` at unit level; the same nested helper
+  applies in a second unit that merely `uses` the first, never naming the
+  outer class; a `strict private` helper nested in an implementation-section
+  class still applies outside that class in its own unit; the same
+  implementation-section helper produces a real `E2003` when used from another
+  unit; and two helpers for one type resolve to the last declared (§15.3.3).
+- *AST:* no shape change — a nested `HelperType` is an ordinary nested
+  `TypeDecl`. The rule is purely a name-resolution one: the collector must
+  inject helper members at the nearest enclosing non-structured scope, not at
+  the scope the declaration lexically sits in.

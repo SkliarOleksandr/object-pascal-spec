@@ -613,10 +613,24 @@ end;
   layer must not treat a member hit as a fallback for names it failed to bind:
   when the target's type is only known later (cross-unit — see below), an
   earlier best-effort binding has to be **overridden**, not just gap-filled.
+- ⚠️ *A target after the first is resolved INSIDE the targets before it.* This
+  is the point of the multi-target form and not merely a shorthand for several
+  independent targets: target *k* is looked up in the scope opened by targets
+  1..*k*-1, then the enclosing scope. The RTL relies on it heavily —
+  `with DIB, dsbm, dsbmih do` (`Vcl.Graphics`) works only because `dsbm` is a
+  field of `DIB` and `dsbmih` a field of `dsbm`, and `with
+  TDragDockObject(ADragObject), FDockRect do` (`Vcl.Controls`) only because
+  `FDockRect` is a field of the cast. A resolver that binds every target in the
+  ENCLOSING scope leaves the later ones undeclared, and with them every member
+  reached through them in the body.
 - *Parser/AST guidance:* **do not** flatten `with` during parsing — keep
   `WithStmt { targets: Designator[], body }` so a later name-resolution pass can
   rewrite each unqualified member access to an explicit `target.member`. Multiple
-  targets desugar to nested single-target `with`s (right-to-left).
+  targets desugar to nested single-target `with`s (right-to-left) — which is
+  also the cleanest way to state the two rules above together: the nesting gives
+  both the right-to-left body precedence and the "target sees the earlier
+  targets" scoping, because an inner `with`'s target sits inside the outer
+  `with`'s body.
 - *Targets* must be record/object/interface-typed designators.
 - ⚠️ *The target's type is very often declared in ANOTHER unit* — in practice
   that is the common case, not the exception (`with LTZ.StandardDate do`,

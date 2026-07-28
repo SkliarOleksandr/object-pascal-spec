@@ -222,6 +222,53 @@ Unit names may be dotted (`System.SysUtils`); the leading segments form a
   most once (aliases do not chain). Distinct from unit scope names: an alias
   changes WHICH unit a name means; a unit scope name only supplies a missing
   namespace prefix for a name that would otherwise be ambiguous/unqualified.
+- ⚠️ A unit scope name is tried against the name **as spelled, dotted or not**
+  — it is not restricted to unqualified names. `uses Generics.Collections` with
+  `-NSSystem` resolves to `System.Generics.Collections`; dcc-verified, and there
+  is no `Generics.Collections.pas` anywhere on disk, so no other rule can
+  explain it.
+- Prefixes are tried only **after** the as-spelled lookup fails, so a dotted
+  name that does name a real unit (`Vcl.Forms`) is never captured by a prefix.
+
+**Resolution order for a `uses` name**
+
+1. Explicit `in '<path>'`, if present.
+2. Unit alias (`-A`), whole-name, once.
+3. As spelled: `<dotted-name>.pas`.
+4. Each unit scope name in order: `<scope>.<name-as-spelled>.pas`.
+5. (Tolerated by some toolchains, not by dcc) the trailing segment alone —
+   pre-namespace file layouts where `System.SysUtils` lived in `SysUtils.pas`.
+
+An unresolvable name is fatal: `F1027 Unit not found`. A project that builds
+therefore has zero of them, which makes the count a usable health metric for
+any tool that reads a project.
+
+#### Where the default lists come from
+
+⚠️ **The compiler has no built-in unit scope names or aliases.** They come from
+the project template, not from dcc — verified: `dcc32 --no-config` on a program
+whose only import is `System` fails with `F1027 Unit not found: 'System'`. A
+tool that analyzes a bare `.dpr`/`.dpk`, or a directory of sources, must supply
+the defaults itself or every legacy unqualified import will appear undefined.
+
+The IDE builds both lists in two groups — a platform-neutral base plus a
+Windows-conditioned group that comes first (unit scope names as written into a
+new project's `.dproj`; aliases in `CodeGear.Common.Targets`):
+
+| | Windows-only group | Base group (all platforms) |
+|---|---|---|
+| **Unit scope names** | `Winapi`, `System.Win`, `Data.Win`, `Datasnap.Win`, `Web.Win`, `Soap.Win`, `Xml.Win` | `Vcl`, `Vcl.Imaging`, `Vcl.Touch`, `Vcl.Samples`, `Vcl.Shell`, `System`, `Xml`, `Data`, `Datasnap`, `Web`, `Soap` |
+| **Unit aliases** | `WinTypes`/`WinProcs` → `Winapi.Windows`; `DbiTypes`/`DbiProcs`/`DbiErrs` → `BDE` | `Generics.Collections` → `System.Generics.Collections`; `Generics.Defaults` → `System.Generics.Defaults` |
+
+The two settings differ in how a project's own entry combines with the default:
+
+- `DCC_Namespace` **replaces** — the project states the whole list (its own
+  `.dproj` text appends `$(DCC_Namespace)`, so what the project writes is what
+  the compiler gets).
+- `DCC_UnitAlias` is **prepended** to the defaults, not substituted. The default
+  aliases therefore apply even to a project that declares its own, and a tool
+  must add the defaults for every project rather than only when the setting is
+  absent.
 
 ### 1.2.3 Qualified name resolution
 

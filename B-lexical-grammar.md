@@ -108,6 +108,19 @@ IdentChar  = IdentStart | "0".."9" ;
 - ⚠️ *`&`-escape:* a leading `&` lets a **reserved word be used as an identifier**
   (e.g. `&begin`, `&type`). The `&` is not part of the name. Essential for
   interop and code generation.
+- ⚠️ *The escape is per-OCCURRENCE, not per-declaration:* `&Foo` and `Foo` are
+  one identifier, so the two spellings are freely interchangeable in **both**
+  directions — dcc-verified: a parameter declared `var Message` may be written
+  `&Message` in the body, one declared `var &Message` may be written `Message`,
+  and the escape is not required merely because a *previous* mention used it.
+  It is not stylistic pedantry: `Vcl.Controls` declares `var Message: TWMKeyDown`
+  and then writes both `&Message.CmdType` and `Broadcast(Message)` inside one
+  routine.
+  A semantic layer must therefore strip a leading `&` when forming a name key at
+  **both** ends — declaration and reference. Keeping it on either side alone
+  makes every mixed-spelling use an undeclared identifier, and stripping it only
+  at lookup leaves an `&`-declared symbol unreachable by its bare name. The
+  token text itself should keep the `&` (spans, hovers, round-tripping).
 - ⚠️ *Undocumented: `&` before a numeric literal is accepted* — `X := &1;`
   compiles (verified against dcc64 37.0) and the RTL ships it
   (`System.Beacon.pas`: `FMDataMask[…] := &1`). The `&` is ignored. A parser

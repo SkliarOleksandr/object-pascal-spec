@@ -631,7 +631,19 @@ end;
   both the right-to-left body precedence and the "target sees the earlier
   targets" scoping, because an inner `with`'s target sits inside the outer
   `with`'s body.
-- *Targets* must be record/object/interface-typed designators.
+- *Targets* must be record/object/interface-typed designators. Anything else is
+  `E2018 Record, object or class type required` — and note the follow-on, because
+  it is what a resolver will see first: dcc then reports every member in the body
+  as `E2003 Undeclared identifier` as well, since the scope never opened.
+  dcc-verified on `with V.rgrc do` where `rgrc` is an `array of TRect` — indexing
+  it (`V.rgrc[0]`) is what makes the target legal.
+- A designator here includes the forms that reach a structured value indirectly,
+  all dcc-verified as with targets: a dereference (`P^`), an index (`Arr[I]`), a
+  member chain (`P^.rgrc[0]`), an `as` cast, a *constructor call* — which yields
+  its CLASS, not a result type, in both the paren-less (`TFoo.Create`) and
+  argumented (`TFoo.Create(Self)`) spellings — and indexing a class through its
+  **default array property**, including one it merely INHERITS (`TCollection.
+  Items`, so `with Coll[I] do` is legal on any TCollection descendant).
 - ⚠️ *The target's type is very often declared in ANOTHER unit* — in practice
   that is the common case, not the exception (`with LTZ.StandardDate do`,
   where the field's type comes from `Winapi.Windows` —

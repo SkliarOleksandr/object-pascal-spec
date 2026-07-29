@@ -162,6 +162,12 @@ property Items[I: Integer]: TItem read GetItem; default;
   Disambiguate by position/operand: bare `default;` = default array property;
   `default 0;` = default value. The parser must not conflate them.
 - `Obj[i]` on a class with a default array property lowers to the property access.
+  ⚠️ *Including an INHERITED one* — the search walks the ancestor chain, so
+  `Coll[I]` is legal on any `TCollection` descendant even though `Items` is
+  declared on `TCollection` itself. The RTL and VCL lean on this constantly
+  (`TStrings.Strings`, `TCollection.Items`), and a resolver that only looks at
+  the type's own members silently types `Obj[i]` as the COLLECTION instead of the
+  element, which then makes every member reached through it undeclared.
 - ⚠️ *Overloaded default array properties:* a class may declare **several** array
   properties under the SAME name, each marked `default`, differing by index
   signature — indexing picks the overload by index type. dcc-verified in the RTL:

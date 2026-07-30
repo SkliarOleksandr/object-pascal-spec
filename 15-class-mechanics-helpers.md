@@ -182,6 +182,24 @@ end;
   `class of` reference instantiates the **actual** class — the language's
   polymorphic factory. The resolver must allow constructor calls on metaclass
   values.
+- ⚠️ *The metaclass value may be any EXPRESSION, not just a variable or a type
+  name* — most often a function result, which is how the factory is usually
+  written:
+
+  ```pascal
+  with GetPainterClass.Create(Canvas, Self) do   // GetPainterClass: TPainterClass
+    try
+      MainPaint;                                 // member of the REFERENCED class
+    finally
+      Free;
+    end;
+  ```
+
+  A resolver that recognises a constructor call only when the qualifier is a
+  type NAME types this as nothing, and then every member reached through it is a
+  false undeclared-identifier. The qualifier has to be TYPED and then unwrapped:
+  `class of T` yields `T`, chasing alias links, since the reference type is
+  almost always reached through one (`TPainterClass = class of TPainter`).
 - `TObject`'s `ClassType`/`ClassName`/`InheritsFrom` operate on metaclasses.
 - *AST:* `ClassOf { baseClass }`.
 

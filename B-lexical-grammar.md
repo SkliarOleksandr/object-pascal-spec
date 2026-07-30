@@ -185,6 +185,29 @@ winapi     write      writeonly
   (ch.06 §6.4.1), `library` as a hint directive (ch.02 §2.5.2). They are still
   reserved (cannot be identifiers); the dual role only affects the parser's
   grammar positions, not the lexer.
+- ⚠️ *The sharp edge is a directive word that NAMES THE NEXT DECLARATION.* After
+  a declaration's terminating `;`, a parser still scanning for trailing
+  directives sees an identifier that IS one, and the run swallows it. The
+  disambiguator is the token AFTER the word: a real directive is followed by
+  `;`, by another directive, or by its own argument — **never by `=` or `:`**.
+  So in
+  ```pascal
+  type
+    TFirst = class ... end;
+    Unsafe = class ... end;     // dxCore.pas (DevExpress) — a TYPE named Unsafe
+  const
+    Alpha = 1;
+    Index = 2;                  // a CONST named Index
+  ```
+  both `Unsafe` and `Index` open declarations. The failure is silent and
+  disproportionate: swallowing the name loses that declaration *and everything
+  the unit declares after it*, so the damage shows up as undeclared-identifier
+  errors on unrelated names in unrelated units (283 of them across one component
+  library, from the one `Unsafe = class` line).
+  - The trap has a mirror worth knowing: `var X: procedure; cdecl = nil;` IS a
+    directive followed by `=` — an initializer placed after the calling
+    convention. That form is legal only in a VAR section, which is exactly what
+    keeps it distinguishable from the two above.
 - *`noreturn`* (13.0) is a new directive on procedure declarations;
   *`dependency`* modifies `external` declarations (ch.06 §6.7.1).
 

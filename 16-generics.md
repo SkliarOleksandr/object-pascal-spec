@@ -66,6 +66,26 @@ The same identifier may name types of different generic arity (`TFoo`,
 
 - Resolution selects by the **number of type arguments** supplied at the use site.
   The resolver keys generic symbols by `(name, arity)`.
+- ⚠️ *A FORWARD declaration completes by `(name, arity)` too, and this composes
+  with arity overloading in a way that is easy to get wrong.* `JclArrayLists.pas`
+  declares, in this order:
+
+  ```pascal
+  TJclArrayIterator = class(...) ... end;          // arity 0
+  TJclArrayIterator<T> = class;                    // arity 1, FORWARD
+  TJclArrayList<T> = class(...) ... end;
+  TJclArrayIterator<T> = class(...) ... end;       // arity 1, the completion
+  ```
+
+  The completion must be matched against **every** declaration the name already
+  carries, not just the most recent or the first: an implementation that looks
+  only at the head of the chain finds the arity-0 class, reads the mismatch as
+  "a different type at a different arity", and declares a THIRD symbol. The
+  empty forward then stays the arity-1 winner, so every method body of the real
+  class loses its own fields *and* its inherited members — the diagnostics land
+  far from the declaration that caused them. Note the non-generic sibling is
+  what makes the shape appear at all; a plain forward + completion pair hides
+  the defect completely.
 
 ---
 

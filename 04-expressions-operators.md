@@ -195,6 +195,16 @@ Inc(P);         // pointer math when enabled
   no new token; the VCL uses it (`LPARAM(@@Hook)` in `Vcl.ActnMenus`).
 - `{$POINTERMATH ON}` enables `+`/`-`/`[]` on typed pointers (treating them
   array-like) — a directive-gated semantic; `PByte`/`PAnsiChar` enable it locally.
+- ⚠️ *Do not confuse that with the OLD, unconditional rule:* for a pointer to an
+  **array**, the `^` may simply be omitted before `[`, and equally before `.` for
+  a pointer to a record. `P[I]` means `P^[I]` and `P.Field` means `P^.Field`,
+  with no directive involved. dcc-verified with `PLine = ^TLine;
+  TLine = array[Word] of TQuad` and POINTERMATH off, both as an expression and as
+  a `with` target. The classic RTL/VCL scan-line idiom rests on it
+  (`Vcl.Imaging.pngimage`'s `pPixelLine`, `Vcl.Imaging.GIFImg`).
+  So a resolver typing an indexed or member expression must dereference a
+  pointer base *before* looking for the array element or the field — and the two
+  compose with alias chasing (`P[I].Field`, `P^.rgrc[0]`).
 
 ---
 

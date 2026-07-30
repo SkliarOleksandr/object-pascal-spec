@@ -623,6 +623,17 @@ end;
   `FDockRect` is a field of the cast. A resolver that binds every target in the
   ENCLOSING scope leaves the later ones undeclared, and with them every member
   reached through them in the body.
+- ⚠️ *The override rule two bullets up applies to a later TARGET too, not only to
+  body names.* Target *k* resolving inside targets 1..*k*-1 means a member hit
+  there OUTRANKS whatever else the name denotes — dcc-verified: with a global
+  `mid: string` in scope, `with O, mid do W := 7` compiles and means `O.mid`
+  (`W` exists only on the field's type). The spelling that catches
+  implementations is a target name that also names a **used unit**: `with
+  ZStream, ZLIB do` (`Vcl.Imaging.pngimage`) against `System.ZLib`, where `ZLIB`
+  is a field of `ZStream`. A bare unit name is not a legal target at all, so a
+  resolver that binds it as one and then treats that target as already resolved
+  never opens the second scope, and every member of it (`next_out`,
+  `avail_out`) becomes a false `E2003`.
 - *Parser/AST guidance:* **do not** flatten `with` during parsing — keep
   `WithStmt { targets: Designator[], body }` so a later name-resolution pass can
   rewrite each unqualified member access to an explicit `target.member`. Multiple
@@ -644,6 +655,15 @@ end;
   argumented (`TFoo.Create(Self)`) spellings — and indexing a class through its
   **default array property**, including one it merely INHERITS (`TCollection.
   Items`, so `with Coll[I] do` is legal on any TCollection descendant).
+  Two of those forms hide an extra step for a resolver, both from `Vcl`:
+  - the dereference may be of a pointer type written INLINE on the variable's own
+    declaration — `PExtLogPen: ^TExtLogPen` as a local, then `with Result,
+    PExtLogPen^ do` (`Vcl.Graphics.GetPenData`). No pointer type *symbol* exists
+    anywhere in that shape, so the pointee is reachable only from the
+    declaration's type node — the same trap as an inline `array[...] of T`.
+  - the cast may name a NESTED type through its outer one, in another unit:
+    `with TScrollBarStyleHook.TScrollWindow(FMDIScrollSizeBox) do SizeBox := True`
+    (`Vcl.Forms` over a nested class of `Vcl.StdCtrls`).
 - ⚠️ *The target's type is very often declared in ANOTHER unit* — in practice
   that is the common case, not the exception (`with LTZ.StandardDate do`,
   where the field's type comes from `Winapi.Windows` —

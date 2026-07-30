@@ -83,29 +83,29 @@ The same identifier may name types of different generic arity (`TFoo`,
   TDerived = class(TBase);               // zero args -> A.TBase, NOT B's
   ```
 
-  `DevExpress` is built this way: `TdxBarAccessibilityHelper` is a plain class
-  in `dxBar.pas`, `TdxBarAccessibilityHelper<T: TWinControl>` a generic in
-  `dxBarAccessibility.pas`, and that unit writes both spellings.
+  Third-party component libraries do this deliberately: a plain base class in a
+  core unit, a same-named generic wrapper over it in a unit above, and code in
+  that upper unit using both spellings.
   - *Why an implementation must get this right rather than approximately right:*
     binding the bare name to the nearer GENERIC is not a small imprecision. The
     generic's own heritage is that same bare name, so it resolves to ITSELF —
     a self-reference that terminates the ancestor walk, and with it every
-    inherited member of every descendant. 100+ false undeclared-identifiers in
-    that one library, reported on names declared three hops away from the
-    mistake.
+    inherited member of every descendant. Observed on a real code base: 100+
+    false undeclared-identifiers, every one of them reported on a name declared
+    three hops away from the mistake.
   - The rule is about the reference, not the declaration: the base of `T<...>`
     is *supposed* to select by the supplied argument count, so an
     arity-preference applied blindly inside generic-argument resolution would
     break every `TList<Integer>`.
 - ⚠️ *A FORWARD declaration completes by `(name, arity)` too, and this composes
-  with arity overloading in a way that is easy to get wrong.* `JclArrayLists.pas`
-  declares, in this order:
+  with arity overloading in a way that is easy to get wrong.* A container
+  library's iterator unit declares, in this order:
 
   ```pascal
-  TJclArrayIterator = class(...) ... end;          // arity 0
-  TJclArrayIterator<T> = class;                    // arity 1, FORWARD
-  TJclArrayList<T> = class(...) ... end;
-  TJclArrayIterator<T> = class(...) ... end;       // arity 1, the completion
+  TIterator = class(...) ... end;          // arity 0
+  TIterator<T> = class;                    // arity 1, FORWARD
+  TList<T> = class(...) ... end;           // needs the forward
+  TIterator<T> = class(...) ... end;       // arity 1, the completion
   ```
 
   The completion must be matched against **every** declaration the name already

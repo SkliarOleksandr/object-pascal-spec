@@ -194,7 +194,7 @@ winapi     write      writeonly
   ```pascal
   type
     TFirst = class ... end;
-    Unsafe = class ... end;     // dxCore.pas (DevExpress) — a TYPE named Unsafe
+    Unsafe = class ... end;     // a TYPE named Unsafe — real, and not rare
   const
     Alpha = 1;
     Index = 2;                  // a CONST named Index
@@ -202,8 +202,8 @@ winapi     write      writeonly
   both `Unsafe` and `Index` open declarations. The failure is silent and
   disproportionate: swallowing the name loses that declaration *and everything
   the unit declares after it*, so the damage shows up as undeclared-identifier
-  errors on unrelated names in unrelated units (283 of them across one component
-  library, from the one `Unsafe = class` line).
+  errors on unrelated names in unrelated units — 283 of them, on a real code
+  base, from a single `Unsafe = class` line in one core unit.
   - The trap has a mirror worth knowing: `var X: procedure; cdecl = nil;` IS a
     directive followed by `=` — an initializer placed after the calling
     convention. That form is legal only in a VAR section, which is exactly what

@@ -607,12 +607,21 @@ end;
 - ⚠️ *A target member outranks EVERYTHING else in scope* — "first" above is
   absolute, not merely "before the unit scope". dcc-verified: a member wins
   over an enclosing class's own field, a routine local, a **parameter**, a
-  unit-level global, and even an **inline `var` declared inside the with body
-  itself** (`with GR do begin var Shared: Integer; Shared := 42; end` is an
-  error when `GR.Shared` is a `string` — the member still won). So a semantic
-  layer must not treat a member hit as a fallback for names it failed to bind:
-  when the target's type is only known later (cross-unit — see below), an
-  earlier best-effort binding has to be **overridden**, not just gap-filled.
+  unit-level global, an **inline `var` declared inside the with body itself**
+  (`with GR do begin var Shared: Integer; Shared := 42; end` is an error when
+  `GR.Shared` is a `string` — the member still won), and even the implicit
+  **`Result`** and **`Self`**: inside `function F: Integer`, `with R do Result
+  := 'x'` compiles when `R.Result` is a `string`, so the member — not the
+  function's return slot — is what that name means.
+  - *Implementation consequence, and the one that is easy to get half-right:* a
+    member hit is not a fallback for names the resolver failed to bind, so an
+    EARLIER binding must be **overridden**, not merely gap-filled. This applies
+    to every target, not only to the hard ones — a resolver that opens the scope
+    and then leaves already-resolved names alone (the natural shape, since most
+    passes only fill in what is still unbound) silently keeps the wrong answer
+    for exactly the collisions this rule exists to describe. The failure is not
+    a missing `E2003`: the name binds to something of the WRONG TYPE, so it
+    surfaces later and elsewhere as a bogus `E2010 Incompatible types`.
 - ⚠️ *A target after the first is resolved INSIDE the targets before it.* This
   is the point of the multi-target form and not merely a shorthand for several
   independent targets: target *k* is looked up in the scope opened by targets
@@ -664,6 +673,37 @@ end;
   - the cast may name a NESTED type through its outer one, in another unit:
     `with TScrollBarStyleHook.TScrollWindow(FMDIScrollSizeBox) do SizeBox := True`
     (`Vcl.Forms` over a nested class of `Vcl.StdCtrls`).
+- *The full list of accepted target forms*, all dcc-verified on 37.0 — worth
+  enumerating because a resolver needs a case per form and a missing one costs
+  the whole body, not one name:
+
+  | form | example | notes |
+  |---|---|---|
+  | variable / field / parameter | `with Rec.Field do` | |
+  | property | `with Canvas do` | including an INHERITED one, and a bare redeclaration (`property Items;`), which has no type of its own — 13.1.4 |
+  | parameterless function call | `with GetRecord do` | the RESULT type |
+  | constructor call | `with TFoo.Create do` | the CLASS; both spellings |
+  | typecast | `with TVarData(X) do` | the cast's TYPE, not the callee's |
+  | `as` cast | `with Obj as TSub do` | |
+  | dereference | `with P^ do` | the POINTEE, chasing alias chains |
+  | index | `with Arr[I] do` | element type, or a default array property |
+  | `inherited Name` | `with inherited Canvas do` | 12.1.2 — the member is looked up from the ANCESTOR of the enclosing method's class, never from the class itself (`Vcl.ExtCtrls`) |
+  | class reference | `with C do` where `C: class of TBase` | exposes TBase's class vars and class methods (15.2.1) |
+  | bare class TYPE NAME | `with TBase do Tick` | same reach as the class reference — legal, and easy to miss because the target resolves to a TYPE rather than a value |
+  | interface-typed designator | `with I do Go` | |
+  | parenthesised designator | `with (R) do` | see the caveat below |
+
+- ⚠️ *Two negatives, both easy to implement by accident:*
+  - *The implicit pointer dereference does NOT extend to a with target.* Object
+    Pascal lets `P.Field` stand for `P^.Field`, and a resolver that reuses its
+    member-access walk for the target inherits that hop — but dcc rejects
+    `with P do` outright with `E2018`, followed by `E2003` on every member in
+    the body. The `^` is mandatory here. Being more permissive costs no false
+    positive, only a missed diagnostic, which is why it survives unnoticed.
+  - *Parentheses demote the target to a VALUE.* `with (R) do X := 1` opens the
+    scope (no `E2018`) but reports `E2064 Left side cannot be assigned to` — the
+    members are readable and not assignable. A resolver that treats `(R)` as
+    transparent will silently accept writes dcc refuses.
 - ⚠️ *The target's type is very often declared in ANOTHER unit* — in practice
   that is the common case, not the exception (`with LTZ.StandardDate do`,
   where the field's type comes from `Winapi.Windows` —
@@ -697,4 +737,21 @@ end;
     ^TVarData`);
   - and compositions: `with FindVarData(V)^ do` (call → pointer result →
     dereference), also `System.Variants.pas`.
+- ⚠️ *The with scope carries the target type's HELPER members too.* dcc-verified:
+  with `TRecHelper = record helper for TRec`, `with R do Bump` calls the
+  HELPER's method unqualified, and 15.3.3's rules apply unchanged (a helper
+  member hides the type's own of the same name). So the scope a `with` opens is
+  not "the type's member scope" but "whatever a member lookup on that type
+  would find" — helpers, inherited members and implicit `TObject` included.
+- ⚠️ *The with scope reaches INTO an anonymous method declared in the body.*
+  dcc-verified: `with R do P := procedure begin Writeln(X) end` binds `X` to
+  `R.X` and captures it. An implementation that splices the with scope in by
+  reparenting must therefore not stop at the first nested scope boundary — the
+  closure's own scope needs its parent link rerouted as well.
+- *A member's type must be closed over the target's instantiation frame.* When
+  the target is a generic instance, the member's DECLARED type is written in the
+  open parameters: `FThreads: TThreadList<TWorker>` makes `LockList`'s declared
+  `TList<T>` mean `TList<TWorker>`, so `with FThreads.LockList do` must
+  substitute before looking anything up inside it. Skipping this finds the right
+  member NAMES with wrong element types.
 - *AST:* `WithStmt { targets: Designator[], body }`.

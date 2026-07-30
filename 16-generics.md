@@ -66,6 +66,37 @@ The same identifier may name types of different generic arity (`TFoo`,
 
 - Resolution selects by the **number of type arguments** supplied at the use site.
   The resolver keys generic symbols by `(name, arity)`.
+- ⚠️ *A reference supplying NO type arguments names the ARITY-0 declaration —
+  even when a same-named GENERIC is nearer in scope.* Arity is part of the
+  identity, so ordinary "nearest declaration wins" shadowing does not apply
+  across arities. dcc-verified:
+
+  ```pascal
+  // unit A
+  TBase = class ... end;                 // arity 0
+
+  // unit B
+  uses A;
+  TBase<T: class> = class(TBase)         // arity 1, and its OWN heritage is
+    ...                                  // the bare name -> A.TBase
+  end;
+  TDerived = class(TBase);               // zero args -> A.TBase, NOT B's
+  ```
+
+  `DevExpress` is built this way: `TdxBarAccessibilityHelper` is a plain class
+  in `dxBar.pas`, `TdxBarAccessibilityHelper<T: TWinControl>` a generic in
+  `dxBarAccessibility.pas`, and that unit writes both spellings.
+  - *Why an implementation must get this right rather than approximately right:*
+    binding the bare name to the nearer GENERIC is not a small imprecision. The
+    generic's own heritage is that same bare name, so it resolves to ITSELF —
+    a self-reference that terminates the ancestor walk, and with it every
+    inherited member of every descendant. 100+ false undeclared-identifiers in
+    that one library, reported on names declared three hops away from the
+    mistake.
+  - The rule is about the reference, not the declaration: the base of `T<...>`
+    is *supposed* to select by the supplied argument count, so an
+    arity-preference applied blindly inside generic-argument resolution would
+    break every `TList<Integer>`.
 - ⚠️ *A FORWARD declaration completes by `(name, arity)` too, and this composes
   with arity overloading in a way that is easy to get wrong.* `JclArrayLists.pas`
   declares, in this order:

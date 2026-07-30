@@ -65,6 +65,17 @@ type
     PROPERTY, not the built-in type (dcc-verified) — and the same goes for any
     member named `Text`, `Real`, `Insert`, `Delete`, `Copy`, `Round`, ... which
     component code is full of.
+  - *And against a USED UNIT's name.* A dotted `uses` makes the unit reachable
+    by its LAST segment, so `uses Some.Header` puts `Header` in scope as a unit
+    — but a bare unit name is never a value, so in a class with a `Header`
+    member the member wins. The shape is common wherever a library splits a unit
+    family by dotted prefix and names a property after one of the leaf units.
+    - ⚠️ *An implementation that exempts "namespace tokens" from
+      undeclared-identifier reporting must apply that exemption AFTER the member
+      walk, not before it.* Tested first, the exemption skips exactly the names
+      that had a member to find, and the failure is silent: the qualifier types
+      as nothing, so a `with` over it opens no scope and every name in the body
+      is reported instead.
   - ⚠️ *Consequence for an implementation that resolves inherited members in a
     LATER pass than it type-checks:* the early pass sees the predefined name,
     types the expression from it, and reports an assignment as `E2010

@@ -93,6 +93,15 @@ The same identifier may name types of different generic arity (`TFoo`,
     inherited member of every descendant. Observed on a real code base: 100+
     false undeclared-identifiers, every one of them reported on a name declared
     three hops away from the mistake.
+  - ⚠️ *The two declarations are usually in different USED UNITS, and that is
+    where an implementation gets it wrong.* Looking the name up with the
+    ordinary last-uses-wins rule returns whichever unit was imported later — and
+    if that is the generic, a search that stops there has just re-found the
+    wrong one. Arity is part of the identity, so a generic candidate must not
+    END the search; the scan has to continue for a matching-arity declaration.
+    The RTL itself sets this trap: `TObjectList` is a plain class in the
+    container unit and a generic in the generic-collections unit, and any unit
+    importing both can write either.
   - The rule is about the reference, not the declaration: the base of `T<...>`
     is *supposed* to select by the supplied argument count, so an
     arity-preference applied blindly inside generic-argument resolution would

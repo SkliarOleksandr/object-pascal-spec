@@ -59,6 +59,19 @@ type
   joins only a class's OWN member scope into a method body binds the global and
   then reports the call as `E2035 Not enough actual parameters` — the diagnostic
   points at the argument count, but the defect is the binding.
+  - *The same holds against a PREDEFINED name*, which is the weaker-looking half
+    of the rule and the one that bites hardest. A class with
+    `property Word: string` makes bare `Word` in a descendant's method mean the
+    PROPERTY, not the built-in type (dcc-verified) — and the same goes for any
+    member named `Text`, `Real`, `Insert`, `Delete`, `Copy`, `Round`, ... which
+    component code is full of.
+  - ⚠️ *Consequence for an implementation that resolves inherited members in a
+    LATER pass than it type-checks:* the early pass sees the predefined name,
+    types the expression from it, and reports an assignment as `E2010
+    Incompatible types`. A later pass can fix the binding but cannot unsay the
+    diagnostic. The type checker therefore must not judge an assignment whose
+    operand resolved to a TYPE NAME — that is a mis-binding, not a type
+    mismatch, and a compiler has separate errors for a type used as a value.
 - ⚠️ *The ancestor may be a NESTED type named through its outer one*, commonly
   from another unit: `TMemoTextSettings = class(TTextSettingsInfo.
   TCustomTextSettings)` (`FMX.Memo`, and the same line in eight sibling units).

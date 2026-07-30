@@ -50,6 +50,24 @@ type
 
 - *Value semantics:* assignment copies all fields; no reference counting (unless it
   contains managed fields, which are individually managed).
+- ⚠️ *A record type may be ANONYMOUS* — written directly in a declaration's type
+  slot instead of being named, most often as an array element:
+
+  ```pascal
+  const
+    TAB: packed array[0..1] of record
+      offset, minimum: Cardinal;
+    end = ((offset: 0; minimum: 16), (offset: 32; minimum: 48));
+  ```
+
+  Its fields are ordinary members: `with TAB[I] do offset` resolves. The
+  awkward part is for a semantic layer — a type with no name cannot be
+  identified by name, so an implementation that keys types by `(unit, symbol)`
+  needs a SYNTHETIC symbol created where the inline type is collected. Giving it
+  only a member scope is not enough: everything that answers "what type is this
+  expression?" answers with a symbol, and without one the array's element type
+  simply does not exist. The synthetic symbol must stay unnamed and unbound, so
+  nothing can resolve to it or be shadowed by it.
 - *AST:* `RecordType { fields[], members[], variantPart? }`.
 
 ### 9.1.2 `packed` records & alignment

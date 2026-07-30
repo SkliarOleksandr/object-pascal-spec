@@ -49,6 +49,22 @@ type
   interfaces, ch.14). The ancestor list `( Ancestor, IFoo, IBar )` has **at most
   one class** (first position) followed by interfaces.
 - Omitted ancestor ⇒ `TObject`.
+- ⚠️ *An INHERITED member outranks a unit-level routine of the same name inside a
+  method body* — including one in the method's OWN unit, and including one
+  declared in the `implementation` section right next to it. dcc-verified on
+  `FMX.Dialogs.Win`, which compiles: `TCustomFileDialog` declares a 1-parameter
+  method `GetFileNames`, the implementation section declares a 4-parameter
+  procedure of the same name, and `GetFileNames(FShellItems)` inside the
+  descendant `TCustomFileOpenDialog.GetResults` means the METHOD. A resolver that
+  joins only a class's OWN member scope into a method body binds the global and
+  then reports the call as `E2035 Not enough actual parameters` — the diagnostic
+  points at the argument count, but the defect is the binding.
+- ⚠️ *The ancestor may be a NESTED type named through its outer one*, commonly
+  from another unit: `TMemoTextSettings = class(TTextSettingsInfo.
+  TCustomTextSettings)` (`FMX.Memo`, and the same line in eight sibling units).
+  Failing to resolve that reference is silent and disproportionate — the class is
+  left with NO ancestry, so every inherited member its methods touch becomes a
+  false `E2003`, and only the members it happens to REDECLARE keep working.
 - *AST:* `ClassType { ancestor, interfaces[] }`.
 
 ### 12.1.2 `inherited`

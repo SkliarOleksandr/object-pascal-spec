@@ -186,6 +186,13 @@ type
     letter switches. dcc-verified: `{$SCOPEDENUMS ON} … {$PUSHOPT}
     {$SCOPEDENUMS OFF} TOpen = (Gamma,…) {$POPOPT} TAfter = (Epsilon,…)` —
     bare `Gamma` compiles, bare `Epsilon` is E2003.
+  - ⚠️ *An ANONYMOUS enum is exempt* — necessarily, since there is no enum type
+    name to qualify its values with, and scoping them would leave them
+    unreachable by any spelling. dcc-verified under `{$SCOPEDENUMS ON}`:
+    `TNeededToDo = set of (SetChecked, CallClick)` still admits bare
+    `Include(S, SetChecked)`, while a named enum's bare value in the same unit
+    is `E2003`. Real code depends on it — that declaration is `FMX.StdCtrls`'
+    `TCustomSwitch`, and the unit carries `{$SCOPEDENUMS ON}` at line 14.
   - ⚠️ *Ignoring the directive is worse than a missing diagnostic* — a leaked
     value can SHADOW a type visible through the implicit `System` scope or a
     used unit, silently corrupting resolution downstream: `System.Threading`

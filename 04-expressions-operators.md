@@ -411,15 +411,20 @@ Str(Val:0, S);          // RTL itself uses this (System.pas)
 | **Deprecated** | — |
 | **Status** | ⚠️ Legacy (COM automation) |
 
-In a call on a **`Variant`** — i.e. a late-bound IDispatch call — an argument may
-be written `Name := Expression`. The name is a *dispatch parameter name* passed
-to the automation server; it is not an identifier in the program.
+In a call on a **`Variant`/`OleVariant`** an argument may be written
+`Name := Expression`. The name is a *dispatch parameter name* passed to the
+automation server; it is not an identifier in the program.
+
+This is **not** general named-parameter syntax — Object Pascal has none. It
+belongs to Automation alone, and the compiler says so itself: the ordering
+diagnostic is `E2166 Unnamed arguments must precede named arguments in OLE
+Automation call`.
 
 **Grammar**
 
 ```ebnf
 NamedArg = Identifier ":=" Expression ;
-(* valid only in the argument list of a late-bound (Variant) call *)
+(* valid only in an argument/index list of a Variant-typed call *)
 ```
 
 **Example**
@@ -443,14 +448,36 @@ Excel.ActiveWorkbook.Charts[1].SeriesCollection.Add(
   - the NAME is not resolved at all — `V.Add(Nonexistent := 1)` compiles;
   - the VALUE is an ordinary expression, fully checked — `V.Add(Source :=
     Undeclared1)` is `E2003` on `Undeclared1`.
-- ⚠️ *Only on a late-bound call.* There is no named-argument form for a
-  statically bound routine: `F.Go(A := 1)` on a real method is `E2003:
-  Undeclared identifier: 'A'`, not a named argument. A resolver that exempts
-  every `Name := Value` argument therefore loses real diagnostics; the exemption
-  belongs to calls whose callee is `Variant`-typed (or, in practice, to calls the
-  resolver could not bind statically).
+- ⚠️ *The gate is the STATIC TYPE of the callee being `Variant`/`OleVariant` —
+  not "dispatch", and not the parameter name matching.* All dcc-verified, and
+  the dispinterface result is the surprising one:
+
+  | callee | `Foo(A := 1)` |
+  |---|---|
+  | `Variant` / `OleVariant` member | ✅ compiles |
+  | global routine whose parameter really IS named `A` | ❌ `E2003` on `A` |
+  | method of a class | ❌ `E2003` on `A` |
+  | ordinary (early-bound) interface | ❌ `E2003` on `A` |
+  | statically typed `dispinterface` | ❌ `E2003` on `A` |
+
+  A `dispinterface` call is late-BOUND at run time but its signature is known at
+  compile time, so the named form is rejected there just like a class method's.
+  A resolver that exempts every `Name := Value` argument therefore loses real
+  diagnostics; the exemption belongs to a `Variant`-typed callee (in practice: to
+  calls the resolver could not bind statically).
+- *The name is consumed even when it collides with a real variable.* With
+  `Source: string` in scope, `V.Add(Source := 1)` compiles — as an assignment it
+  would be `E2010 Incompatible types`. So the name is never an ordinary
+  reference, and never an assignment target.
+- *Named arguments must FOLLOW the positional ones.* `V.Add(1, Source := 2)` is
+  fine; `V.Add(Source := 2, 1)` is `E2166`.
+- *Also valid in an INDEX list*, for a Variant's indexed property:
+  `V.Range[Source := 1] := 5` compiles. An implementation that handles only the
+  parenthesised argument list still mis-parses this one.
 - Only a bare identifier may appear on the left — nothing dotted or indexed.
-- *AST:* `NamedArg { name, value }` within the call node.
+- *Calling the Variant ITSELF is not this form:* `V(Source := 1)` is a syntax
+  error (`E2066`). It is a member call or nothing.
+- *AST:* `NamedArg { name, value }` within the call or index node.
 
 ---
 

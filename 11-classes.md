@@ -295,6 +295,28 @@ var C: TGrid.TCell;     // qualified access
   unit scope, or a nested class's own name is invisible outside its outer
   class. See `06-routines.md` `ImplName` (arbitrary dotted chain) and
   `16-generics.md` §"nested generic" for the same rule under generics.
+- ⚠️ *The DECLARATION of a nested type sees the members of every class it is
+  nested in — and of each of those classes' ANCESTORS.* The same reach as the
+  method-body rule below, one step earlier: it applies to the heritage clause
+  itself. dcc-verified — with `TBase` declaring nested `TInner` and a const
+  `MaxRows`, and `TDesc = class(TMid)` where `TMid = class(TBase)`, this
+  compiles:
+
+  ```pascal
+  TDesc = class(TMid)
+  public type
+    TSub = class(TInner)                    // grandparent's nested type, bare
+      A: array[0..MaxRows] of Integer;      // grandparent's const, bare
+    end;
+  end;
+  ```
+
+  `Vcl.Skia.pas`/`FMX.Skia.pas` rely on it (`TSkAnimatedPaintBox.TAnimation =
+  class(TAnimationBase)`, a nested type of `TSkCustomAnimatedControl`). A
+  resolver that misses it reports far more than the one name: the nested class
+  is then left with NO ancestry, so its property specifiers (`read GetDuration`)
+  and its methods' inherited constants fail too — 6 false undeclared-identifiers
+  per Skia unit from a single unresolved heritage reference.
 - ⚠️ *The body of such a method sees the members of EVERY qualifier segment —
   and of each segment's ANCESTORS.* Not just the innermost class's own
   inheritance chain: `TParallel.TLoopState32.TLoopStateFlag32.ShouldExit`

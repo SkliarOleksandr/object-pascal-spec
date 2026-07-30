@@ -403,6 +403,57 @@ Str(Val:0, S);          // RTL itself uses this (System.pas)
 
 ---
 
+### 4.11.3 OLE-automation named arguments
+
+| | |
+|---|---|
+| **Introduced** | Delphi 2 (Variant/dispatch calls) |
+| **Deprecated** | — |
+| **Status** | ⚠️ Legacy (COM automation) |
+
+In a call on a **`Variant`** — i.e. a late-bound IDispatch call — an argument may
+be written `Name := Expression`. The name is a *dispatch parameter name* passed
+to the automation server; it is not an identifier in the program.
+
+**Grammar**
+
+```ebnf
+NamedArg = Identifier ":=" Expression ;
+(* valid only in the argument list of a late-bound (Variant) call *)
+```
+
+**Example**
+
+```pascal
+var Excel: Variant;
+...
+Excel.ActiveWorkbook.Charts[1].SeriesCollection.Add(
+  Source := Excel.Worksheets[1].Range['B1:B20']);
+```
+
+**Semantics & parsing notes**
+
+- ⚠️ *This is a second context-restricted argument form, and it collides with the
+  assignment statement.* A parser that ends the argument at the identifier reads
+  the `:=` as an assignment whose TARGET is the whole call, and reports `")"
+  expected` — then the name, having been parsed as an ordinary reference, is a
+  false `E2003`. Handle it in the argument rule, exactly like `:width` above.
+- ⚠️ *The two sides are checked differently, and only the asymmetry makes it
+  implementable.* dcc-verified on 37.0:
+  - the NAME is not resolved at all — `V.Add(Nonexistent := 1)` compiles;
+  - the VALUE is an ordinary expression, fully checked — `V.Add(Source :=
+    Undeclared1)` is `E2003` on `Undeclared1`.
+- ⚠️ *Only on a late-bound call.* There is no named-argument form for a
+  statically bound routine: `F.Go(A := 1)` on a real method is `E2003:
+  Undeclared identifier: 'A'`, not a named argument. A resolver that exempts
+  every `Name := Value` argument therefore loses real diagnostics; the exemption
+  belongs to calls whose callee is `Variant`-typed (or, in practice, to calls the
+  resolver could not bind statically).
+- Only a bare identifier may appear on the left — nothing dotted or indexed.
+- *AST:* `NamedArg { name, value }` within the call node.
+
+---
+
 ## 4.12 Operator overloading (cross-reference)
 
 | | |

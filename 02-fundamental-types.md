@@ -286,6 +286,14 @@ RealType = "Real" | "Single" | "Double" | "Extended" | "Comp" | "Currency" | "Re
 - `Currency` is a 64-bit integer scaled by 10 000 (4 decimal places) — exact
   decimal arithmetic for money; not a binary float.
 - `Comp` is a legacy 64-bit integer-valued float; avoid in new code.
+- ⚠️ *`Real48` and `Comp` are COMPILER-PROVIDED, not declared in `System.pas`* —
+  so a semantic layer must seed both names itself, and a grep of the RTL source
+  will mislead you into thinking otherwise: `System.pas` mentions `Real48` only
+  in a `NODEFINE` directive (a C++ header-generation hint) and inside comments.
+  dcc resolves both in a unit with no `uses` clause; real code still uses them
+  (11 sites in one line-of-business application). Same family of trap as the
+  intrinsic ROUTINES in B.4.3, several of which appear in the source only as
+  record FIELDS.
 - Real literals (B.5.2) default to `Extended`/`Double`.
 
 ---

@@ -439,6 +439,35 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   `Xml.adomxmldom.pas`) — full evaluation is only possible **after** semantic
   analysis. A standalone preprocessor must define a fallback policy for such
   expressions (e.g. evaluate to False and flag).
+- ⚠️ *`Declared(X)` is the same circularity, and it is not a rare corner:* it
+  asks whether an identifier is in scope, and the scope is built from the token
+  stream this very directive decides. It is the standard portability guard —
+  `{$IF not declared(UInt64)} UInt64 = QWord; {$IFEND}` — so a fallback of
+  "False, and flag it" takes the wrong branch precisely where the name DOES
+  exist, which is the normal case on a current compiler. 81 sites in one
+  vendor's RTL+VCL+FMX sources.
+
+  Getting the right answer takes two stages, and the split is what makes the
+  cost bearable:
+  1. **Compiler-provided names can be answered immediately** — they need no
+     symbol table at all, and they cover the two commonest spellings
+     (`Declared(AnsiChar)`, `Declared(UInt64)`), which happen to sit in the
+     largest units. Only a POSITIVE is final here: a name the seed lacks may
+     still come from an import. So the query needs three states — yes, no, and
+     *ask someone else* — and the third records the name instead of guessing.
+  2. **Everything else needs a second pass** over just those units, once their
+     imports have been analyzed and before anything holds references into the
+     models being replaced.
+
+  Two details that are easy to get wrong, both found by implementing it:
+  - the argument is a **designator, not an identifier**
+    (`Declared(System.Embedded)`, in a platform header unit). Stopping at the
+    dot asks about `System`, which is a unit name and answers True — the
+    opposite branch.
+  - the second pass must **not** consult the unit's OWN declarations. The guard
+    idiom declares the name inside the text it guards, so answering from the
+    previous pass's model makes the answer flip every round: declared, so skip
+    the text, so not declared, so take the text.
 - *AST:* conditional structure is usually resolved away before the syntax tree;
   optionally retained as trivia for tooling.
 

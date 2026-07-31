@@ -239,7 +239,19 @@ type
 
 - ⚠️ Helpers **cannot add instance fields** (no per-instance storage); only methods,
   class vars, properties (backed by existing state). Enforce in the type-checker.
-- *AST:* `HelperType { kind: class, forType, members[] }`.
+- ⚠️ *A class helper may INHERIT from another helper* — that is what the
+  optional `( Ancestor )` in the grammar above is, and it names a HELPER, not
+  the extended type. The ancestor helper's members apply to the extended type
+  as well, so a member walk that reaches a helper must try the helper's own
+  ancestors before it continues into the `for` target.
+  - ⚠️ *Record helpers cannot* (dcc-verified): `record helper(TBaseH) for T` is
+    `E2029 ',' or ':' expected` — that production has no ancestor slot at all,
+    so the `(` is read as the start of something else. The grammar in §15.3.2
+    is the whole story there.
+  - Helpers cannot form cycles (an ancestor must already be declared), so the
+    walk is bounded by the declaration chain and needs no cycle guard of its
+    own.
+- *AST:* `HelperType { kind: class, ancestor?, forType, members[] }`.
 
 ### 15.3.2 Record helpers (incl. intrinsic types)
 

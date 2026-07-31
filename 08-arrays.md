@@ -115,6 +115,16 @@ end;
 - *Managed:* assignment shares the reference (copy-on-write via `SetLength`/
   `Copy`); lifetime automatic.
 - `SetLength`, `Length`, `Copy`, `High`, `Low` are the intrinsics (ch.04 §4.11).
+- ⚠️ *The element type may be another dynamic array, and §8.1.2's indexing sugar
+  applies there too.* `array of array of T` is the idiomatic jagged/2-D dynamic
+  array — `SetLength(A, 2, 3)` takes one length per dimension — and both
+  `A[0][1]` and the comma form `A[1, 2]` compile (dcc-verified). §8.1.2 states
+  the `M[i, j]` ≡ `M[i][j]` normalisation for the STATIC form only, which reads
+  as though the dynamic case were different; it is not.
+  - *Implementation note:* written inline, the two nest as one array-type node
+    inside another, so an element walk that peels a single level answers "array
+    of T" where the index count says the caller wanted T. Peel to the innermost
+    while the element is itself an inline array.
 - *AST:* `DynamicArrayType { elementType }`.
 
 ### 8.2.2 Dynamic array concatenation & literal init

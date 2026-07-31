@@ -614,6 +614,18 @@ GenericArgs = "<" TypeRef { "," TypeRef } ">" ;
   Delphi resolves this largely by context — the parser must know whether it is
   reading a type or an expression. Inline-type-args in expressions
   (`TList<Integer>.Create`) need lookahead. Full rules in ch.16.
+- ⚠️ *A `TypeRef` position resolves to a TYPE even when a nearer non-type of the
+  same name is in scope.* A declaration's type slot is not an ordinary
+  reference: `Params: Params` — a member whose name equals its own type's — is
+  legal and means the TYPE, though the member being declared is the nearer
+  binding by every ordinary rule. dcc-verified; the shape is common in imported
+  type-library interfaces, where a property and the interface it returns share
+  a name.
+  - This matters because the natural implementation resolves both positions
+    with one scope lookup. Doing so binds the type slot to the member, the
+    declaration comes out with no type at all, and every member reached
+    THROUGH it is then a false `E2003` — reported at the use sites, not at the
+    declaration that caused it (11 such sites in one database layer).
 - Structural type bodies (`record … end`, `array[…] of …`, `set of …`) are
   defined in their chapters; `TypeRef` is the umbrella reference.
 

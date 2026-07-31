@@ -255,7 +255,8 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
 | Strings & dynamic arrays (by-ref where mutating) | `Length` `SetLength` `SetString` `Copy` `Concat` `Delete` `Insert` `Pos`❌(RTL, not intrinsic) — `Insert`/`Delete`/`Concat`/`Copy` work on **dynamic arrays since XE7** |
 | Sets (by-ref) | `Include` `Exclude` |
 | Pointers & addresses (plain) | `Addr` `Assigned` `Ptr` `ReturnAddress` (~XE2) `AddressOfReturnAddress` (~XE2) |
-| Atomics (plain; XE3) | `AtomicIncrement` `AtomicDecrement` `AtomicExchange` `AtomicCmpExchange` |
+| Atomics (plain; XE3) | `AtomicIncrement` `AtomicDecrement` `AtomicExchange` `AtomicCmpExchange` — plus `AtomicCmpExchange128`, **64-bit targets only** (see the platform note) |
+| Varargs (by-ref arg list; **64-bit targets only**) | `VarArgStart` `VarArgEnd` `VarArgCopy` `VarArgGetValue` (type-arg) — declared NOWHERE, see the grep warning |
 | Special grammar | `Write` `WriteLn` `Read` `ReadLn` `Str` (colon-formatted args, §4.11.2; optional leading file var) `Val` (by-ref out params) `Slice` (open-array args only, §4.11) `Assert` `NameOf` (13.0, identifier arg §4.11.1) |
 | Classic file I/O (by-ref file var) | `Append` `Assign`/`AssignFile` `BlockRead` `BlockWrite` `Close`/`CloseFile` `Eof` `Eoln` `Erase` `FilePos` `FileSize` `Rename` `Reset` `Rewrite` `Seek` `SeekEof` `SeekEoln` `Truncate` — `Flush`❌(RTL, not intrinsic) |
 | Directories | `GetDir` only — `ChDir` `MkDir` `RmDir`❌(RTL, not intrinsic) |
@@ -282,14 +283,24 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
     trap: it looks like a flow intrinsic next to `Exit`/`Halt`, but it is an
     ordinary `System.SysUtils` routine, so code using it without that unit
     must still be an error.
+- ⚠️ *The catalog is not the same on every target.* `AtomicCmpExchange128` and
+  the four `VarArg*` routines resolve on a 64-bit target and are plain
+  `E2003 Undeclared identifier` on Win32 — dcc-verified both ways on 37.0, and
+  the RTL itself relies on it (`System.pas`, `System.Variants`,
+  `System.SysUtils` and `System.Rtti` all call them inside `CPUX64` branches).
+  So "seed exactly this catalog" above is per-TARGET: a seeder that ignores the
+  platform either false-E2003s the RTL on Win64 or accepts Win32 code that does
+  not compile. Whether a 32-bit ARM target agrees with Win32 here is untested.
 - ⚠️ *Do not decide membership by grepping `System.pas`* — that misreads the
-  source three separate ways, each of which makes a real intrinsic look
+  source FOUR separate ways, each of which makes a real intrinsic look
   declared: `GetMem`/`FreeMem`/`ReallocMem` appear only as **fields** of the
   deprecated `TMemoryManager` record; `VarClear`/`VarCast`/`VarCopy`/
-  `VarArrayRedim` only as fields of `TVariantManager`; and
+  `VarArrayRedim` only as fields of `TVariantManager`;
   `CompilerVersion`'s `const CompilerVersion = 0.0;` sits inside a
   `(* … *)` **comment** ("assigned a value by the compiler when the system
-  unit is compiled"). Conversely `Close`/`Halt` appear in the file, but only
+  unit is compiled"); and all four `VarArg*` signatures appear as
+  **commented-out `//` lines** next to the `TVarArgList` declaration they
+  operate on. Conversely `Close`/`Halt` appear in the file, but only
   as *calls*.
 - ✅ *The reliable test, per name:* compile a unit whose `uses` clause is
   **empty** and which merely mentions the name (`procedure P; begin X end;`).

@@ -235,7 +235,7 @@ P := TPair<string, Integer>.Create('a', 1);
   `TThingList = class(TObjectList<TThing>)` inherits `property Items[I]: T` from
   `TList<T>` two hops up; at any use site inside or outside TThingList, `Items[I]`
   is a `TThing`. Stated as semantics this is obvious, and it is *still* the
-  single most common place an implementation loses precision, in three distinct
+  single most common place an implementation loses precision, in four distinct
   ways worth naming separately:
   - the substitution must COMPOSE along the chain — a descendant's arguments
     apply to its ancestor's heritage reference too, so a frame that survives only
@@ -243,6 +243,13 @@ P := TPair<string, Integer>.Create('a', 1);
   - it must be taken at the hop the member was FOUND at, not at the type the walk
     STARTED from — the starting type is frequently the one with no arguments at
     all;
+  - it must travel with a NESTED type of the generic. Such a type has no
+    arguments of its own — `TList<T>` declares `arrayofT = array of T` and
+    returns it from `property List` — so there is nothing to substitute IN it
+    and a substitution step naturally returns it untouched; but its definition
+    is written in the enclosing generic's parameters, which is precisely the
+    frame the next step (indexing it) needs. The RTL's own containers are built
+    this way, so `with SomeList.List[I] do` is ordinary code;
   - and it must be recorded WITH the binding. A resolver that records only
     "which symbol does this name denote" and re-derives the type later has thrown
     away the only thing that closes it: nothing downstream can tell which hop the

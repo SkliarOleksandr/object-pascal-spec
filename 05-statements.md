@@ -681,7 +681,7 @@ end;
   |---|---|---|
   | variable / field / parameter | `with Rec.Field do` | |
   | property | `with Canvas do` | including an INHERITED one, and a bare redeclaration (`property Items;`), which has no type of its own — 13.1.4 |
-  | parameterless function call | `with GetRecord do` | the RESULT type |
+  | parameterless function call | `with GetRecord do` | the RESULT type; if the name is OVERLOADED, the arity-0 overload — see below |
   | constructor call | `with TFoo.Create do` | the CLASS; both spellings |
   | typecast | `with TVarData(X) do` | the cast's TYPE, not the callee's |
   | `as` cast | `with Obj as TSub do` | |
@@ -693,6 +693,18 @@ end;
   | interface-typed designator | `with I do Go` | |
   | parenthesised designator | `with (R) do` | see the caveat below |
 
+- ⚠️ *A call target is subject to OVERLOAD RESOLUTION, against an empty argument
+  list.* The syntax provides no arguments, so the target selects the arity-0
+  overload (6.3.1) — and it may be the one the class does NOT declare. A UI
+  automation library writes exactly that: the class overrides `function
+  GetScreenBounds(out ABounds: TRect): Boolean` and inherits a parameterless
+  `function GetScreenBounds: TRect` from two classes up, then says
+  `with GetScreenBounds do X := (Left + Right) div 2`. A resolver that types the
+  target by finding "the member of that name" — the natural implementation,
+  since the *nearest* member is what every other reference wants — types the
+  target as `Boolean` and reports every name in the body undeclared. Overload
+  selection cannot be skipped here just because there is no argument list to
+  parse; the empty list is what selects.
 - ⚠️ *Two negatives, both easy to implement by accident:*
   - *The implicit pointer dereference does NOT extend to a with target.* Object
     Pascal lets `P.Field` stand for `P^.Field`, and a resolver that reuses its

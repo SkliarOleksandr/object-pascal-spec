@@ -106,6 +106,28 @@ The same identifier may name types of different generic arity (`TFoo`,
     is *supposed* to select by the supplied argument count, so an
     arity-preference applied blindly inside generic-argument resolution would
     break every `TList<Integer>`.
+  - ⚠️ *The two arities may also sit in ONE unit, split across its sections* —
+    the generic in the interface, a plain instantiation alias in the
+    implementation:
+
+    ```pascal
+    interface
+    type
+      TSomeProvider<T: TSomeControl> = class(TBaseProvider<T>) ... end;
+    implementation
+    type
+      TSomeProvider = class(TSomeProvider<TSomeControl>);   // short name for
+                                                            // the common case
+    ```
+
+    This is idiomatic, not odd, and it is the hardest placement to get right
+    because it falls between the two mechanisms an implementation naturally
+    builds: same-name declarations chained within one scope, and a cross-unit
+    search. Here the arities are in the same unit but different scopes, so
+    neither applies. The alias is the nearer declaration, so its own heritage
+    reference resolves to the alias ITSELF — the self-reference described above,
+    and every inherited member named from the generic's method bodies goes
+    undeclared.
 - ⚠️ *A FORWARD declaration completes by `(name, arity)` too, and this composes
   with arity overloading in a way that is easy to get wrong.* A container
   library's iterator unit declares, in this order:
@@ -208,6 +230,25 @@ P := TPair<string, Integer>.Create('a', 1);
   (introduces `T` into the body's scope), not an instantiation — the RTL's
   `Generics.Defaults`/`Collections` implementations are wall-to-wall examples. See
   ch.06 `ImplName`.
+- ⚠️ *Inheriting from an instantiation closes the ancestor's members over its
+  arguments, and that substitution has to survive every hop of the walk.*
+  `TThingList = class(TObjectList<TThing>)` inherits `property Items[I]: T` from
+  `TList<T>` two hops up; at any use site inside or outside TThingList, `Items[I]`
+  is a `TThing`. Stated as semantics this is obvious, and it is *still* the
+  single most common place an implementation loses precision, in three distinct
+  ways worth naming separately:
+  - the substitution must COMPOSE along the chain — a descendant's arguments
+    apply to its ancestor's heritage reference too, so a frame that survives only
+    one hop leaves `T` open at the second;
+  - it must be taken at the hop the member was FOUND at, not at the type the walk
+    STARTED from — the starting type is frequently the one with no arguments at
+    all;
+  - and it must be recorded WITH the binding. A resolver that records only
+    "which symbol does this name denote" and re-derives the type later has thrown
+    away the only thing that closes it: nothing downstream can tell which hop the
+    member came from. The symptom is a member whose type reads back as the open
+    parameter `T` — after which indexing it, or opening a `with` over it, yields
+    nothing and the whole enclosing body reports as undeclared.
 - *AST:* `GenericInstantiation { genericName, typeArgs[] }`.
 
 ---

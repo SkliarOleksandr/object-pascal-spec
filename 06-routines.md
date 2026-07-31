@@ -295,6 +295,17 @@ function Area(C: TCircle): Double; overload;
   (with implicit-conversion ranking); ambiguity is a compile error.
 - ⚠️ Overload resolution interacts with **default parameters** and **distinct type
   aliases** (ch.02) — both can change which candidate wins.
+- ⚠️ *An overload declared only in the IMPLEMENTATION section joins the interface
+  section's set for the same unit.* dcc-verified: a 3-parameter `Conv` in the
+  interface and a 4-parameter `Conv` in the implementation, and both call shapes
+  compile from inside that implementation.
+  - The two are naturally separate SYMBOLS in separate scopes, and must stay so
+    — chaining them would export the implementation-only overload to every
+    importer, which is exactly what it is not. A resolver therefore has to
+    consult BOTH chains whenever it reasons over "all the overloads of this
+    name": a call inside the implementation resolves to the nearer head, and
+    measuring it against that chain alone reports a perfectly good call to the
+    interface overload as having the wrong number of arguments.
 - *Parser impact:* none beyond recording the directive; resolution is semantic.
 
 ---

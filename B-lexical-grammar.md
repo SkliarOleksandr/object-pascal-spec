@@ -466,7 +466,23 @@ const SQL =
   `'''` defines the "ignored indentation". From every content line, that many
   leading whitespace columns are removed; extra indentation beyond it is kept.
 - ⚠️ *Under-indent is an error:* no content line may be **less** indented than the
-  closing `'''` → compile error.
+  closing `'''` → `E2657 Inconsistent indent characters`. The code names the rule
+  better than "under-indented" does, because dcc32 37.0 compares the closing
+  indentation **character by character** rather than by width, and stops at the
+  end of a short line:
+
+  | closing indent | content line | |
+  |---|---|---|
+  | 4 spaces | `··under` | `E2657` at the `u` |
+  | 4 spaces | a single tab | `E2657` — same width would not save it |
+  | 4 spaces | `··` (whitespace only) | **ok** — the line simply runs out |
+  | 4 spaces | empty | **ok** |
+  | 4 spaces | `·····⇥more` | **ok** — the first 4 match; the rest is free |
+  | none (column 1) | anything | **ok** |
+
+  So the rule is: *the closing line's indentation must be a character-wise prefix
+  of every content line, as far as that line goes.* One report per offending
+  line, not per literal, and the same for longer quote runs.
 - *Trailing newline:* the line break immediately before the closing `'''` is
   **omitted** from the value; add a blank line to force a trailing newline.
 - *Embedding quotes:* use a larger odd run (`'''''`) to embed a literal `'''`.

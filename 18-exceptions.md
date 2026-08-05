@@ -153,7 +153,26 @@ raise E at ReturnAddress;           // raise at a specific address
 
 - ⚠️ *Bare `raise`* is only valid **inside an exception handler** — it re-throws the
   in-flight exception, preserving its original stack trace. Outside a handler it is
-  an error. The analyzer must track handler context.
+  an error: `E2145 Re-raising an exception only allowed in exception handler`.
+- ⚠️ *What "inside a handler" means* is **lexical**, and the deciding scope is the
+  **nearest enclosing part of a `try` statement**, not any enclosing one. A `try`
+  block or a `finally` part therefore *resets* the context an outer handler
+  established (dcc32 37.0):
+
+  ```pascal
+  try except try finally raise; end; end;   // error — nearest part is `finally`
+  try finally try except raise; end; end;   // legal — nearest part is `except`
+  try except try raise; except end; end;    // error — nearest part is a try block
+  try try except raise; end; finally end;   // legal
+  ```
+
+  Both the `on … do` bodies and the `else` branch of an `except` part count as
+  handler context. An **anonymous method body does not reset it** — a bare
+  `raise` written inside a `procedure begin … end` in a handler is accepted —
+  which confirms the try-statement part is the *only* boundary. A named nested
+  routine needs no separate rule: its body is never lexically inside a
+  statement, so no part is in effect there and the `raise` is an error even when
+  the routine is called from a handler.
 - `raise` **transfers ownership** of the exception object to the RTL — do not free
   the raised instance.
 - `at Address` overrides the reported raise location (diagnostics).

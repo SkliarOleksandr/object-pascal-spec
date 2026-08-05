@@ -96,7 +96,8 @@ Directive = "{$" DirectiveBody "}" | "(*$" DirectiveBody "*)" ;
 **Grammar**
 
 ```ebnf
-Ident      = [ "&" ] IdentStart { IdentChar } ;
+Ident      = [ "&" ] Name ;                  (* the ONE leading "&" escapes *)
+Name       = { "&" } IdentStart { IdentChar } ;   (* further "&"s ARE the name *)
 IdentStart = "A".."Z" | "a".."z" | "_" | ?Unicode letter? ;
 IdentChar  = IdentStart | "0".."9" ;
 ```
@@ -105,6 +106,15 @@ IdentChar  = IdentStart | "0".."9" ;
 
 - *Case-insensitive:* `Count`, `count`, `COUNT` are the same identifier. Fold case
   for symbol lookup; keep original spelling on the token.
+- ⚠️ *Only the FIRST `&` escapes; any further ones are part of the NAME.*
+  `&&op_Equality` names `&op_Equality`, which is a **different** member from
+  `op_Equality` — dcc32 37.0 accepts both in one record, and rejects
+  `&op_Equality` beside `op_Equality` as a redeclaration. `&&&op_Equality` is
+  accepted as a declaration too (naming `&&op_Equality`). This is how the RTL and
+  spring4d spell the compiler's internal operator names in source
+  (`class function &&op_Equality(const left, right: TValue): Boolean; static`),
+  so a lexer that treats `&` as a one-shot escape emits a stray token in the
+  middle of a class body.
 - ⚠️ *`&`-escape:* a leading `&` lets a **reserved word be used as an identifier**
   (e.g. `&begin`, `&type`). The `&` is not part of the name. Essential for
   interop and code generation.

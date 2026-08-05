@@ -105,7 +105,15 @@ The same identifier may name types of different generic arity (`TFoo`,
   - The rule is about the reference, not the declaration: the base of `T<...>`
     is *supposed* to select by the supplied argument count, so an
     arity-preference applied blindly inside generic-argument resolution would
-    break every `TList<Integer>`.
+    break every `TList<Integer>`. Note that an identifier *inside* `<...>` is
+    itself a bare reference — `TDict<Pointer, TList>` means the arity-0
+    `Pointer` — so the exemption covers the BASE of the reference only.
+  - ⚠️ *The arity-0 candidate may be a PREDEFINED type rather than a
+    declaration*, and then it is not in any unit's scope at all: spring4d
+    declares `Pointer<T> = record` beside the compiler's own `Pointer`, so the
+    search for a matching arity has to reach the predefined names too, not only
+    the current unit and its imports. Every `Pointer(X) := nil` in that unit
+    depends on it.
   - ⚠️ *The two arities may also sit in ONE unit, split across its sections* —
     the generic in the interface, a plain instantiation alias in the
     implementation:

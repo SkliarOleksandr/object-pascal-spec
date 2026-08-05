@@ -58,8 +58,9 @@ Object Pascal types divide into: **simple** (ordinal, real), **string**,
   A `record` with an `Implicit` operator to an ordinal is *not* rescued in any of
   the first four (verified for `case`); in a condition, a record with `Implicit`
   to `Boolean` **is** accepted, so a checker must exempt records there and only
-  there. `array[Int64]` is `E2100 Data type too large`, and `set of Int64` is
-  `E2001` even though `Int64` is an ordinal.
+  there. `array[Int64]` is `E2100 Data type too large`, and a 64-bit ordinal
+  `set of` base is `E2001` rather than `E2028` — see §2.4.1, where the answer
+  turns out to depend on the target.
 - *AST:* a single `TypeRef`/`TypeDecl` node with a discriminant for the category.
 
 ---
@@ -363,10 +364,19 @@ end;
   lower bound: `set of -5..5` is `E2028`, not a separate range message. So are
   `set of Word`, `set of Integer`, `set of 0..256` and an enum with an explicit
   value above 255. `set of Byte` and `set of 0..255` are the legal boundary.
-  Two exceptions, both dcc32 37.0: `set of Char` is only a **warning**
-  (`W1050 WideChar reduced to byte char in set expressions`), not an error, and
-  `set of Int64` is `E2001 Ordinal type required` rather than `E2028`.
-  A non-ordinal base is `E2001` (§2.1.1).
+  A non-ordinal base is `E2001` (§2.1.1). Three exceptions to the above, all
+  probed against dcc 37.0:
+
+  - `set of Char` / `set of WideChar` is only a **warning**
+    (`W1050 WideChar reduced to byte char in set expressions`), not an error.
+  - a **64-bit ordinal** base is `E2001 Ordinal type required`, not `E2028` —
+    `Int64` and `UInt64` on every target, and `NativeInt`/`NativeUInt` **only
+    where the target makes them 64-bit**: the same `set of NativeInt` is `E2028`
+    under `dcc32` and `E2001` under `dcc64`. So the code follows the WIDTH, not
+    the spelling, and a checker needs the target to answer.
+  - the `*Bool` interop types are `E2028` — including `ByteBool`, which is a
+    single byte. `set of Boolean` is fine, so this is about the type and not
+    about its size.
 - Set *values* are written with the set-constructor `[ … ]` (B.9), which collides
   syntactically with array indexing — disambiguated by position.
 - Operators: `+` (union), `-` (difference), `*` (intersection), `in`,

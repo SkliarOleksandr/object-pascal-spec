@@ -333,8 +333,19 @@ TypeInfo(TMyEnum);             // takes a TYPE -> PTypeInfo
   them. The AST may keep them as `CallExpr` and tag `intrinsic: true`.
 - ⚠️ *`Slice(A, Count)`:* valid **only** as an actual argument to an open-array
   parameter (ch.06 §6.2.6) — it passes the first `Count` elements of `A`. Reject
-  it in any other expression position (semantic check); the RTL uses it in
+  it in any other expression position: `E2193 Slice standard function only
+  allowed as open array argument`. The RTL uses it in
   `System.Classes`/`System.ObjAuto`.
+- ⚠️ *An argument of an INTRINSIC is never such a position*, even when that
+  intrinsic's parameter is itself an open array — so the rule is narrower than
+  "an open-array argument". `Insert(const Values: array of T; var Dest; Index)`
+  is the decisive case and dcc32 37.0 rejects `Insert(Slice(A, 3), D, 0)`;
+  `Concat(Slice(A, 3), D)` and `Writeln(Slice(A, 3))` go the same way, as does
+  `Slice(Slice(A, 5), 3)`. Read it as: the position must be an argument of an
+  ordinary *call*.
+- ⚠️ *`A` may not be a dynamic array* — `Slice(D, 3)` with `D: array of Integer`
+  is `E2016 Array type required`, even in a perfectly good argument position.
+  A static array and an open-array parameter both work.
 
 ### 4.11.1 `NameOf` intrinsic
 

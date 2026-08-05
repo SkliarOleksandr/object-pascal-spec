@@ -44,6 +44,22 @@ Object Pascal types divide into: **simple** (ordinal, real), **string**,
 - The parser needs this taxonomy to validate where a type may appear (e.g. only
   *ordinal* types are legal as `case` selectors, array index types, `set of`
   base, and `for` counters — recurring constraint).
+- ⚠️ *The constraint is per POSITION, not one predicate.* dcc32 37.0 uses three
+  different codes and does not draw the line in the same place each time:
+
+  | position | non-ordinal | `Variant` | sparse enum |
+  |---|---|---|---|
+  | array index type | `E2001 Ordinal type required` | **`E2001`** | ok |
+  | `set of` base | `E2001` (plus `E2028`, §2.4.1) | **`E2001`** | ok |
+  | `case` selector | `E2001` | **accepted** | ok |
+  | `for` counter | `E2032 For loop control variable must have ordinal type` | **`E2032`** | ok |
+  | `if`/`while`/`until` | `E2012 Type of expression must be BOOLEAN` | **accepted** | n/a |
+
+  A `record` with an `Implicit` operator to an ordinal is *not* rescued in any of
+  the first four (verified for `case`); in a condition, a record with `Implicit`
+  to `Boolean` **is** accepted, so a checker must exempt records there and only
+  there. `array[Int64]` is `E2100 Data type too large`, and `set of Int64` is
+  `E2001` even though `Int64` is an ordinal.
 - *AST:* a single `TypeRef`/`TypeDecl` node with a discriminant for the category.
 
 ---
@@ -116,8 +132,13 @@ BoolType = "Boolean" | "ByteBool" | "WordBool" | "LongBool" ;
 - `Boolean` has ordinal values `False=0`, `True=1`. The `*Bool` types treat any
   non-zero as `True` (interop with C/WinAPI) — relevant to constant folding, not
   parsing.
-- Conditions in `if`/`while`/`until`/`for-in` guards require a Boolean type — no
-  integer-to-Boolean coercion.
+- Conditions in `if`/`while`/`until` guards require a Boolean type — no
+  integer-to-Boolean coercion: `E2012 Type of expression must be BOOLEAN`, which
+  dcc32 37.0 reports for an integer, real, char, enum, set, array, pointer,
+  class, interface or procedural condition. Two things it accepts, and neither is
+  guessable: a `Variant`, and a `record` with an `Implicit` operator to `Boolean`
+  (the same record with `Implicit` to `Integer` is `E2012`). See the
+  position table in §2.1.1.
 
 ### 2.2.3 Character types
 
@@ -171,8 +192,13 @@ type
 
 **Semantics & parsing notes**
 
-- *Explicit values* make the enum *non-contiguous* (a "sparse" enum). Sparse enums
-  cannot be used as array index/`set of` bases — semantic constraint.
+- *Explicit values* make the enum *non-contiguous* (a "sparse" enum). A sparse enum
+  is still an **ordinal type and usable everywhere one is** — as an array index, a
+  `set of` base, a `case` selector and a `for` counter. (An earlier revision of
+  this section claimed the opposite; dcc32 37.0 accepts
+  `array[(spA = 0, spB = 10, spC = 99)] of Integer` and `set of` that type. What
+  can still fail is the `set of` *cardinality* rule — an explicit value above 255
+  is `E2028`, §2.4.1 — not sparseness.)
 - ⚠️ *Scope of element names:* by default enum element identifiers are injected
   into the **enclosing scope** (so `Clubs` is directly visible). With
   `{$SCOPEDENUMS ON}` they must be qualified (`TSuit.Clubs`). This changes
@@ -332,8 +358,15 @@ end;
 **Semantics & parsing notes**
 
 - ⚠️ *Base-type limit:* the base ordinal type must have **no more than 256
-  possible values**, and ordinal values must be in `0..255`. Larger ranges are a
-  compile error. Enforce semantically.
+  possible values**, and ordinal values must be in `0..255`. Both failures share
+  one code — `E2028 Sets may have at most 256 elements` — including a negative
+  lower bound: `set of -5..5` is `E2028`, not a separate range message. So are
+  `set of Word`, `set of Integer`, `set of 0..256` and an enum with an explicit
+  value above 255. `set of Byte` and `set of 0..255` are the legal boundary.
+  Two exceptions, both dcc32 37.0: `set of Char` is only a **warning**
+  (`W1050 WideChar reduced to byte char in set expressions`), not an error, and
+  `set of Int64` is `E2001 Ordinal type required` rather than `E2028`.
+  A non-ordinal base is `E2001` (§2.1.1).
 - Set *values* are written with the set-constructor `[ … ]` (B.9), which collides
   syntactically with array indexing — disambiguated by position.
 - Operators: `+` (union), `-` (difference), `*` (intersection), `in`,

@@ -302,8 +302,23 @@ type
 - *Kind constraints:* `class` (a reference type), `record` (a value type),
   `constructor` (has an accessible parameterless constructor — enabling
   `T.Create`). They may combine (`T: class, constructor`).
+- **What each constraint UNLOCKS on a value of type T**, which is the question a
+  member lookup asks (all dcc32 37.0-probed):
+  - `T: class` — **TObject's members**. `V.Free` and `V.ClassName` compile under
+    a bare `class` constraint, because a reference type is a class and every
+    class descends from TObject.
+  - `T: record` and a lone `T: constructor` — **nothing**. The same `V.Free` is
+    `E2003 Undeclared identifier` under either.
+  - `T: TBase` / `T: IFoo` — that type's members, and its ancestors'.
+  - `T.Create` needs the `constructor` keyword specifically: under `T: class`
+    alone it is `E2568 Can't create new instance without CONSTRUCTOR constraint
+    in type parameter declaration`.
 - *Type constraints:* a class type (T must descend from it) or interface (T must
   implement it). `T: TBase, IFoo` combines.
+- ⚠️ Constraints are written **once, on the declaration**. A method body may not
+  repeat them — `procedure TList<T>.Sort;` carries a bare `<T>` — so a tool that
+  reads constraints off the parameter it finds must follow the body's parameter
+  back to the declaring type's.
 - ⚠️ `class`/`record`/`constructor` here are **constraint keywords**, not type
   declarations — parse within the `GenericParams` constraint list, not as a class
   body.

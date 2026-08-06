@@ -155,6 +155,49 @@ B := A + [4, 5];       // concatenation (XE7+)
 
 ---
 
+### 8.2.3 The dynamic-array pseudo-constructor `T.Create(...)`
+
+| | |
+|---|---|
+| **Introduced** | Delphi 2009 |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+A **dynamic array type** may be written with a `Create` pseudo-constructor that
+builds a value from its arguments. It is spelled like a class constructor, but
+no `Create` is declared anywhere — the compiler makes it up for the type.
+
+**Example**
+
+```pascal
+type
+  TMyArr = array of Byte;
+var
+  A: TMyArr;
+begin
+  A := TMyArr.Create($20, $20);       // two elements
+  A := TMyArr.Create();               // legal, and empty
+  A := TArray<Integer>.Create(1, 2);  // an instantiated generic, likewise
+```
+
+The RTL leans on it: `TBytes.Create($EF, $BB, $BF)` (System.SysUtils),
+`TCharArray.Create('*', '?')` (System.IOUtils), `TArray<TGUID>.Create(...)`
+(System.Win.Sensors).
+
+**Semantics & parsing notes**
+
+- The qualifier must be the **TYPE**. `A.Create(1, 2)` through a *variable* of
+  that type is `E2671 Record, object, class type, or type helper required`
+  (dcc32 37.0-probed) — the same error a **static** array gets:
+  `TStat = array[0..1] of Byte; TStat.Create(1, 2)` is rejected.
+- There is no member to resolve, so a name resolver must special-case the form
+  rather than look `Create` up: the result type is the array type itself,
+  exactly as a real constructor yields its class.
+- Aliases hide it — `TBytes` is `TArray<Byte>` is `array of T` — so "is this a
+  dynamic array" has to follow the alias chain, not read one node.
+
+---
+
 ## 8.3 Open array parameters (recap)
 
 ### 8.3.1 Open arrays & `array of const`

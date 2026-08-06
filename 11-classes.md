@@ -326,6 +326,36 @@ var C: TGrid.TCell;     // qualified access
   segment's own ancestry is searched before the outer segments'. A resolver
   that walks only the innermost segment's ancestors mis-reports these
   (16 false undeclared-identifiers in that one RTL unit).
+- ⚠️ *A member — including an INHERITED one — outranks a compiler-PREDEFINED
+  name.* The implicit System scope is the outermost one, so a class member of
+  the same name shadows it throughout the method body, in **every** position.
+  dcc32 37.0-probed with `Text`, which is a predefined file type (ch.10 §10.3):
+
+  ```pascal
+  TBase = class
+    property Text: string read FText;
+  end;
+  TDesc = class(TBase)
+    function Use: Boolean;
+    procedure Decl;
+  end;
+
+  function TDesc.Use: Boolean;
+  begin
+    Result := Text.IsEmpty;   // OK — the inherited PROPERTY, not the file type
+  end;
+
+  procedure TDesc.Decl;
+  var
+    F: Text;                  // E2007 — the property shadows the type here too
+  ...
+  ```
+
+  FMX's canvas units rely on the first form (`TTextLayout.Text`, used bare in
+  descendants across units). A resolver that binds predefined names in an early
+  pass and only fills GAPS later gets this wrong silently: the name resolves, so
+  no diagnostic appears — only the member after the dot fails, and ctrl+click
+  lands on nothing.
 - *AST:* nested `TypeDecl`/`ConstDecl` as class members.
 
 ---

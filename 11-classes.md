@@ -154,6 +154,32 @@ type
   **all code in the same unit** (Object Pascal has no separate `friend`). `strict
   private`/`strict protected` (2006+) restrict to the class / class+descendants.
   The resolver enforces this — it needs the declaring unit on each member.
+- ⚠️ *`strict private` reaches into NESTED types, and the relation is asymmetric*
+  (dcc32 37.0-probed both ways). A type nested in the declaring class may read
+  its enclosing class's `strict private` members:
+
+  ```pascal
+  TOuter = class
+  strict private
+    FVal: Integer;
+  public type
+    TInner = class
+      procedure Poke(const A: TOuter);
+    end;
+  end;
+
+  procedure TOuter.TInner.Poke(const A: TOuter);
+  begin
+    A.FVal := 1;              // OK — a nested type is inside the declaring class
+  end;
+  ```
+
+  The other direction is refused: an enclosing class reading a NESTED class's
+  `strict private` member is `E2361 Cannot access private symbol
+  TOuter.TInner.FIn`. So "inside the declaring type" includes what is nested in
+  it, and not what it is nested in. `System.JSON.Builders` depends on the legal
+  direction (`TJSONCollectionBuilder.TBaseCollection` reads the outer class's
+  `FJSONWriter`).
 - ⚠️ *`published` requires RTTI:* `published` members generate runtime type info and
   are restricted to classes compiled with `{$M+}` (or descending from `TPersistent`).
   Allowed member types are constrained (e.g. method pointers for events, ordinal/

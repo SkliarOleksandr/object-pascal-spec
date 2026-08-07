@@ -141,6 +141,17 @@ type
 
 - ⚠️ *Not callable explicitly, take no parameters, run automatically.* Distinct from
   instance constructors. The parser records `kind = classConstructor/classDestructor`.
+- ⚠️ *So it is never what a NAME means either* — which matters most where it
+  shares a name with a real constructor, and that is the common case. `TRegistry`
+  (System.Win.Registry) declares a private `class constructor Create` fourteen
+  lines above the public parameterless `constructor Create`: `TRegistry.Create`
+  means the latter, and a resolver that stops at the first declaration of the
+  name binds the former with no diagnostic to show for it. Nor does one hide an
+  INHERITED constructor — with a `class constructor Create` as a class's only own
+  `Create`, `TDesc.Create(7)` still resolves to the ancestor's
+  `constructor Create(A: Integer)` (dcc32 37.0-probed).
+- The name is not fixed: `class constructor Init;` compiles, so these cannot be
+  recognised by name — only by `class` together with `constructor`/`destructor`.
 
 ---
 

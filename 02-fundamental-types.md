@@ -421,6 +421,19 @@ type
   **RTTI** (distinct types get their own type info), and implicit conversions.
 - The leading `type` here is the reserved word `type` used as a *modifier*, not a
   section header — distinguish by position (inside a `TypeDecl` RHS).
+- ⚠️ *`X = X` is the RE-EXPORT idiom, and its right side means the OUTER `X`.*
+  A declaration cannot alias itself, so the name on the right means whatever it
+  meant before this declaration — which for a NESTED type is the enclosing
+  scope's. dcc32 37.0-probed: with a unit-level `TMode` enum, a class declaring
+  `public type TMode = TMode;` compiles, and `THost.TMode.AllLocal` is that
+  enum's value. FMX re-exports two types through classes this way
+  (`TOverlayMode = TOverlayMode deprecated ...` in FMX.MultiView.Types,
+  `TItemAppearanceObjectsClass = TItemAppearanceObjectsClass` in
+  FMX.ListView.Appearances).
+
+  A resolver that binds the right side AFTER declaring the left gets a type
+  whose definition is itself: no error, and every member reached through it
+  silently missing. The lookup has to exclude the symbol being declared.
 - *AST:* `TypeAlias { name, baseType, distinct: bool }`.
 
 ### 2.5.2 Hint directives on type declarations

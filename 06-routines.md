@@ -410,6 +410,19 @@ type
   pointer** (`of object` = code + `Self`, 8/16 bytes), and a **reference** (an
   interface-backed closure that can capture locals). Keep the kind on the type
   node — assignment compatibility differs across them.
+- ⚠️ *Writing the NAME of a procedural value in a value position CALLS it* — the
+  classic Pascal rule, and the one that decides what `.Member` after it means.
+  With `ValueFunc: TFunc<IValue>` (that is, `reference to function: IValue`),
+  `ValueFunc.GetValue` means `ValueFunc().GetValue`, so `GetValue` is IValue's
+  member and not the closure's — `System.Bindings.Outputs` does exactly this.
+  `@ValueFunc` is how the value itself is named instead.
+
+  Two shapes are NOT called this way, and a resolver needs both to stop it: a
+  procedural type that takes PARAMETERS (nothing would supply the arguments),
+  and a `procedure` type, which has no result to take a member from. The same
+  rule seen from the other side is why a guard may be procedural — `if
+  AShouldStop then` on a `reference to function: Boolean` is legal because the
+  guard's type is the RESULT (ch.05).
 - `of object` and `reference to` use the directives/reserved words `object` and
   `reference`; `reference` is a directive (B.4.2).
 

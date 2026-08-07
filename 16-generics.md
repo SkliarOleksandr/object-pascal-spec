@@ -181,6 +181,23 @@ function Max<T>(const A, B: T): T;
 
 - Type arguments may be **explicit** (`Max<Integer>(a, b)`) or **inferred** from
   the value arguments (`Max(a, b)`) — see 16.5.
+- ⚠️ *Constraints live on the DECLARATION here too* (§16.4.1), so a generic
+  method's implementation header repeats a bare `<T>`:
+
+  ```pascal
+  // interface
+  function GetNamedObject<T: TRttiNamedObject>(const AName: string): T;
+  // implementation — no constraints, and dcc refuses them here
+  function TRttiType.GetNamedObject<T>(const AName: string): T;
+  ```
+
+  A resolver answering "what members does a `T` value have" inside that body
+  must therefore find the METHOD's declaration, not the enclosing type's
+  parameters. Note the implementation name is a flat run of segments and **each
+  segment may carry its own parameter list** (`TList<T>.Sort`,
+  `TFinder.Pick<T>`), so the owner of a list is the segment immediately before
+  it. System.Rtti's `GetNamedObject` is the real case: its body calls
+  `Obj.HasName`, which only the constraint can answer for.
 - *AST:* `MethodDecl { typeParams[], … }`.
 
 ---

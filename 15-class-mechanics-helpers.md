@@ -291,6 +291,20 @@ type
 - ⚠️ Method-call syntax on a value of an intrinsic type (`42.ToString`,
   `S.ToUpper`) resolves through the active helper. The parser sees an ordinary
   `Designator` member access on a literal/expression — the resolver routes it.
+- ⚠️ *The target is a TYPE, not a name* — and an intrinsic type has several
+  names. A `record helper for Cardinal` applies to values declared `Cardinal`,
+  `LongWord` and `UInt32` alike, because those are one type; it is `E2671` on an
+  `Integer`. Same for `Integer`/`LongInt`/`Int32`, `Char`/`WideChar` and
+  `string`/`UnicodeString` (all dcc32 37.0-probed). Two consequences for a
+  resolver that keys helpers by symbol identity: a plain alias
+  (`UInt32 = Cardinal`) must be followed to the type it names, and the names
+  that are seeded separately have to be grouped by hand.
+- ⚠️ *...but `T = type Base` is a DISTINCT type* (2 §2.5.1), so a helper for it
+  is NOT a helper for `Base`, and — since at most one helper is active per type
+  (§15.3.3) — registering it as one HIDES the real `Base` helper. Real shape:
+  `TEditMask = type string` (System.MaskUtils) has its own helper, and treating
+  that as a string helper made ordinary `SomeString.Substring` unresolvable
+  throughout FMX.MaskEdit.
 - Same no-instance-fields restriction as class helpers.
 
 ### 15.3.3 Helper scope-resolution rule

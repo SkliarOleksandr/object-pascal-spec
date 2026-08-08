@@ -111,7 +111,7 @@ IdentChar  = IdentStart | "0".."9" ;
   `op_Equality` — dcc32 37.0 accepts both in one record, and rejects
   `&op_Equality` beside `op_Equality` as a redeclaration. `&&&op_Equality` is
   accepted as a declaration too (naming `&&op_Equality`). This is how the RTL and
-  spring4d spell the compiler's internal operator names in source
+  value-wrapper libraries spell the compiler's internal operator names in source
   (`class function &&op_Equality(const left, right: TValue): Boolean; static`),
   so a lexer that treats `&` as a one-shot escape emits a stray token in the
   middle of a class body.

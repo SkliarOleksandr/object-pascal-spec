@@ -306,6 +306,19 @@ function Area(C: TCircle): Double; overload;
     name": a call inside the implementation resolves to the nearer head, and
     measuring it against that chain alone reports a perfectly good call to the
     interface overload as having the wrong number of arguments.
+- ⚠️ *Across an ANCESTOR — including an ancestor INTERFACE — the set spans the
+  hierarchy only when the declarations carry `overload`.* dcc-verified both
+  ways: with `IBase` declaring `Take(const A: TSpot)` and `IMore =
+  interface(IBase)` declaring `Take(const A: TArray<TSpot>)`, `M.Take(S)`
+  compiles when both are marked `overload` and is `E2010 Incompatible types`
+  when neither is — the derived declaration simply HIDES the ancestor's, and
+  the argument never gets a second candidate to fit.
+  - Worth stating because the shape is common in layered interface libraries: a
+    base interface declares the single-item method, the derived one adds the
+    batch method, and only the `overload` directive keeps both callable through
+    the derived reference. A resolver that merges the ancestry unconditionally
+    accepts code dcc rejects; one that never merges it rejects code dcc
+    accepts.
 - *Parser impact:* none beyond recording the directive; resolution is semantic.
 
 ---
@@ -418,11 +431,21 @@ type
   `@ValueFunc` is how the value itself is named instead.
 
   Two shapes are NOT called this way, and a resolver needs both to stop it: a
-  procedural type that takes PARAMETERS (nothing would supply the arguments),
-  and a `procedure` type, which has no result to take a member from. The same
+  procedural type with a parameter the CALLER must supply, and a `procedure`
+  type, which has no result to take a member from. The same
   rule seen from the other side is why a guard may be procedural — `if
   AShouldStop then` on a `reference to function: Boolean` is legal because the
   guard's type is the RESULT (ch.05).
+  - ⚠️ *"Must supply" and not "declares none":* a parameter with a DEFAULT is
+    supplied by the compiler, so a type whose parameters are all defaulted is
+    called by writing its name like any other. dcc-verified in both directions
+    on `TF = function(A: Integer = 0): TStyler` — `F.Color` compiles, and the
+    same line against `function(A: Integer): TStyler` is `E2035 Not enough
+    actual parameters`. A resolver that tests for the PRESENCE of a parameter
+    list therefore stops one shape too early; the test is whether any parameter
+    lacks a default. (Component libraries reach for this deliberately: a global
+    `function(AControl: TControl = nil): TStyleServices` reads as a value at
+    every call site that wants the default.)
 - `of object` and `reference to` use the directives/reserved words `object` and
   `reference`; `reference` is a directive (B.4.2).
 

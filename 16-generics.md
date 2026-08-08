@@ -109,11 +109,24 @@ The same identifier may name types of different generic arity (`TFoo`,
     itself a bare reference — `TDict<Pointer, TList>` means the arity-0
     `Pointer` — so the exemption covers the BASE of the reference only.
   - ⚠️ *The arity-0 candidate may be a PREDEFINED type rather than a
-    declaration*, and then it is not in any unit's scope at all: spring4d
-    declares `Pointer<T> = record` beside the compiler's own `Pointer`, so the
-    search for a matching arity has to reach the predefined names too, not only
-    the current unit and its imports. Every `Pointer(X) := nil` in that unit
-    depends on it.
+    declaration*, and then it is not in any unit's scope at all: a
+    collections library declares `Pointer<T> = record` beside the compiler's own
+    `Pointer`, so the search for a matching arity has to reach the predefined
+    names too, not only the current unit and its imports. Every
+    `Pointer(X) := nil` in that unit depends on it.
+  - ⚠️ *Two GENERIC arities of one name are the same rule, and the one an
+    implementation is most likely to miss* — "does this reference supply type
+    arguments" separates `TFoo` from `TFoo<T>` and says nothing about
+    `TFoo<T>` versus `TFoo<K,V>`. Both are generic; only the COUNT tells them
+    apart, and only the head of the chain is registered under the name.
+    - *Why it is worth its own bullet:* the two declarations are usually
+      parallel designs of the same container, so they declare the SAME nested
+      type names. Binding the qualifier to the wrong arity then resolves
+      `TFoo<K,V>.PNode` to the other declaration's `PNode` — a type that exists,
+      has most of the same members, and differs in one field. Nothing fails
+      until that field is read, and the report lands in a method of the right
+      class pointing at a field name that is genuinely absent from the type it
+      was handed.
   - ⚠️ *The two arities may also sit in ONE unit, split across its sections* —
     the generic in the interface, a plain instantiation alias in the
     implementation:
@@ -332,6 +345,14 @@ type
     in type parameter declaration`.
 - *Type constraints:* a class type (T must descend from it) or interface (T must
   implement it). `T: TBase, IFoo` combines.
+  - ⚠️ *Combining means the UNION of what each unlocks, and a member lookup has
+    to try them ALL.* `TKey: IComparable<TKey>, IEquatable<TKey>, IHashable`
+    makes `AKey.Compare`, `AKey.Equals` and `AKey.Hash` equally legal, and a
+    resolver that takes the first constraint answers only for the first
+    interface. The failure is quiet in the usual way: the constraint it did
+    consult has SOME members, so the walk succeeds often enough to look
+    correct, and the reports land on whichever names happen to live on the
+    second and third.
 - ⚠️ Constraints are written **once, on the declaration**. A method body may not
   repeat them — `procedure TList<T>.Sort;` carries a bare `<T>` — so a tool that
   reads constraints off the parameter it finds must follow the body's parameter
@@ -367,6 +388,25 @@ var X := Max(3, 7);          // T inferred as Integer, X inferred as Integer
 - ⚠️ *No inference for generic **types*** — `TList.Create` cannot infer `T`; you
   must write `TList<Integer>.Create`. Only generic **methods** infer. Enforce in
   the resolver.
+- ⚠️ *Type arguments WRITTEN at the call site are the answer; inference only
+  supplies what was not written.* `Cast<TSomeEdit>(AObject)` says what `T` is,
+  and it has to, because the common shape of an explicitly-instantiated method
+  is one whose parameters mention `T` nowhere at all:
+
+  ```pascal
+  class function Cast<T: class>(AObject: TObject): T; static;   // nothing to infer from
+  ```
+
+  A resolver that reaches for inference here binds nothing, leaves the call
+  typed as the OPEN parameter, and loses every member after the dot. Worth
+  saying plainly because the argument-driven half of this rule is the one
+  everybody implements first.
+- ⚠️ *A call written `Name<...>` cannot mean a NON-generic routine of that name*
+  — §16.1.2's arity rule, on the method side. A binding stops at the first
+  declaration, so a derived class that declares a plain `GetValue(const AName:
+  string)` in front of an ancestor's `GetValue<T>(const APath: string)` takes
+  the call unless the arity is checked; the RTL's own JSON types are shaped
+  exactly like that.
 - Inference combines with inline-var inference for terse code.
 
 ---

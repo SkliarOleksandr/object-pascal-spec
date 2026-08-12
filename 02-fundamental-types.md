@@ -491,6 +491,13 @@ Three distinct relations the semantic layer must implement: **type identity**
     declaration** (structural equivalence is *not* used for named types). This is
     why `type T = type Integer` differs from `Integer`.
   - Subrange types are compatible with their base and with overlapping subranges.
-  - Numeric types are mutually compatible with implicit widening; narrowing needs
-    a cast (ch.04).
+  - ⚠️ *Numeric narrowing needs NO cast* (dcc-verified, dcc32 37.0): assigning a
+    wider ordinal to a narrower one (`SmallInt := Int64Var`) is plain assignment-
+    compatible, not a type error. A *variable* source silently truncates (or
+    raises `ERangeError` under `{$RANGECHECKS ON}`); a *compile-time-constant*
+    source that overflows the target's range instead gets
+    `W1012 Constant expression violates subrange bounds` — a warning, compile
+    still succeeds either way. ch.04's `TypeName(Expr)` cast exists for explicit
+    intent / reference reinterpretation, never as a requirement for a narrowing
+    assignment to compile.
 - *AST:* no node; this drives the type-checker pass.

@@ -193,6 +193,18 @@ end;
   `class of` reference instantiates the **actual** class — the language's
   polymorphic factory. The resolver must allow constructor calls on metaclass
   values.
+  - ⚠️ *Virtuality picks the constructor BODY, not the allocated class*
+    (dcc-verified, dcc32 37.0): `TObject.NewInstance` — the method that
+    actually allocates and sizes the instance — is itself virtual and always
+    dispatches on the metaclass value's RUNTIME class, regardless of whether
+    `Create` is declared `virtual`. Calling `GetDerivedClass.Create` through a
+    reference statically typed `class of TBase`, with a **non-virtual**
+    `Create`, still allocates a correctly-sized instance of the derived class
+    (`Obj is TDerived` is `True`, `Obj.InstanceSize` matches `TDerived`'s, not
+    `TBase`'s) — it just runs `TBase.Create`'s code on it, statically bound,
+    because `Create` itself never dispatches. Declaring `Create` `virtual` (and
+    overriding it) is what makes the DERIVED class's *initialization code* run
+    instead — the correct-class allocation was never in question either way.
 - ⚠️ *The metaclass value may be any EXPRESSION, not just a variable or a type
   name* — most often a function result, which is how the factory is usually
   written:
@@ -250,11 +262,13 @@ type
 
 - ⚠️ Helpers **cannot add instance fields** (no per-instance storage); only methods,
   class vars, properties (backed by existing state). Enforce in the type-checker.
-- ⚠️ *A class helper may INHERIT from another helper* — that is what the
-  optional `( Ancestor )` in the grammar above is, and it names a HELPER, not
-  the extended type. The ancestor helper's members apply to the extended type
-  as well, so a member walk that reaches a helper must try the helper's own
-  ancestors before it continues into the `for` target.
+- ⚠️ *A class helper may INHERIT from another helper* (dcc-verified, dcc32
+  37.0: a helper `for T` declared `(Ancestor)` for another helper of the same
+  `T` resolves the ancestor's members through the descendant helper) — that is
+  what the optional `( Ancestor )` in the grammar above is, and it names a
+  HELPER, not the extended type. The ancestor helper's members apply to the
+  extended type as well, so a member walk that reaches a helper must try the
+  helper's own ancestors before it continues into the `for` target.
   - ⚠️ *Record helpers cannot* (dcc-verified): `record helper(TBaseH) for T` is
     `E2029 ',' or ':' expected` — that production has no ancestor slot at all,
     so the `(` is read as the start of something else. The grammar in §15.3.2

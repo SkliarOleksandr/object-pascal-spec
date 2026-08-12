@@ -294,6 +294,46 @@ P := TPair<string, Integer>.Create('a', 1);
     member came from. The symptom is a member whose type reads back as the open
     parameter `T` — after which indexing it, or opening a `with` over it, yields
     nothing and the whole enclosing body reports as undeclared.
+- ⚠️ *Instantiations are STRUCTURALLY compatible, not nominally distinct per use
+  site* — an explicit exception to Object Pascal's otherwise-nominal type
+  system (contrast the ARRAY case, ch.08 §8.1: two independently-declared array
+  types of identical shape stay incompatible). Two `TList<Integer>`
+  instantiations written in different units aren't merely "compatible", they
+  ARE the same type: the compiler builds one concrete type per `(generic
+  template, type-argument list)` pair, wherever it's first needed, and every
+  later use of the same pair resolves to that one type (dcc-verified, dcc32
+  37.0: a `TList<Integer>` produced by one unit's function and a
+  `TList<Integer>`-typed variable declared in the caller's own unit are
+  directly assignment-compatible with no cast, and `TClass(TList<Integer>) =
+  TClass(TList<Integer>)` evaluated at the two separate sites is `True`). A
+  resolver should key instantiated-type identity by `(genericName, typeArgs)`,
+  not by declaration or use site.
+- *Monomorphization: one method-body copy per distinct instantiation, even for
+  a T-independent method.* Each closed instantiation gets its own compiled copy
+  of every method, whether or not that method's body actually mentions `T` —
+  the compiler does not detect and share type-parameter-independent code
+  across instantiations (dcc-verified, dcc32 37.0: a generic class with one
+  method that never references `T`, instantiated with ONE type argument and
+  called twice, reported `131144 bytes code`; the identical program
+  instantiating it with TWO distinct type arguments instead — same total call
+  count, one call per instantiation — reported `131804 bytes code`: +660 bytes
+  purely from adding a second distinct instantiation). A codegen-size estimate
+  built on this AST should scale with the number of distinct instantiations
+  actually used, not with the number of generic declarations.
+- ⚠️ *A generic class's `class constructor` runs once PER instantiated type,
+  not once overall* — each closed instantiation is its own type with its own
+  class-level storage, so it gets its own class-constructor run and its own
+  independent `class var`s. This is the generic-specific case that
+  [`15-class-mechanics-helpers.md`
+  §15.1.5](15-class-mechanics-helpers.md#1515-class-constructors--destructors)'s
+  "runs once at unit initialization" doesn't cover — that description is
+  accurate for an ordinary, non-generic class, just incomplete for a generic
+  one (dcc-verified, dcc32 37.0: a generic class's `class constructor`
+  incrementing a `class var` counter, instantiated and used as both
+  `TBox<Integer>` and `TBox<string>`, printed its marker TWICE — once per
+  instantiation — and each instantiation's own counter independently reached
+  `1`, not `2`, confirming the `class var` storage itself is also
+  per-instantiation, not shared across them).
 - *AST:* `GenericInstantiation { genericName, typeArgs[] }`.
 
 ---
@@ -360,6 +400,27 @@ type
 - ⚠️ `class`/`record`/`constructor` here are **constraint keywords**, not type
   declarations — parse within the `GenericParams` constraint list, not as a class
   body.
+- ⚠️ *The `constructor` constraint is not enforced against the ACTUAL type
+  argument at instantiation — it only unlocks the `T.Create` syntax, it does
+  not verify `T` genuinely has an accessible parameterless constructor of its
+  own.* If the bound type's own `Create` takes required parameters (so a
+  DIRECT, non-generic call to a parameterless `Create` on it would fail to
+  compile), `T.Create` inside the generic body still compiles and, at run
+  time, silently resolves to the nearest ancestor's parameterless constructor —
+  ordinarily `TObject.Create` — leaving that type's own fields exactly as they
+  were before allocation, never touched by its real constructor
+  (dcc-verified, dcc32 37.0: `TFoo<T: constructor>` calling `T.Create` inside a
+  method, instantiated as `TFoo<TNoDefaultCtor>` where `TNoDefaultCtor`
+  declares only `constructor Create(AValue: Integer)`: the call compiles and
+  runs, returning a correctly-classed/-sized `TNoDefaultCtor` instance whose
+  field reads back as `0` — i.e. `TObject.Create`'s body ran, not
+  `TNoDefaultCtor.Create`'s. A direct, non-generic `TNoDefaultCtor.Create;`
+  with no arguments, by contrast, fails to compile with `E2035 Not enough
+  actual parameters` — confirming the generic path is genuinely more
+  permissive than a direct call, not just resolving to the same thing). A
+  type-checker that rejects `TFoo<TNoDefaultCtor>` outright for failing the
+  constraint would be STRICTER than dcc32 actually is here — match the
+  compiler's leniency, don't "fix" it.
 - *AST:* per-parameter `constraints: [ kind | typeRef ]`.
 
 ---

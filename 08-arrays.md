@@ -49,6 +49,17 @@ type
 - ⚠️ *Index type must be ordinal* (integer subrange, char, enum, boolean). The
   bounds come from the index type's `Low`/`High` — not a separate length.
 - Static arrays are **value types** (copied on assignment, no reference counting).
+- ⚠️ *Array compatibility is NOMINAL, not structural.* Two independently-declared
+  array types with identical shape and element type are still two distinct,
+  mutually incompatible types — direct assignment between them is rejected:
+  `T1 = array[1..5] of Integer; T2 = array[1..5] of Integer;` then `V1 := V2`
+  (both static, no cast, no `type ... = type ...` equivalence declaration) is
+  `E2010 Incompatible types: 'T1' and 'T2'` (dcc-verified, dcc32 37.0). A
+  resolver must key array-type identity by the declared type symbol, never by
+  a structural shape comparison (index bounds + element type) — two shapes that
+  print identically are still not the same type unless one is declared as the
+  other (`T2 = T1;`, a true alias) or the check is a subtype-in-context case
+  like an open-array parameter.
 - *AST:* `StaticArrayType { indexTypes[], elementType }`.
 
 ### 8.1.2 Multidimensional static arrays
@@ -115,6 +126,15 @@ end;
 - *Managed:* assignment shares the reference (copy-on-write via `SetLength`/
   `Copy`); lifetime automatic.
 - `SetLength`, `Length`, `Copy`, `High`, `Low` are the intrinsics (ch.04 §4.11).
+- ⚠️ *`SetLength` zero-fills newly-added elements.* Growing a dynamic array with
+  `SetLength` initialises every **new** slot to zero/nil/empty — never garbage —
+  while every **pre-existing** slot keeps its old value untouched. Confirmed
+  both halves (dcc-verified, dcc32 37.0): `SetLength(A, 10)` on a never-touched
+  `array of Integer` reads `A[9] = 0`; populating `A[0..9]` then
+  `SetLength(A, 20)` leaves `A[0]..A[9]` at their old values while `A[10]..A[19]`
+  read `0`. A semantic/codegen layer can rely on this — it is a real guarantee,
+  not an implementation accident — but note it does **not** carry over to
+  `string` (ch.07 §7.3.1): growing a string's length is NOT zero-filled.
 - ⚠️ *The element type may be another dynamic array, and §8.1.2's indexing sugar
   applies there too.* `array of array of T` is the idiomatic jagged/2-D dynamic
   array — `SetLength(A, 2, 3)` takes one length per dimension — and both
@@ -152,6 +172,16 @@ B := A + [4, 5];       // concatenation (XE7+)
   disambiguates set vs. array — the type-checker decides; the parser keeps a
   generic "bracket constructor" node.
 - *AST:* `ArrayLiteral { elements[] }` (or shared `BracketConstructor`).
+- `Insert(Item, DynArray, Index)` and `Delete(DynArray, Index, Count)` are
+  intrinsics that mutate a **dynamic array** in place — inserting a value (or,
+  for `Insert`, an open-array/slice of values) at `Index`, shifting later
+  elements up, growing the array by one; and removing `Count` elements starting
+  at `Index`, shifting later elements down, shrinking the array — analogous to
+  their `string`/`TList` namesakes but operating directly on the array variable
+  (taken by `var`, like `SetLength`). Confirmed on a `TArray<Integer>`-style
+  dynamic array (dcc-verified, dcc32 37.0): `Insert(99, A, 2)` on `[1,2,3,4,5]`
+  yields `[1,2,99,3,4,5]`; `Delete(A, 0, 2)` on that result yields `[99,3,4,5]`,
+  `Length(A) = 4`.
 
 ---
 
@@ -216,3 +246,12 @@ The RTL leans on it: `TBytes.Create($EF, $BB, $BF)` (System.SysUtils),
 - ⚠️ Repeat of the key trap: an `array of T` *parameter* is an **open array**, not
   a dynamic-array-typed parameter — different ABI. The open-array constructor
   `[a, b, c]` at the call site is an open-array value, not a set/dynamic array.
+- `Slice(A, Count)` builds an open-array value covering the **first `Count`
+  elements** of a static (or dynamic) array `A`, for passing a partial array
+  where an open-array parameter is expected — without copying and without
+  needing a `[…]` constructor at the call site. Confirmed (dcc-verified, dcc32
+  37.0): given `S: array[0..9] of Integer` and a routine
+  `procedure P(const Arr: array of Integer)`, `P(Slice(S, 3))` compiles and `Arr`
+  inside `P` has `Length(Arr) = 3` covering `S[0]..S[2]`. `Slice` is itself an
+  intrinsic, not an ordinary function — a resolver must recognise it rather than
+  look it up as a declared symbol.

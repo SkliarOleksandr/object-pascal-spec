@@ -83,6 +83,14 @@ type
     diagnostic. The type checker therefore must not judge an assignment whose
     operand resolved to a TYPE NAME — that is a mis-binding, not a type
     mismatch, and a compiler has separate errors for a type used as a value.
+- ⚠️ *Assignment compatibility between a class and its ancestor is covariant,
+  one direction only* (dcc-verified, dcc32 37.0: with `TAnimal = class; TDog =
+  class(TAnimal);` and `A: TAnimal; D: TDog;`, `A := D;` compiles, but
+  `D := A;` fails as `E2010 Incompatible types: 'TDog' and 'TAnimal'`). A
+  descendant-typed value can always be assigned or passed where the ancestor
+  type is expected — it IS one — but the reverse needs an explicit checked
+  (`as`) or unchecked (hard-cast) narrowing, since a variable's declared type
+  is not proof of the object's actual runtime type. See §12.4.1.
 - ⚠️ *The ancestor may be a NESTED type named through its outer one*, commonly
   from another unit: `TMemoTextSettings = class(TTextSettingsInfo.
   TCustomTextSettings)` (`FMX.Memo`, and the same line in eight sibling units).
@@ -183,6 +191,20 @@ function Create(X: Integer): TThing; reintroduce; overload;
 - `reintroduce` starts a **new** non-overriding member that shadows the inherited
   one; calls through a base reference still hit the ancestor version. Often paired
   with `overload`.
+- ⚠️ *Plain redefinition of a NON-virtual ancestor method needs no keyword at
+  all, and is static shadowing rather than late binding* (dcc-verified, dcc32
+  37.0) — distinct from the `reintroduce`-for-hiding-a-virtual case above. If
+  `TBase.Speak` is a plain (non-`virtual`/non-`dynamic`) method, a descendant
+  `TDerived` may redeclare `procedure Speak;` with no directive whatsoever
+  (not even `reintroduce`); the compiler emits no hint, because there is no
+  virtual ancestor method to warn about hiding. The result is two entirely
+  separate, statically-bound symbols: calling `Speak` through a
+  `TBase`-typed variable that happens to hold a `TDerived` instance still
+  runs `TBase.Speak`'s body (the call is resolved from the variable's
+  *declared* type, at compile time); only a `TDerived`-typed variable (or a
+  cast to `TDerived`) reaches `TDerived.Speak`. Contrast with `virtual`/
+  `override` (§12.2.1), where a base-typed call dispatches to the
+  most-derived override regardless of the variable's declared type.
 - *AST:* `isReintroduce: true`.
 
 ### 12.2.4 `abstract` methods
@@ -207,6 +229,28 @@ procedure Speak; virtual; abstract;
 - ⚠️ `abstract` requires `virtual`/`dynamic`. Instantiating a class with an
   unoverridden abstract method is allowed to compile but raises
   `EAbstractError` at the call — a semantic/runtime note.
+- ⚠️ *The compile-time signal and the run-time signal are two different
+  mechanisms, firing at two different sites* (dcc-verified, dcc32 37.0).
+  Constructing an instance of a class with an unoverridden abstract method
+  (`TBase.Create` where `TBase` declares `procedure Go; virtual; abstract;`
+  and no descendant overrides it) compiles with `W1020 Constructing instance
+  of 'TBase' containing abstract method 'TBase.Go'` — a **warning**, not an
+  error, so the build still succeeds and the instance is created. Only
+  actually *calling* the abstract method on such an instance raises
+  `EAbstractError` (RTL runtime error 210 if unhandled) — the warning fires
+  once per unoverridden abstract method, at the construct site; the exception
+  fires only if and when that method is invoked.
+- ⚠️ *`abstract` as a class-level directive (`class abstract(Ancestor)` —
+  the `ClassHeader`/`ClassType` grammar's `[ "abstract" | "sealed" ]`/
+  `[ Abstract ]` option) is documentation only — it does NOT block
+  instantiation, unlike C++/Java* (dcc-verified, dcc32 37.0: `TFoo = class
+  abstract(TBase)` with zero actual abstract methods — `TFoo.Create` compiles
+  with no warning at all and the instance works normally). It is orthogonal
+  to the per-METHOD `virtual; abstract` combination above: marking the CLASS
+  `abstract` signals intent to readers/tooling, but only an actual
+  unoverridden `virtual; abstract` method triggers `W1020` at construction
+  (previous bullet) — a class can be marked `abstract` and still be freely
+  instantiated if it has no such method.
 - *AST:* `isAbstract: true` (no body).
 
 ### 12.2.5 `sealed` classes & `final` methods

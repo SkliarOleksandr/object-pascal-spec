@@ -64,6 +64,12 @@ type
 - A class declared `class;` or `class(TParent);` with no member block is a
   **forward declaration** (completed later in the same type section) — used for
   mutually referencing classes.
+- The optional `[ Abstract ]` in the `ClassType` grammar above is the
+  class-level `abstract` directive (the same one in ch.12's `ClassHeader`
+  grammar) — it does **not** block instantiation of the class. See
+  [ch.12 §12.2.4](12-inheritance-polymorphism.md#1224-abstract-methods) for
+  the compile-time warning that DOES fire, and only when an actual
+  unoverridden `virtual; abstract` method is present.
 - *AST:* `ClassType { ancestor?, interfaces[], sections[], isForward }`.
 
 ### 11.1.2 Fields
@@ -185,6 +191,21 @@ type
   Allowed member types are constrained (e.g. method pointers for events, ordinal/
   string/class properties). See ch.13/19.
 - `strict` is a **directive** (B.4.2) preceding `private`/`protected`.
+- ⚠️ *The "protected hack" is a direct consequence of the same-unit rule
+  above* (dcc-verified, dcc32 37.0). Given `TTest` declared in unit `UTest`
+  with a `protected` field, code in a *different* unit cannot reach that
+  field directly — but declaring an empty descendant in the accessing unit,
+  `TAccessHack = class(TTest);`, and hard-casting an existing `TTest`
+  instance to it makes it reachable: `TAccessHack(SomeTestInstance).
+  FProtectedField` compiles and works. The reason is exactly the rule above
+  applied twice over: `TAccessHack` inherits the field, is declared in the
+  SAME unit as the accessing code (so the unit-level friend rule grants
+  access), and has an identical memory layout to `TTest` (it adds no
+  members), so the cast is safe in practice even though it is an unchecked
+  hard cast. This pattern is pervasive in the RTL/VCL source for reaching a
+  base class's protected members from a sibling unit without adding a public
+  accessor — legal, if discouraged, and considered part of the language
+  specification rather than a bug.
 - ⚠️ *Legacy fifth visibility — `automated`:* old OLE-Automation code may declare an
   `automated` section (like `published` but generating Automation dispatch info).
   Unused in the D13 sources, but still accepted by the compiler — the parser should
@@ -233,6 +254,26 @@ end;
 - Fields are zero-filled **before** the constructor body runs. If the constructor
   raises, the **destructor is called automatically** on the partially built object
   (ch.18 interaction).
+- ⚠️ *Calling `inherited Create` is OPTIONAL for constructors, not compulsory*
+  (dcc-verified, dcc32 37.0: a descendant constructor that never calls
+  `inherited Create` compiles cleanly, with no error or hint, and runs
+  normally). Unlike C++/C#/Java, where invoking the base-class constructor is
+  implicit and effectively required, Object Pascal leaves the call to the
+  programmer. Omitting it does not fail to compile — it simply means the
+  ancestor constructor's body never executes, so any state that body would
+  have set up (beyond the automatic zero-fill of fields) stays at its
+  zero-initialized default. This is the same `inherited` mechanism documented
+  generally for methods (§12.1.2), but the compiler does not enforce the call
+  specifically for constructors; good practice still calls it (see `Destroy`,
+  §11.3.2, where the pattern is followed).
+- ⚠️ *A constructor may be named anything — the `constructor` keyword marks
+  the method, not the identifier `Create`* (dcc-verified, dcc32 37.0:
+  `TFoo = class(TObject) constructor Init; end;` — both the custom `TFoo.Init`
+  AND the inherited `TObject.Create` are valid, independently callable
+  constructors on `TFoo`; declaring `Init` neither hides nor replaces
+  `Create`). A custom-named constructor is *additive*, not a replacement: to
+  actually prevent callers from reaching the inherited default construction
+  path, a class must declare its OWN constructor named `Create`.
 - *AST:* `MethodDecl { kind: constructor, … }`.
 
 ### 11.3.2 Destructors & `Free`

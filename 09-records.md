@@ -50,6 +50,18 @@ type
 
 - *Value semantics:* assignment copies all fields; no reference counting (unless it
   contains managed fields, which are individually managed).
+- ⚠️ *Local (stack) record variables are NOT zero-initialized — unlike globals.*
+  A global/unit-level record variable's fields read as zero before any
+  assignment, because static/BSS storage is zero-filled by the loader. A
+  **local** record variable has no such guarantee: its fields hold whatever was
+  last on that stack slot. Confirmed (dcc-verified, dcc32 37.0): a global
+  `TRec` read before assignment shows `0` for every field; a local `TRec` in a
+  procedure called right after another procedure that fills its own same-shaped
+  local with `$7F7F7F7F` reads back `2139062143` (`$7F7F7F7F`) for every
+  field — genuine leftover garbage, not a fluke of a "clean" stack. A semantic
+  layer must not assume a local record reads as zero pre-assignment; only a
+  record with a managed `Initialize` operator (§9.4.1) gets a real init
+  guarantee on the stack.
 - ⚠️ *A record type may be ANONYMOUS* — written directly in a declaration's type
   slot instead of being named, most often as an array element:
 
@@ -265,6 +277,19 @@ type
   qualified form) must accept keywords.
 - `Implicit`/`Explicit` define conversions to/from other types — they drive
   implicit/explicit cast resolution.
+- ⚠️ *`Implicit`/`Explicit` may overload by RESULT TYPE ALONE* — a deliberate
+  exception to the general routine-overloading rule (ch.06) that two overloads
+  cannot differ only by return type. Two `class operator Implicit` declarations
+  on the same record, with the same parameter list but different result types
+  (e.g. `Implicit(A: TFoo): Integer` and `Implicit(A: TFoo): string`), both
+  compile and each fires at its own cast site (dcc-verified, dcc32 37.0):
+  `I := F` (target `Integer`) dispatches to the `Integer`-returning overload,
+  `S := F` (target `string`) dispatches to the `string`-returning overload. The
+  exception holds because the disambiguator is not the call signature but the
+  **cast target type** at the use site — the same reason overload resolution
+  works at all for a conversion operator. A resolver for these two operator
+  kinds must therefore key candidate lookup by (param types, result type)
+  jointly, unlike ordinary routine overloads which key on parameters only.
 - *AST:* `OperatorDecl { opName, params[], resultType }` as a record member.
 
 ---
@@ -315,6 +340,41 @@ type
   "is managed".
 - `Initialize` runs on every instance creation (locals, fields, array elements);
   `Finalize` on destruction; `Assign` replaces the default field-copy.
+- ⚠️ *Parameter-passing matrix — which operators fire on a call.* Probed with a
+  `TMgd` record whose `Initialize`/`Finalize`/`Assign` each print a marker
+  (dcc-verified, dcc32 37.0):
+  - **By value** (`procedure P(M: TMgd)`): the callee's local parameter slot
+    gets `Initialize`, then `Assign` copies the caller's argument into it —
+    `M` inside `P` is a genuine independent copy — and `Finalize` runs on that
+    local slot when `P` returns. A by-value managed-record parameter is exactly
+    as expensive as a local variable built by assignment.
+  - **`const`, `var`, and `const [ref]`** (`procedure P(const M: TMgd)` /
+    `var` / `const [ref]`): **none** of the three operators fire. All three
+    pass a reference to the caller's own instance — no copy is made, so there
+    is nothing to `Initialize`, `Assign`, or later `Finalize` on the callee's
+    side.
+  - **Function result of a managed-record type:** the function's hidden
+    `Result` variable gets `Initialize` on entry (like any local of that type);
+    on `Dest := SomeFunc`, the returned value is copied into `Dest` via
+    `Assign`, and the temporary `Result` is then `Finalize`d — i.e. a
+    managed-record-returning function call is, on the assignment side,
+    indistinguishable from a by-value parameter pass: `Initialize` (for the
+    temporary) + `Assign` (into the receiver) + `Finalize` (of the temporary).
+  - A semantic/codegen layer must therefore treat "is this parameter mode
+    copying" as the single switch that decides whether the three operators are
+    even inserted: by-value and function-result positions copy (all three
+    operators may run); `const`/`var`/`const [ref]` never copy (none run).
+- ⚠️ *Managed records auto-finalize on exception unwind* — no `try-finally`
+  needed. A local managed-record variable that has already had `Initialize`
+  run, in a procedure that then raises before reaching its own end, still gets
+  `Finalize` called on unwind, before the exception reaches its handler
+  (dcc-verified, dcc32 37.0: a local `TMgd` created, then `raise
+  Exception.Create(...)` immediately after — the `Finalize` marker prints
+  *before* the `except` block's own output). The compiler emits the same
+  implicit cleanup a `try-finally` would, scoped to every managed local in the
+  unwound frames; no explicit `try-finally` is required to guarantee it, unlike
+  a plain (unmanaged) object reference which leaks if not freed in a
+  `finally`.
 - *AST:* tag the `RecordType` `managed: true` and keep the three operator nodes.
 
 ### 9.4.2 Implicit `Self` in `Initialize`/`Finalize` (13.0)

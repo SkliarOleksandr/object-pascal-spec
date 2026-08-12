@@ -62,6 +62,63 @@ end;
   `OwnsObjects`) is an RTL convention, not a language rule.
 - A lifetime analyzer built on this AST should flag created-but-not-freed objects
   (heuristic), but the language does not enforce it.
+- ⚠️ *`FreeAndNil` nils the CALLER's variable; `Free` cannot.* `Obj.Free`
+  dispatches to `Destroy`, which knows only `Self` — it has no way to reach back
+  into the caller's variable and clear it, so `Obj` is still a (now-dangling)
+  non-nil reference right after `Obj.Free;`. `FreeAndNil` closes that gap by
+  taking the VARIABLE, not the object: since 10.4 its `System.SysUtils` signature
+  is `procedure FreeAndNil(const [ref] Obj: TObject);` — a `const [ref]`
+  parameter (ch.06 §6.2.3) — so the routine receives the caller's variable's
+  ADDRESS and can zero it through that reference after freeing. Pre-10.4 it took
+  an untyped `var` pointer instead; the `const [ref] TObject` form is what lets
+  it accept any `TObject`-descended reference while still writing back to the
+  exact variable passed (dcc-verified, dcc32 37.0: `Obj.Free;` leaves `Obj`
+  non-nil; `FreeAndNil(Obj);` on a freshly-recreated object of the same variable
+  leaves it `nil`). Relies on the same subclass-permissive `const [ref]`
+  compatibility rule as the next bullet.
+- `TObject.DisposeOf` — `Free`'s ARC-era sibling — is still declared, `inline`,
+  and `deprecated 'Use Free instead'` (dcc-verified, dcc32 37.0: `W1000` hint on
+  use). Under the current (10.4+) manual model its body is simply `Free;` — it
+  only differed from `Free` on the historical mobile-ARC compilers (§20.5),
+  where it forced immediate disposal instead of waiting for the reference count
+  to reach zero. Kept for source compatibility; on current compilers it has no
+  behavior of its own.
+- ⚠️ *`const [ref]` on an object parameter is SUBCLASS-permissive; `var` is
+  not.* `const [ref]` only requires the ARGUMENT's static type to be
+  assignment-compatible with the parameter's declared type — a `TDerived`
+  argument satisfies `const [ref] A: TBase`, the same covariance as an ordinary
+  class-reference assignment (§12.1.1). A `var` parameter requires the
+  argument's type to match EXACTLY (dcc-verified, dcc32 37.0: with
+  `TDerived = class(TBase)` and a `TDerived`-typed variable `D`,
+  `P(D)` against `procedure P(const [ref] A: TBase)` compiles clean, while
+  `Q(D)` against `procedure Q(var A: TBase)` fails with `E2033 Types of actual
+  and formal var parameters must be identical: TBase and TDerived`). This
+  complements — doesn't duplicate — [`06-routines.md`
+  §6.2.3](06-routines.md#623-const-parameters-and-const-ref)'s `const [Ref]`
+  coverage: that section is about HOW the argument is passed (by address, for
+  efficiency); this is about WHICH argument types are accepted. `const
+  [ref]`'s read-only contract is what makes the exact-type restriction
+  unnecessary — the callee can never write back through it, so accepting a
+  wider/more-derived reference is safe — while `var`'s read/write contract
+  cannot be relaxed the same way. This is precisely why `FreeAndNil` (above)
+  can be declared `const [ref] Obj: TObject` and still accept any
+  `TObject`-descended variable.
+- *`NewInstance`/`FreeInstance`: the allocation hooks under `Create`/`Free`.*
+  `Create` and `Free`/`Destroy` don't allocate/release raw storage themselves —
+  they call `TObject`'s own virtual hooks: `class function NewInstance:
+  TObject; virtual;` and `procedure FreeInstance; virtual;`. Overriding either
+  lets a class intercept every instance's allocation (a live-instance counter,
+  a custom allocator/pool, …) (dcc-verified, dcc32 37.0: overriding both,
+  incrementing/decrementing a counter and calling `inherited` in each, shows
+  `NewInstance` firing once per `Create` and `FreeInstance` firing once per
+  `Free`/`Destroy` — the counter tracks exactly the outstanding pairs).
+  Cross-reference: `NewInstance`'s virtuality is also what makes `class
+  of`-based polymorphic construction allocate the RUNTIME-correct size
+  regardless of which constructor body executes — see
+  [`15-class-mechanics-helpers.md`
+  §15.2.1](15-class-mechanics-helpers.md#1521-class-of-types) for that specific
+  constructor-dispatch consequence; this bullet is the general allocation-hook
+  mechanism underneath it.
 
 ---
 

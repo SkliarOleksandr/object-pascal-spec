@@ -65,6 +65,55 @@ visibilities emit extended RTTI.
   sets). The directive pre-pass must parse this rather than skip it, since it
   affects emitted metadata (and tools reading the AST may need it).
 - Drives `TRttiContext`/`TRttiType` reflection; mostly an RTL concern.
+- ⚠️ *Default visibility differs by member kind* (dcc-verified, dcc32 37.0): with
+  no `{$RTTI}` override, a `private` **field** is still visible via
+  `TRttiType.GetFields` in extended RTTI, but a `private` **method** and a
+  `private` **property** are NOT visible via `GetMethods`/`GetProperties`. This
+  matches the documented system defaults
+  `DefaultFieldRttiVisibility = [vcPrivate..vcPublished]` (all four
+  visibilities) vs. `DefaultMethodRttiVisibility = DefaultPropertyRttiVisibility
+  = [vcPublic, vcPublished]` (public/published only) — fields are RTTI'd at
+  every visibility level by default, methods and properties are not.
+- ⚠️ *`{$RTTI}` cannot precede the `unit`/`program`/`library` header*
+  (dcc-verified, dcc32 37.0): placing `{$RTTI …}` as the first line of a unit,
+  before the `unit Foo;` clause, fails with **`E2609 RTTI directive must be
+  used after PROGRAM, UNIT or LIBRARY header`** (plus a knock-on "undeclared
+  identifier" for the visibility-set constants, since the compiler hasn't
+  processed the `System` unit's declarations yet at that point). The directive
+  must always come after the header. (The failure is a normal, clearly-worded
+  compiler error in this version — not the unintuitive internal-error-style
+  failure described in some older references.)
+- ⚠️ *Extended RTTI restriction and classic `published`/`{$M+}` RTTI are
+  independent — and `published` members bypass the `{$RTTI}` visibility sets
+  entirely* (dcc-verified, dcc32 37.0). Fully disabling extended RTTI with
+  `{$RTTI EXPLICIT METHODS([]) FIELDS([]) PROPERTIES([])}` on a class that also
+  has `published` members under `{$M+}`:
+  - Classic RTTI is untouched: `GetTypeData(ClassInfo)^.PropCount` and
+    `IsPublishedProp` still report the `published` property normally — the
+    directive "doesn't cause any change on the traditional RTTI generated for
+    published types" (matches the source material).
+  - A `private`/`public` (non-`published`) field/method/property IS correctly
+    hidden from `TRttiContext` by the empty visibility sets, as expected.
+  - However, a `published` field, `published` property, AND `published`
+    method **all still show up via `TRttiType.GetFields`/`GetProperties`/
+    `GetMethods`** despite the empty `FIELDS([])`/`PROPERTIES([])`/
+    `METHODS([])` sets — i.e. `published` members are exempt from the
+    `{$RTTI}` visibility-set restriction even inside the *extended* RTTI API,
+    not only in the classic one. A resolver modeling "does this member have
+    extended RTTI" must special-case `published` as always-on, independent of
+    the class's `{$RTTI}` settings.
+- `{$WeakLinkRTTI ON|OFF}` and `{$StrongLinkTypes ON|OFF}` are two further
+  directives governing whether extended RTTI **survives smart-linking**:
+  `$WeakLinkRTTI` lets the linker drop a type (and its RTTI) entirely when
+  nothing in the program references it; `$StrongLinkTypes` forces the opposite
+  — every type and its extended RTTI is linked in even if unreferenced, which
+  can noticeably increase program size on some projects.
+  (book-stated, directive-recognition dcc32-confirmed: both directives compile
+  without error, e.g. `{$WeakLinkRTTI ON} {$StrongLinkTypes ON}` at the top of
+  a program — but their actual effect is on linker output size/behavior across
+  a whole program's set of compiled units, which isn't observable from a single
+  throwaway probe's diagnostics, so only directive recognition was verified,
+  not the linking behavior itself.)
 
 ---
 
@@ -140,6 +189,27 @@ type
   attribute instance in RTTI). The trailing `Attribute` suffix is optional.
 - Attributes are only retained in binaries where extended RTTI is enabled
   (`{$RTTI}`); otherwise they parse but emit nothing.
+- ⚠️ *Constructor arguments must be compile-time constant expressions*
+  (dcc-verified, dcc32 37.0), because they are resolved at compile time to
+  build the attribute instance in RTTI. Confirmed with an attribute whose
+  constructor takes an `Integer`:
+  - a literal (`[Tag(3)]`) — OK.
+  - a `const` symbol (`[Tag(CVal)]` with `const CVal = 5;`) — OK.
+  - a plain variable (`[Tag(GVar)]`) — **`E2026 Constant expression expected`**.
+  - a function-call result (`[Tag(SomeFunc)]`) — **`E2026 Constant expression
+    expected`** (same error as the variable case).
+  - a class-reference argument (constructor parameter typed `TClass`, applied
+    as `[ClassRef(TObject)]`) — OK, confirming class references are among the
+    allowed constant-expression kinds alongside ordinals/strings/sets.
+- ⚠️ *No `AttributeUsage`-style target restriction exists* (dcc-verified,
+  dcc32 37.0): an ordinary `TCustomAttribute` descendant with no special
+  marker or metadata compiles cleanly when applied to all four attributable
+  target kinds — a type, a field, a method, and a formal parameter — in the
+  same program, with no restriction-related error or warning from any of the
+  four placements. Object Pascal has no language mechanism (unlike .NET's
+  `AttributeUsageAttribute`) to declare that a given attribute class may only
+  be attached to certain kinds of declarations; a resolver must not invent or
+  enforce such a restriction.
 - *AST:* attach `attributes: [ { type, args[] } ]` to the annotated declaration node.
 
 ### 19.3.3 Compiler-recognized ("magic") attributes

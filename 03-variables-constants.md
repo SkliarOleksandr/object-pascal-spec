@@ -139,6 +139,20 @@ end;
   produces false E2004. See 05 §5.5.1/§5.5.2.
 - *Type inference:* with `:=` and no `: TypeRef`, the type is the static type of the
   initializer expression. `var X := 1` ⇒ `Integer`.
+- ⚠️ *Inline `const` keeps the `=` token but drops the constant-expression
+  requirement.* An inline `const` (a `const` declaration appearing as a
+  statement inside a block) is written `const Ident [: TypeRef] = Expression;`
+  — still `=`, not `:=` (dcc-verified: `const X := Expr;` is
+  `E2029 '=' expected but ':=' found`) — but unlike a section-level
+  `ConstDecl` (B.10/3.2.1), the right-hand side may be **any** expression, not
+  just one evaluable at compile time. dcc32 37.0 accepts, inside a routine
+  body, both `const X = SomeFunc;` (a function call) and
+  `const Y: Integer = GVar + 1;` (an expression over a plain variable), and
+  both run at the declaration's position, taking whatever value the
+  expression has there. The identical declaration at unit/section scope is
+  rejected: `E2026 Constant expression expected`. Type inference for an
+  untyped inline `const` follows the same rule as inline `var` — the static
+  type of the initializer expression, not a narrowed constant-folded type.
 - *AST:* `InlineVar { name, type?, init?, pos }` as a statement node.
 
 ### 3.1.4 `absolute` variables (overlay)
@@ -339,6 +353,22 @@ Where a name is visible and how long its storage lives.
 - *Inline locals* (3.1.3) are visible only **from declaration point to end of the
   enclosing statement block** — narrower than the routine. Shadowing an outer name
   with a later inline `var` is legal and position-dependent.
+- ⚠️ *A managed-type inline/block-scoped local's LIFETIME, not just its
+  visibility, ends at the enclosing sub-block* — it is finalized when that
+  inner `begin … end` exits, not when the routine returns. dcc-verified,
+  dcc32 37.0: an interface-typed inline `var` declared inside a nested
+  `begin … end` inside a procedure runs its destructor (via
+  `_Release`/`Destroy`) immediately at that inner block's `end`, before any
+  code following the block runs — while an ordinary (non-inline,
+  routine-top-level) local of the same managed type declared in the same
+  procedure is finalized only at the routine's own exit, after the nested
+  block has already finished. The same early-finalization timing applies to
+  compiler-generated temporaries holding intermediate expression results
+  inside the sub-block. A resolver/codegen that always emits finalization at
+  routine exit is therefore wrong for any managed local declared inside a
+  nested block — it must finalize at the innermost enclosing `CompoundStmt`'s
+  end that the declaration is scoped to (mirrors the 3.1.3 for-header
+  exception: scope AND lifetime both follow the narrowest enclosing block).
 - *Globals* (unit `var`) live for program duration; `interface`-section vars are
   visible to importing units, `implementation`-section vars are unit-private (ch.01).
 - *Resolution order* for an unqualified identifier: innermost block scope →

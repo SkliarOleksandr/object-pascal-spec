@@ -108,6 +108,14 @@ end.
   `implementation`; the interface declaration acts as an implicit forward.
 - `initialization`/`finalization` are reserved words; the legacy bare `begin … end`
   before `end.` is an older equivalent of `initialization`.
+- ⚠️ *The unit's declared name must match its file name* (dotted names too:
+  `unit MyProject.Unit1;` must live in `MyProject.Unit1.pas`) — dcc-verified,
+  dcc32 37.0: a file `Foo.pas` containing `unit Bar;` fails with
+  `E1038 Unit identifier 'Bar' does not match file name`, and any program that
+  `uses` it fails to build at all (`F1027`/`F2063 Could not compile used
+  unit`). The same rule applies to a program's own name vs. its `.dpr` file.
+  A checker that resolves `uses` entries by file path (§1.2.2) can rely on
+  this identity holding for every unit that actually compiles.
 - *AST:* `Unit { name, interfaceDecls, implDecls, init?, final? }`.
 
 ### 1.1.3 Library & package files

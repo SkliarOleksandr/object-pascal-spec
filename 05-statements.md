@@ -66,6 +66,14 @@ PNode^.Value := 1;
 - *Property dispatch:* if the LHS resolves to a property, lower to the setter
   call/field-store named by its `write` clause — the AST should record that the
   target is a property so later passes can expand it.
+- ⚠️ *This "assignable" class is NOT the same set that qualifies as a `var`-parameter
+  argument* (ch.06 §6.2.2) — a property with a `write` specifier is a valid `:=`
+  LHS (it lowers to a setter call) but is **rejected** when passed to a `var`
+  parameter, because there is no addressable storage to hand the callee.
+  (dcc-verified, dcc32 37.0: `Foo.Val := 10` compiles, but passing that same
+  `Foo.Val` to `procedure P(var X: Integer)` is `E2197 Constant object cannot be
+  passed as var parameter`.) Do not reuse one "assignable designator" check for
+  both contexts.
 - *Type rule:* RHS must be assignment-compatible with the LHS type (implicit
   conversions per ch.04; otherwise error).
 - *AST:* `Assign { target: Designator, value: Expression }`.
@@ -427,7 +435,8 @@ until Succeeded or (Tries >= MaxTries);
 
 ## 5.6 Flow-control statements
 
-> ⚠️ **Lexical fact for all of 5.6.1–5.6.3:** `Break`, `Continue`, and `Exit` are
+> ⚠️ **Lexical fact for all of 5.6.1–5.6.3 (and 5.6.5, `Halt`):** `Break`,
+> `Continue`, and `Exit` are
 > **standard (intrinsic) procedures declared in `System`, not reserved words.**
 > They parse as ordinary `CallStatement`s. Their loop/routine-control meaning is
 > applied during semantic analysis, which also rejects `Break`/`Continue` outside
@@ -567,6 +576,50 @@ end;
 - *Jump restrictions:* cannot jump **into** a structured statement from outside it,
   nor **out of / into** a procedure or function. Enforce in semantic analysis.
 - *AST:* `LabelDecl`, `LabeledStmt { label, stmt }`, `GotoStmt { label }`.
+
+### 5.6.5 `Halt`
+
+| | |
+|---|---|
+| **Introduced** | Pascal/Turbo (pre-1995) |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+Terminates the **entire program** immediately — not just the current
+routine or loop.
+
+**Grammar**
+
+```ebnf
+(* parsed as CallStatement: "Halt" [ "(" Expression ")" ] *)
+```
+
+**Example**
+
+```pascal
+Writeln('working...');
+if Fatal then Halt(3);   // process exits now, with exit code 3
+Writeln('never reached');
+```
+
+**Semantics & parsing notes**
+
+- Intrinsic (declared in `System`), not a reserved word — same shadowing rule as
+  the 5.6 note above (Appendix B lists it alongside `Break`/`Continue`/`Exit` in
+  the plain-flow intrinsic family).
+- `Halt` optionally takes one `Integer` argument used as the process exit code
+  (defaults to 0 when omitted).
+- ⚠️ *`Halt` bypasses `finally` blocks and unit finalization* — it ends the
+  process directly and does **not** unwind the call stack the way a raised
+  exception or a normal return would. (dcc-verified, dcc32 37.0: `Halt(3)` called
+  inside a `try…finally` prints the text before the call, but neither the
+  `finally` block's `Writeln` nor any statement after the call executes; the
+  spawned process's exit code was observed to be exactly `3`.)
+- *Distinguish from `Exit`:* `Exit` leaves only the current routine and still runs
+  enclosing `finally` blocks on the way out; `Halt` leaves the whole program and
+  runs none of them.
+- *AST:* may stay `Call("Halt")` until a lowering pass rewrites it to
+  `HaltStmt { exitCode? }`.
 
 ---
 

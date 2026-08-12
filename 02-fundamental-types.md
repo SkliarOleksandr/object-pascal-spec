@@ -86,7 +86,8 @@ Predefined integer types of fixed or platform-dependent width.
 ```ebnf
 IntegerType = "ShortInt" | "SmallInt" | "Integer" | "LongInt" | "Int64"
             | "Byte" | "Word" | "Cardinal" | "LongWord" | "UInt64"
-            | "NativeInt" | "NativeUInt" | "FixedInt" | "FixedUInt" ;
+            | "NativeInt" | "NativeUInt" | "FixedInt" | "FixedUInt"
+            | "Int8" | "Int16" | "Int32" | "UInt8" | "UInt16" | "UInt32" ;
 (* these are predefined identifiers, NOT reserved words *)
 ```
 
@@ -109,6 +110,22 @@ var
   current targets; `FixedInt`/`FixedUInt` are guaranteed 32-bit. A parser doesn't
   need the width, but a *semantic/type* layer does — record the nominal name and
   resolve width per target.
+- ⚠️ *`Int8`/`Int16`/`Int32`/`UInt8`/`UInt16`/`UInt32` are real `System`-seeded
+  aliases*, not book/documentation-only names — dcc-verified, dcc32 37.0:
+  `System.pas` declares `Int8 = ShortInt`, `Int16 = SmallInt`, `Int32 = Integer`,
+  `UInt8 = Byte`, `UInt16 = Word`, `UInt32 = Cardinal`, and all six resolve with
+  **no `uses` clause at all** (`SizeOf` confirms 1/2/4/1/2/4 bytes respectively) —
+  same implicit-`System`-seeding footing as `Integer`/`Byte` themselves (§1.2.4).
+  They are C-interop-friendly spellings of existing types, not distinct types.
+- ⚠️ *`LargeInt` exists but is NOT `System`-seeded* — dcc-verified, dcc32 37.0:
+  a bare reference with no `uses` clause (and even `uses System.Types;`) is
+  `E2003 Undeclared identifier`; it resolves only via `uses Winapi.ActiveX;`
+  (`LargeInt = Int64`, unconditionally — `SizeOf` = 8 on this Win32 build).
+  This contradicts a plausible-sounding claim that `LargeInt` is
+  platform-width-dependent (32-bit on 32-bit targets): as declared and as
+  probed here, it is a plain alias of `Int64` and does not vary with target
+  width. Treat it as a Windows-interop alias requiring an explicit `uses`,
+  not as a `System`-level integer type name.
 - *Literal typing:* an integer literal takes the smallest predefined type holding
   it (see B.5.1).
 
@@ -251,6 +268,25 @@ type
   - A LOCAL nested type inside a routine body is the one case that stays
     properly scoped: its enum's values are NOT visible outside that routine
     (real E2003) — a routine is not a struct, so the climb never starts.
+- ⚠️ *Default storage size follows the ordinal RANGE, not the element count* —
+  dcc-verified, dcc32 37.0, via `SizeOf` on a variable of each enum type:
+
+  | shape | ordinal range | `SizeOf` |
+  |---|---|---|
+  | 3 named elements, no explicit values | `0..2` | **1 byte** |
+  | 256 named elements, no explicit values | `0..255` | **1 byte** (boundary — still ok) |
+  | 257 named elements, no explicit values | `0..256` | **2 bytes** |
+  | 2 named elements, explicit value up to 300 (`spA = 0, spB = 300`) | `0..300` | **2 bytes** |
+  | any of the above under `{$Z4}`/`{$MINENUMSIZE 4}` | — | **4 bytes** |
+
+  So the rule is the same "≤256 possible values fits in a byte" cardinality
+  test as `set of` (§2.4.1's `E2028` boundary): the default is **1 byte**
+  while the highest ordinal in the type is `≤255`, **2 bytes** once it
+  exceeds that (whether reached by element count or by an explicit value),
+  and `{$Z4}`/`{$MINENUMSIZE 4}` (§1.3.1) forces **4 bytes** regardless of
+  range — a directive-state fact the type-layout pass must consult per
+  declaration site, the same positional tracking as `{$SCOPEDENUMS}` above.
+  There is no default 32-bit case; 4 bytes only happens under the directive.
 - *AST:* `EnumType { elements: [ { name, explicitValue? } ], scoped: bool }`.
 
 ### 2.2.5 Subrange types

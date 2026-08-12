@@ -152,6 +152,25 @@ type
   `constructor Create(A: Integer)` (dcc32 37.0-probed).
 - The name is not fixed: `class constructor Init;` compiles, so these cannot be
   recognised by name — only by `class` together with `constructor`/`destructor`.
+- ⚠️ *Ordering relative to the unit's own `initialization`/`finalization`,
+  same unit* (dcc-verified, dcc32 37.0): a class constructor runs BEFORE its
+  unit's `initialization` section, and a class destructor runs AFTER that
+  unit's `finalization` section. For a unit declaring both, the observed order
+  across a whole program run is: class constructor → `initialization` →
+  (program body) → `finalization` → class destructor. Book-stated only, not
+  independently confirmed here — verifying it would require inspecting
+  binary/symbol presence rather than program output, which this probe pass did
+  not attempt: class-constructor/destructor code is linked into the program
+  only if the class is actually USED, whereas a unit's `initialization`/
+  `finalization` is always linked in once the unit itself is compiled into the
+  program (i.e. class ctors/dtors are more linker-friendly than unit init
+  code for otherwise-unused classes).
+- ⚠️ *At most one class constructor and one class destructor per class* — a
+  second one is a compile-time error, `E2359` (dcc-verified, dcc32 37.0: a
+  class declaring both `class constructor Create` and `class constructor Foo`
+  fails with `E2359 Multiple class constructors in class TTestClass: Create
+  and Foo`). The same one-per-class limit applies independently to class
+  destructors.
 
 ---
 
@@ -223,7 +242,13 @@ end;
   false undeclared-identifier. The qualifier has to be TYPED and then unwrapped:
   `class of T` yields `T`, chasing alias links, since the reference type is
   almost always reached through one (`TPainterClass = class of TPainter`).
-- `TObject`'s `ClassType`/`ClassName`/`InheritsFrom` operate on metaclasses.
+- `TObject`'s `ClassName`/`ClassParent`/`InheritsFrom` are class methods and can
+  be called directly on a metaclass value or class-reference expression. ⚠️
+  *`ClassType` is NOT one of them* (dcc-verified, dcc32 37.0: `TFoo.ClassType`
+  where `TFoo` is a class reference, not an instance, fails with `E2076 This
+  form of method call only allowed for class methods or constructor`) — it's
+  an ordinary (instance) method, valid on an object instance
+  (`Inst.ClassType`) but not on the class itself.
 - *AST:* `ClassOf { baseClass }`.
 
 ---
@@ -276,6 +301,21 @@ type
   - Helpers cannot form cycles (an ancestor must already be declared), so the
     walk is bounded by the declaration chain and needs no cycle guard of its
     own.
+- ⚠️ *Since Delphi 10.1 Berlin, a class helper's methods cannot reach a
+  visibility level that wouldn't already apply without the helper mechanism* —
+  concretely: `strict private` members of the extended type are unreachable
+  from a helper's methods (`E2003` undeclared identifier) even when the helper
+  is declared in the SAME unit as the extended class (dcc-verified, dcc32
+  37.0); and plain `private` members are unreachable from a helper declared in
+  a DIFFERENT unit than the extended class (dcc-verified: `E2003` there too,
+  same as any other cross-unit `private` access). What still works, and is
+  *not* the old hole being described: a helper in the SAME unit as a class
+  reading that class's plain (unit-scoped) `private` field compiles fine
+  (dcc-verified) — for the ordinary reason that Object Pascal `private` is
+  unit-scoped, not class-scoped, not because the helper mechanism grants any
+  special access. Before 10.1 Berlin, a compiler bug let helpers reach private
+  members across the real boundary too (cross-unit `private`, any-unit
+  `strict private`) — never an intended feature, and closed since.
 - *AST:* `HelperType { kind: class, ancestor?, forType, members[] }`.
 
 ### 15.3.2 Record helpers (incl. intrinsic types)
@@ -320,6 +360,13 @@ type
   that as a string helper made ordinary `SomeString.Substring` unresolvable
   throughout FMX.MaskEdit.
 - Same no-instance-fields restriction as class helpers.
+- Same private-access restriction as class helpers (§15.3.1): `strict private`
+  members of the extended record are unreachable from a record helper's
+  methods even within the same unit, and plain `private` members are
+  unreachable across a unit boundary (dcc-verified, dcc32 37.0, same-unit
+  plain-`private` case: a record helper reading its extended record's ordinary
+  `private` field from within the same unit compiles fine, for the same
+  unit-scoping reason as class helpers above).
 
 ### 15.3.3 Helper scope-resolution rule
 

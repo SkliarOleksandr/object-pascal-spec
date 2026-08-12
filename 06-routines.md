@@ -60,6 +60,14 @@ begin Result := A + B; end;
   the **function name** (`Add := …`) is the classic-Pascal equivalent and still
   legal — the resolver must treat the routine name as an alias of `Result` inside
   the body. `Exit(value)` also sets it (ch.05 §5.6.3).
+- ⚠️ *Assigning `Result` does NOT terminate the function* — unlike C's `return`,
+  it is an ordinary assignment to an ordinary local variable, and execution falls
+  through to whatever statement follows. Only `Exit`/`Exit(value)` (ch.05 §5.6.3)
+  or falling off the end of the block actually returns. (dcc-verified, dcc32
+  37.0: a function that does `Result := 1;` then more statements then
+  `Result := 2;`, with no `Exit` in between, prints from both statements after
+  each assignment and returns `2` — the last write, not the first — to its
+  caller.)
 - A function whose `Result` is never assigned returns an undefined value (managed
   types excepted) — a hint/warning, not a parse error.
 - *AST:* `Routine { kind, name, params[], resultType?, directives[], body? }`.
@@ -105,6 +113,18 @@ ForwardOrExternal = "forward" ";" | ExternalDecl ;
 > reference, read-only) — central to both semantics and codegen. The parser
 > records the modifier; the type-checker enforces lvalue/const rules.
 
+> ⚠️ **The order in which actual-parameter expressions are evaluated is
+> unspecified by the language** — do not encode any particular order as a rule,
+> and do not let a resolver/optimizer assume left-to-right evaluation is safe to
+> rely on for side effects. (dcc-verified, dcc32 37.0 — implementation-defined,
+> NOT a language guarantee: `F(SideEffect(1), SideEffect(2), SideEffect(3))`
+> printed `eval 3`, `eval 2`, `eval 1` — i.e. the CURRENT compiler evaluates
+> actual arguments **right-to-left** — before the call itself ran with the
+> arguments in their written left-to-right positions (`1 2 3`). Treat this as
+> one observed data point about today's dcc32, not a rule a conforming parser
+> or resolver may depend on; a future compiler version or optimization level is
+> free to evaluate in a different order.)
+
 ### 6.2.1 Value parameters
 
 | | |
@@ -143,6 +163,18 @@ procedure Swap(var A, B: Integer);
 
 - ⚠️ The argument **must be an assignable lvalue** of the *exact* type (no implicit
   conversion) — enforce in the type-checker.
+- ⚠️ *"Assignable lvalue" here is narrower than an assignment-statement LHS*
+  (ch.05 §5.1.1): a genuine addressable variable/field/array-element/dereference
+  qualifies, but a literal constant, an arbitrary expression, a function-call
+  result, and — critically — a **property**, even one with a `write` specifier,
+  do **not**. A property lowers to a setter *call*, which has no address to hand
+  the callee, so it cannot bind to `var`/`out` even though `Foo.Val := X` is a
+  perfectly legal assignment. (dcc-verified, dcc32 37.0, all four rejected
+  identically against `procedure P(var X: Integer)`: `P(5)`, `P(A + B)`,
+  `P(GetVal)` where `GetVal` is a function, and `P(Foo.Val)` where `Val` is a
+  read/write property all report `E2197 Constant object cannot be passed as var
+  parameter`.) A resolver must not reuse the assignment-LHS check for
+  `var`/`out` argument binding.
 
 ### 6.2.3 `const` parameters (and `const [Ref]`)
 
@@ -213,6 +245,22 @@ procedure Show(Msg: string; Modal: Boolean = True);
   parameters must too. Defaults must be **constant expressions** and are only
   allowed on value/`const` parameters (not `var`/`out`). Enforce both.
 - Interacts with overloading (6.3) — ambiguous calls are a semantic error.
+- ⚠️ *Dynamic-array and interface-typed parameters may default only to `nil`.*
+  For dynamic arrays, any other value — an array-literal constructor or a typed
+  constant of the same array type — is rejected outright, because it is not
+  accepted as a constant expression in this position. (dcc-verified, dcc32
+  37.0: `A: TArray<Integer> = nil` compiles; `A: TArray<Integer> = DefArr` (a
+  typed constant of the same array type) and `A: TArray<Integer> = [1, 2, 3]`
+  (an array-literal default) both fail `E2026 Constant expression expected`.)
+  For interfaces, `A: IInterface = nil` likewise compiles (dcc-verified) — a
+  non-`nil` interface default was not separately probed, because an interface
+  reference has no OTHER form of compile-time constant expression to write in
+  the first place, so `nil` being the only option follows from that, not from
+  an independently observed rejection.
+- ⚠️ *Record-typed parameters cannot have a default value at all* — not even one
+  naming a constant of the same record type. (dcc-verified, dcc32 37.0:
+  `R: TPoint2 = Origin`, with `Origin` a typed constant of type `TPoint2`, is
+  `E2268 Parameters of this type cannot have default values`.)
 
 ### 6.2.6 Open array & `array of const` parameters
 
@@ -319,6 +367,15 @@ function Area(C: TCircle): Double; overload;
     the derived reference. A resolver that merges the ancestry unconditionally
     accepts code dcc rejects; one that never merges it rejects code dcc
     accepts.
+- ⚠️ *Return type is never part of overload resolution.* Two routines with
+  identical parameter lists that differ only in result type are not distinct
+  overloads — the second declaration collides with the first rather than
+  extending an overload set. (dcc-verified, dcc32 37.0:
+  `function F(X: Integer): Integer; overload;` followed by
+  `function F(X: Integer): string; overload;` fails with
+  `E2004 Identifier redeclared: 'F'` — the *same* diagnostic dcc32 gives for a
+  plain non-overloaded re-declaration, not an overload-specific error.) A
+  resolver's overload key must be the parameter-type signature only.
 - *Parser impact:* none beyond recording the directive; resolution is semantic.
 
 ---
@@ -339,11 +396,58 @@ Requests the compiler expand the routine body at the call site.
 function Min(A, B: Integer): Integer; inline;
 ```
 
+The `{$INLINE ON | OFF | AUTO}` compiler directive controls whether the `inline`
+hint above is honored at each call site that is in scope when the directive is
+active (it is a compile-time switch, not per-routine — its setting at the CALL
+SITE governs, and it can be toggled between calls in the same file):
+
+- `ON` (the default) — a call to a routine marked `inline` is expanded in place;
+  a call to a routine WITHOUT the hint is compiled as a normal call.
+- `OFF` — the `inline` hint is ignored everywhere it is in effect; every call
+  compiles as a normal call, even to a routine marked `inline`.
+- `AUTO` — the compiler may inline **even routines with no explicit `inline`
+  hint**, at its own discretion, in addition to honoring explicit hints.
+
 **Semantics & parsing notes**
 
 - `inline` is a **directive** here (note: it is *also* a reserved word in some
   lists — Delphi treats it as a directive in this position). It is a *hint*; the
   compiler may decline.
+- ⚠️ *`{$INLINE ON}` vs `{$INLINE OFF}` vs `{$INLINE AUTO}` are independently
+  dcc-verified as producing different codegen*, not just accepted syntax.
+  (dcc-verified, dcc32 37.0, single-call program `Writeln(Min(3, 5))`:
+  under `{$INLINE ON}` with `Min` marked `inline`, generated code is 39000
+  bytes; under `{$INLINE OFF}` with the SAME `inline`-marked `Min`, it is
+  39016 bytes — 16 bytes more, i.e. the hint was ignored and a real `CALL` was
+  emitted. Removing the `inline` marker entirely and compiling under
+  `{$INLINE ON}` also yields 39016 bytes — confirming `ON` alone does not
+  inline a routine that lacks the hint. Removing the marker but switching to
+  `{$INLINE AUTO}` yields 39000 bytes again — the SAME size as the explicit
+  `inline` + `ON` case — confirming `AUTO` inlined the call on its own
+  initiative, with no `inline` directive present at all.) The exact byte counts
+  are toolchain/version-specific; what is confirmed is the ON/OFF/AUTO
+  *ordering* and that AUTO's extra behavior (inlining un-hinted routines) is
+  real, not merely documented.
+- ⚠️ *Cross-unit inlining requires the CALLER'S unit to transitively `uses` every
+  unit the inline body itself references* — dcc32 does not pull in a hidden
+  dependency just to honor the hint; instead it silently degrades to a normal
+  (non-inlined) call and, with `{$HINTS ON}`, emits an explicit compiler Hint
+  naming the missing unit. (dcc-verified, dcc32 37.0: unit `UnitA2` has
+  `function CallsHelperInline: Integer; inline;` whose body calls `Helper`
+  from `UnitB2` (which `UnitA2` itself `uses`); a program that `uses UnitA2`
+  but NOT `UnitB2` compiles cleanly but with
+  `Hint: H2443 Inline function 'CallsHelperInline' has not been expanded
+  because unit 'UnitB2' is not specified in USES list`. Adding `UnitB2` to the
+  program's own `uses` clause — nothing else changed — removes the hint and
+  shrinks the generated code by 12 bytes, confirming the call really was
+  expanded in place once the transitive dependency was visible to the
+  CALLER's unit.) This is the mechanism, not a guess: the failure mode is
+  graceful (a plain call, never an error) and self-reports via `H2443` whenever
+  `{$HINTS ON}` (the default) is active.
+- The book additionally states inlining never crosses a CIRCULAR unit reference
+  (ch.4 of the audited book, ~p.118); this was not independently probed here —
+  no clean two-unit circular-`uses` repro was built — so treat it as
+  book-stated, not dcc-verified.
 
 ---
 
@@ -484,6 +588,15 @@ function MessageBox(hWnd: HWND; lpText, lpCaption: PChar; uType: UINT): Integer;
 - An `external` routine has **no `Block`** — the body is the OS/library symbol.
 - `name`/`index` (directives) select the imported symbol; `delayed` defers load
   until first call. `varargs` (with `cdecl`) allows C-style variadic calls.
+- ⚠️ *A `delayed` import's DLL/symbol lookup happens at the FIRST CALL, not at
+  process load* — if the library or symbol cannot be resolved at that point,
+  dcc32 raises `EExternalException` right there (an ordinary, catchable
+  exception), rather than failing to load the executable at all. (dcc-verified,
+  dcc32 37.0: `procedure NoSuchProc; external 'NoSuchLib_ZZZ.dll' name
+  'NoSuchSymbolZZZ' delayed;` compiles cleanly — with a `W1002` warning that
+  `delayed` is platform-specific — and calling `NoSuchProc` for the first time
+  raises `EExternalException` with message `External exception C06D007E`,
+  caught by an ordinary `except on E: Exception` handler around the call.)
 - `dependency` (directive) lists additional libraries the import needs at link
   time — used mainly by the mobile/posix toolchains
   (`external libc name 'dlopen' dependency 'dl'`).

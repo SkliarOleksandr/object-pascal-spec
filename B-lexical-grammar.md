@@ -55,6 +55,21 @@ ParenStarComment = "(*" { ?any char? } "*)" ;
   **compiler directive** (B.2.2). The lexer must peek the next char.
 - Comments are tokens to *skip*, but a full-fidelity AST may attach them as
   trivia for tooling/formatting.
+- ⚠️ *"Doc comments" (`///` and `{! … }`) are NOT a distinct grammar
+  production* — dcc-verified, dcc32 37.0: a `///`-prefixed line lexes as an
+  ordinary `LineComment` (the extra `/`s are just more comment text, and the
+  comment still runs to end-of-line exactly like `//`), and a `{!`-prefixed
+  block lexes as an ordinary `BraceComment` — it ends at the very first
+  unescaped `}` (no special `!}` terminator exists) and does **not** nest with
+  an embedded `{`, the same non-nesting rule as any other `{ }` comment.
+  Probed by deliberately closing a `{! ...` comment early with a stray `}`:
+  the text that follows is parsed as real source and fails on ordinary
+  syntax/illegal-character errors, not on anything doc-comment-specific.
+  The IDE's Help-Insight display and the compiler's optional XML-doc-file
+  generation both key off the `///`/`{!` *prefix* as a tooling convention
+  layered on top of ordinary comment text — a lexer/parser implementing this
+  grammar needs no new token or production for them, only (optionally) a
+  downstream pass that re-scans skipped-comment trivia for the prefix.
 
 ### B.2.2 Compiler directives
 

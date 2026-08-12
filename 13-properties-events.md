@@ -74,6 +74,17 @@ type
   design: the ancestor walk reads the heritage clause of this same
   declaration, so heritage references must be resolved in an earlier round
   than the specifiers that depend on them.
+- ⚠️ *A property is not a memory location, so it cannot be a `var`/reference
+  argument* — even though a plain field of the same type works fine there. Two
+  different call shapes hit two different errors (dcc-verified, dcc32 37.0):
+  `Inc(Obj.Prop)` is `E2064 Left side cannot be assigned to` (the intrinsic
+  lowers to a read-modify-write it cannot express through a property), while
+  passing the property to a user-declared `procedure P(var X: Integer)` is
+  `E2197 Constant object cannot be passed as var parameter` (the property read
+  is treated as a non-addressable rvalue). This holds regardless of whether the
+  property is field-backed or method-backed. See §13.1.6 for the one exception —
+  a `var` parameter inside the property's own *setter*, gated behind
+  `{$VARPROPSETTER}`.
 - *AST:* `PropertyDecl { name, type, reader?, writer?, index?, … }`.
 
 ### 13.1.2 Array properties
@@ -203,6 +214,67 @@ property Caption: string read FCaption write SetCaption stored FHasCaption;
 - `stored` takes a boolean constant/field/method controlling whether to persist.
 - Only meaningful for `published` properties with RTTI.
 
+### 13.1.6 Put-by-reference setters (`{$VARPROPSETTER}`)
+
+| | |
+|---|---|
+| **Introduced** | Delphi 2009 (COM "put by ref" support) |
+| **Deprecated** | — |
+| **Status** | ✅ Current, but opt-in |
+
+A property setter may take its value as a `var` parameter instead of a by-value
+one, letting the setter observe/mutate the caller's variable as a side effect of
+the assignment. This is disabled by default and gated behind the
+`{$VARPROPSETTER ON}` compiler directive.
+
+**Example**
+
+```pascal
+{$VARPROPSETTER ON}
+type
+  TMyIntegerClass = class
+  private
+    FNumber: Integer;
+    function GetNumber: Integer;
+    procedure SetNumber(var Value: Integer);   // var, not a plain by-value param
+  public
+    property Number: Integer read GetNumber write SetNumber;
+  end;
+
+procedure TMyIntegerClass.SetNumber(var Value: Integer);
+begin
+  Inc(Value);           // side-effect on the CALLER's variable
+  FNumber := Value;
+end;
+```
+
+**Semantics & parsing notes**
+
+- ⚠️ *Without `{$VARPROPSETTER ON}`, a `var` setter parameter is a hard error* —
+  `E2282 Property setters cannot take var parameters` (dcc-verified, dcc32 37.0;
+  reproduced verbatim). With the directive on, the same declaration compiles.
+- ⚠️ *Only a variable is assignable once the setter takes `var`* — a constant (or
+  any other non-addressable expression) on the right-hand side of the assignment
+  is `E2036 Variable required` (dcc-verified), exactly as for any other `var`
+  parameter binding. `Mic.Number := 10;` fails; `Mic.Number := N;` (`N` a
+  variable) succeeds.
+- ⚠️ *The setter can mutate the caller's variable as a side effect of the
+  assignment statement* — `Inc(Value)` inside the setter above changes the
+  caller's `N` in place, in addition to whatever the setter does with
+  `FNumber`. Two syntactically identical consecutive assignments
+  (`Mic.Number := N; Mic.Number := N;`) therefore produce *different* runtime
+  effects each time, since `N` itself changed after the first call
+  (dcc-verified: this pattern turns an initial `N := 10` into `FNumber = 12`
+  after two assignments — `N` becomes 11 then 12, and each new value is what
+  gets stored).
+- This is orthogonal to the general "properties are not addressable" rule in
+  §13.1.1 — it does not make the *property itself* passable as a `var` argument
+  anywhere; it only changes what the *setter's own parameter* looks like on the
+  implementation side of the assignment.
+- *AST:* no new grammar — the setter's parameter list already carries `var`/
+  `const`/plain per the ordinary `FormalParams` production (ch.06); this is a
+  semantic gate on an existing shape, keyed off the `{$VARPROPSETTER}` state.
+
 ---
 
 ## 13.2 `published` properties & RTTI
@@ -220,9 +292,29 @@ Inspector / streaming system.
 
 **Semantics & parsing notes**
 
-- Requires `{$M+}` or a `TPersistent` ancestor (ch.11 §11.2.1). Published property
-  types are restricted (ordinal, string, set, class, method-pointer). The resolver
-  enforces the allowed-type set.
+- ⚠️ *Not a hard precondition — "requires `{$M+}`" undersells what actually
+  happens.* Declaring an explicit `published` member on a class that is
+  **neither** compiled with `{$M+}` **nor** descended from a class compiled with
+  it (e.g. a plain `TObject` descendant) does **not** error: the compiler
+  silently injects `{$M+}` for that type and emits `W1055 PUBLISHED caused RTTI
+  ($M+) to be added to type '<Name>'` — a warning, not a rejection
+  (dcc-verified, dcc32 37.0: a `TObject`-descended class with a `published`
+  property compiles clean-except-for-the-warning, and the property is genuinely
+  reachable afterwards through old-style RTTI, e.g. `TypInfo.GetPropValue`).
+  Published property types are still restricted (ordinal, string, set, class,
+  method-pointer); the resolver enforces the allowed-type set.
+- ⚠️ *`{$M+}` (or a `TPersistent`/RTTI-bearing ancestor, ch.11 §11.2.1) changes
+  the DEFAULT visibility of undecorated members* — a member with no explicit
+  visibility keyword, positioned in the section right after the class header
+  (before any `private`/`protected`/`public`/`published` keyword appears),
+  defaults to `published` under `{$M+}` and to `public` otherwise
+  (dcc-verified: an undecorated property in that position is found by
+  `TypInfo.GetPropInfo` — i.e. is published — when the enclosing class is
+  compiled under `{$M+}`, and is *not* found — i.e. is public — with the exact
+  same source under a class with no `{$M+}`/`TPersistent` ancestry). This is the
+  same default-visibility mechanism as ch.11 §11.2.1's ordinary
+  `private`/`public` default, just with a different default keyword selected by
+  the `{$M+}` state.
 - Full RTTI model → [ch.19](19-rtti-attributes.md).
 
 ---

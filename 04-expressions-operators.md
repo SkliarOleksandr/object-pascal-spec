@@ -23,6 +23,10 @@ Four precedence levels, all binary operators left-associative. Full table in
   `a = b and c` parses as `a = (b and c)`. The AST follows the table; never
   special-case it.
 - *AST:* `BinaryOp { op, left, right }`, `UnaryOp { op, operand }`.
+- ⚠️ *Precedence governs GROUPING, not evaluation ORDER* — and for the actual
+  arguments of a routine call, evaluation order is unspecified by the language.
+  See ch.06 §6.2 for the dcc32-observed (right-to-left, implementation-defined,
+  not to be relied on) order for a multi-argument call.
 
 ---
 

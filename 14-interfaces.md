@@ -168,6 +168,21 @@ object self-destructs when the count hits zero (when implemented via
   hazard the type-checker can warn about, not parse.
 - Interface variables are auto-released at scope exit (compiler inserts
   `_Release`).
+- ⚠️ *Reference counting is per-class, not a fixed language guarantee* —
+  `_AddRef`/`_Release` are ordinary (virtual) methods, so a class's ancestor
+  decides whether they count anything at all. `TNoRefCountObject`
+  (`System.SysUtils`, Delphi 11 — the older name `TSingletonImplementation`,
+  `System.Generics.Defaults`, is now just an alias for the same code) implements
+  `IInterface` with `_AddRef`/`_Release` that do nothing and return `-1`.
+  `TComponent` does the same, because it already has its own ownership-based
+  memory model. (dcc-verified, dcc32 37.0: a `TComponent`-descended class
+  implementing a custom interface, assigned to an interface variable that then
+  goes out of scope/is set to `nil`, is **not** destroyed — `ClassName` is still
+  readable on it afterward and it must be freed manually; a `TInterfacedObject`-
+  descended equivalent under the identical test IS destroyed at that point.) A
+  resolver/lifetime-checker cannot assume "reachable only through an interface
+  variable" implies "will be freed by refcounting" — it depends on which
+  `_AddRef`/`_Release` the object's ancestor chain provides.
 - Detailed model → [ch.20 §20.x](20-memory-management.md).
 
 ### 14.3.2 Weak & unsafe interface references
@@ -229,6 +244,23 @@ type
 - `implements IFace` on a property means the property's value supplies that
   interface's methods — the class need not reimplement them. `implements` is a
   **directive** (B.4.2).
+- ⚠️ *The delegate's usual base class is `TAggregatedObject`* (`System.pas`),
+  not `TInterfacedObject` — it is purpose-built for this role and has a
+  different reference-count/query story: its `_AddRef`/`_Release` do not count
+  anything of its own, and its `QueryInterface` reflects to a
+  `[Unsafe]`-referenced `Controller: IInterface`, supplied via its
+  `constructor Create(const Controller: IInterface)` — because, per its own
+  doc comment in `System.pas`, an aggregated object "must have the same
+  lifetime as their controller." (dcc-verified, dcc32 37.0: an outer
+  `TInterfacedObject`-descended class constructs its delegate as
+  `TJumperImpl.Create(Self)` — `Self` satisfies the required `Controller`
+  parameter; calling a method of the delegated interface through the outer
+  object's interface property correctly runs the delegate's code, and
+  `(OuterIntf as TObject) = Outer` — the interface obtained from the OUTER
+  class resolves back to the outer object, not the aggregate.) Consistent with
+  having no ref-count of its own, the outer class still frees the delegate
+  itself in its destructor through a plain object field (never an interface
+  field for the delegate).
 - *AST:* `PropertyDecl { …, implements: [IFace] }`.
 
 ---
@@ -250,5 +282,28 @@ across interface and class types (via `QueryInterface`).
 
 - `Obj as IFace` performs `QueryInterface` (may raise); `Supports(Obj, IFace)`
   (RTL) is the non-raising test.
+- ⚠️ *`is` cannot test interface-to-interface support — only object-to-interface
+  (and object/interface-to-object, next bullet)* — given `F: IFoo` backed by an
+  object that also implements `IBar`, `F is IBar` is a **compile-time error**,
+  not a runtime `False` (dcc-verified, dcc32 37.0: `E2015 Operator not
+  applicable to this operand type`). `F as IBar`, by contrast, DOES work
+  interface-to-interface — it compiles and performs `QueryInterface` under the
+  hood (dcc-verified: `(F as IBar).Bar` runs correctly), and so does
+  `Supports(F, IBar, B)`, the RTL's recommended non-raising equivalent
+  (dcc-verified). A resolver must reject `is` when BOTH operands are interface
+  types while still allowing `as` (and `Supports`) for the identical pair.
+- ⚠️ *Interface references cast back to their underlying object* — for an
+  interface backed by a genuine Object-Pascal object (never a COM server, which
+  has no such object to recover), all three reverse-cast forms work and refer
+  to the SAME object: `IntfVar is TMyClass`, `IntfVar as TMyClass` (raises on
+  failure), and the hard cast `TMyClass(IntfVar)` (yields `nil` on failure).
+  (dcc-verified, dcc32 37.0: pointer-identity check `TTestImpl(Intf) = Original`
+  where `Original := TObject(Intf)`; a method that exists only on the concrete
+  class, not the interface, is reachable through both `TTestImpl(Intf)` and
+  `Intf as TTestImpl`.) The target need not be the object's exact runtime
+  class — casting to a BASE class of the actual class also succeeds, following
+  ordinary class-compatibility rules (dcc-verified: `TTestBase(Intf)` succeeds
+  where `TTestBase` is an ancestor of the actual `TTestImpl`, and
+  `AsBase is TTestImpl` is `True` on the result).
 - Interface properties expose only accessor names (no storage), resolved on the
   implementing object.

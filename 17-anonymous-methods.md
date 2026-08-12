@@ -44,6 +44,26 @@ type
   **interface-backed closure** that can **capture local state**, is
   reference-counted, and is *not* a simple `(code, Self)` pair. Keep the kind on
   the type node — assignment compatibility differs.
+- ⚠️ *Compiler-distinguished interface, not a structurally-equal one* (dcc-verified,
+  dcc32 37.0): although a `reference to` value is implemented as a single-method
+  interface with a hidden `Invoke` method, it is **not** assignment-compatible
+  with a hand-declared single-method interface of the identical signature, even
+  when that interface's method is itself named `Invoke`. Both directions fail:
+  ```pascal
+  type
+    IMyCallback = interface function Invoke: Integer; end;
+    TFuncInt    = reference to function: Integer;
+  var
+    Cb: IMyCallback; Fn: TFuncInt;
+  begin
+    Fn := function: Integer begin Result := 42; end;
+    Cb := Fn;   // E2010 Incompatible types: 'TFuncInt' and 'IMyCallback'
+  ```
+  (and, symmetrically, assigning an `IMyCallback` instance to a `TFuncInt`
+  variable gives `E2010 Incompatible types: 'TFuncInt' and 'IMyCallback'` as
+  well). A resolver must track `reference to` types as their own nominal kind —
+  never unify them with a structurally-matching user interface just because both
+  lower to "interface with one method called Invoke".
 - *AST:* `AnonMethodType { kind: proc|func, params[], resultType? }`.
 
 ---
@@ -84,6 +104,38 @@ P(42);
   open across the whole embedded `Block` — a classic source of confusing syntax
   errors when hand-written parsers close the call too early.
 - *AST:* `AnonMethod { kind, params[], resultType?, body, captured[] }`.
+- ⚠️ *A function returning a `reference to` value needs a double call to invoke
+  the closure* (dcc-verified, dcc32 37.0). Given
+  `function GetShowMethod: TIntProc;` (`TIntProc = reference to procedure(N: Integer)`):
+  - `GetShowMethod;` (bare, as a statement) compiles and **only runs
+    `GetShowMethod`'s own body**; the closure it returns is evaluated and
+    immediately discarded — never invoked.
+  - `GetShowMethod(3);` fails with **E2034 "Too many actual parameters"** —
+    `GetShowMethod` itself takes zero parameters, so `3` cannot bind to it.
+  - `IP := GetShowMethod;` (assigning the bare call to an `IP: TIntProc`
+    variable) fails with **E2010 "Incompatible types: 'TIntProc' and
+    'Procedure'"** — dropping the parens makes the compiler try to treat
+    `GetShowMethod` itself (a routine of type "function: TIntProc") as the
+    value being assigned to `IP`, rather than calling it and assigning the
+    *result*; that routine type is not `TIntProc`, hence the mismatch. The
+    empty-parens call `IP := GetShowMethod();` is required to force
+    call-then-assign semantics.
+  - `GetShowMethod()(3);` — first `()` calls `GetShowMethod` and produces the
+    closure value, the second `()` invokes that closure with argument `3`.
+    This chained-call form compiles and runs correctly; it is the idiomatic
+    one-liner alternative to a temporary variable.
+  - A resolver must therefore special-case "call expression whose *result
+    type* is itself invokable, followed immediately by another argument
+    list" as a **second, independent call** on the intermediate result — not
+    reinterpret it as one call with the wrong arity.
+  - ⚠️ By contrast, a *plain variable* of a parameterless `reference to
+    procedure` type (not a function call) **does** invoke correctly when
+    referenced bare in statement position — `P;` calls the closure exactly
+    like `P();` in dcc32 37.0. Older guidance describing a bare parameterless
+    `reference to` *variable* as requiring explicit `()` to avoid being
+    mistaken for "getting its address" was not reproduced here; the
+    ambiguity is real only for the bare-call-of-a-function-with-a-procedural-
+    result-type case documented above.
 
 ---
 

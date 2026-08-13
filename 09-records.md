@@ -159,9 +159,23 @@ type
   alignment 4 — is **12**. Same eight bytes of payload, different alignment.
 - ⚠️ *`SizeOf` of a CLASS type is the reference, not the instance* —
   `SizeOf(TObject)` is 4/8. The instance size is `TObject.InstanceSize`.
-- ⚠️ *A set's size is the byte span of its base range rounded UP to a power of
-  two* (capped at 32): `set of TEnum` with 8 members is 1, with 9 is 2, with 17
-  is **4** (not 3), and `set of 200..255` is **8** (not 7). `set of Byte` is 32.
+- ⚠️ *A set's size is the byte SPAN of its base range — and the rounding is
+  platform-dependent.* The span is `Hi div 8 − Lo div 8 + 1`, so the base's
+  lower bound matters: `set of 8..15` is **1** byte, `set of 0..8` is **2**.
+  While that span still fits in a machine word it is rounded up to a power of
+  two; above it, it is exact. So span 3 → 4 everywhere, but spans 5, 6 and 7
+  are 5, 6 and 7 on **Win32** and all **8** on **Win64**. `set of Byte` is 32,
+  `set of 100..200` is 14, and a set is always **byte-aligned** whatever its
+  size (`record A: Byte; S: set of Byte; end` is 33).
+- ⚠️ *`file` and `file of T` are the same size whatever `T` is* — they are
+  `System.TFileRec` (592 bytes on Win32, 616 on Win64 in 13.x; `Text` /
+  `TextFile` are `TTextRec`, 730 / 754). Do not hard-code those: the RTL
+  declares both records, and the declaration carries the comment that it "must
+  match the size the compiler generates". Both are declared **packed**, so
+  laying them out gives an alignment of 1 — but a file VARIABLE is
+  **pointer-aligned** anyway (`record A: Byte; F: file of Byte; end` is 596 on
+  Win32, not 593). The packing describes the record's own field offsets, not
+  where the compiler places a file.
 
 ### 9.1.3 Variant records (`case` part)
 
@@ -222,6 +236,23 @@ type
   branch's fields, at every nesting depth, are members of the same record and
   must collect into its one member scope.
 - All variant branches **overlay the same memory** (a union); no runtime checking.
+- ⚠️ *The layout rules,* measured by printing real field OFFSETS (inferring
+  them from `SizeOf` alone is not enough to separate these three):
+
+  1. a NAMED tag is placed with **its own** alignment but does **not** raise
+     the record's alignment. `record A: Byte; case T: Int64 of 0: (X: Byte); end`
+     puts `T` at 8 and `X` at 16 and is **17** bytes — an odd size, so nothing
+     rounded it. An anonymous tag occupies nothing at all.
+  2. every branch starts at the **same** offset, aligned to the largest
+     alignment among the fields declared **directly at that level** — a nested
+     variant's fields do not count. That is the whole difference between
+     `case … of 0: (P: Byte; Q: Int64)` — both at one level, so the part starts
+     at 8 and the record is 24 — and
+     `case … of 0: (X: Byte; case … of 0: (Q: Int64))`, where `X` alone is at
+     this level, so the part starts at 1, the NESTED part starts at 8, and the
+     record is 16.
+  3. the part's extent is the furthest any branch reaches, and the record's
+     size is then rounded up to its own alignment as usual.
 - *AST:* `VariantPart { tagField?, tagType, branches: [ { labels[], fields[] } ] }`.
 
 ---

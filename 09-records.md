@@ -101,6 +101,39 @@ type
   `end align {$IFDEF CPU64BITS} 16 {$ELSE} 8 {$ENDIF};`
   (System.SysUtils.pas). The operand is a constant expression; a parser must
   accept `align` (contextual word) after the closing `end`.
+- ⚠️ *The layout rule itself,* needed by anything that answers
+  `{$IF SizeOf(TRec) = N}` (1.3.2) without compiling. Three steps:
+
+  1. each field starts at the next offset that is a multiple of
+     `Min(the field's own alignment, the current CAP)`;
+  2. the record's **own alignment** is the largest cap-clipped field
+     alignment it contains;
+  3. the record's `SizeOf` is the running offset rounded **up** to that own
+     alignment — so trailing padding is real
+     (`record A: Integer; B: Byte; end` is 8, not 5).
+
+  A scalar's alignment is `Min(its size, 8)`. `Extended` is the one type where
+  size and alignment differ: 10 bytes on Win32, aligned to 8, so
+  `record A: Byte; B: Extended; end` is 24. A nested record contributes **its
+  own** alignment, not its size, and that alignment was fixed at ITS
+  declaration site — a 9-byte `$A1` record inside an `$A8` record sits at
+  offset 1, giving 10.
+- ⚠️ *The alignment CAP is a ceiling, not a forced alignment, and it is
+  positional.* `{$A1|2|4|8|16}`, the long `{$ALIGN 1|2|4|8|16}`, and
+  `{$A-}`/`{$A+}` (= 1 and 8) all set it, and a unit routinely brackets one
+  type with it, so the value that matters is the one in effect **at the
+  record's declaration**, not at the end of the file. `packed` is a cap of 1
+  for that record only.
+
+  Because no builtin's natural alignment exceeds 8, `{$ALIGN 16}` produces
+  layouts identical to `{$ALIGN 8}` — it raises a ceiling nothing reaches.
+  Only 4, 2 and 1 change anything. `{$ALIGN 32}` is **not** valid (E1030);
+  FastMM4 ships one, but inside an `{$IFDEF FPC}` branch.
+
+  Measured for `record A: Byte; B: Int64; end`: cap 16 or 8 → 16, cap 4 → 12,
+  cap 2 → 10, cap 1 or `packed` → 9. (All of 9.1.2's numbers here come from
+  compiling ~20 record shapes for Win32 and Win64 and printing `SizeOf` at run
+  time.)
 
 ### 9.1.3 Variant records (`case` part)
 

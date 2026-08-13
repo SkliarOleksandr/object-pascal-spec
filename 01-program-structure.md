@@ -447,6 +447,67 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   `Xml.adomxmldom.pas`) — full evaluation is only possible **after** semantic
   analysis. A standalone preprocessor must define a fallback policy for such
   expressions (e.g. evaluate to False and flag).
+- ⚠️ *What "visible to `{$IF}`" actually means — position, not existence.* The
+  expression is evaluated against the symbol table **as of that point in the
+  file**, so a constant is only usable if it is declared *textually above* the
+  directive. All three of these read as UNRESOLVED even though the name exists
+  in the unit:
+
+  ```pascal
+  {$IF LateConst = 7}   // <- does NOT see the line below
+  const LateConst = 0;
+  ```
+
+  the same directive in the *interface* over a constant in the *implementation*,
+  and a constant in an enclosing routine's scope. Only an **untyped** constant
+  resolves: a `var`, a **typed** constant (`const C: Integer = 7`), a function
+  and a type name all fail to resolve too. Qualified constants DO resolve
+  normally (`{$IF UConst.QC > 1}`, `{$IF System.MaxInt > 1}`) — but a qualified
+  name whose unit is known and whose member is not is a hard **E2003**, not a
+  fallback.
+- ⚠️ *An unresolvable name does not evaluate to False — the verdict depends on
+  where it sits, and one case ABORTS the whole expression.* This is the single
+  most surprising rule in the pre-pass, and any tool that models `$IF` has to
+  reproduce it or it will silently pick the other branch:
+
+  | shape | verdict |
+  |---|---|
+  | arithmetic (`X+1=1`, `1 shl X = 2`, `-X = 0`, `X div 2 = 0`) | **True** |
+  | relational vs a numeric literal/const, either side (`X>1`, `1=X`, `X>KnownConst`, `X=$10`) | **True** |
+  | `X in [1,2]` | **True** |
+  | unresolvable vs unresolvable (`X > Y`) | **True** |
+  | bare boolean (`X`, `(X)`) | **False** |
+  | `not X`, `not not X` | **False** |
+  | vs a string literal (`X >= '1.0'`, `'1.0' <= X`) | **False** |
+  | vs a char literal (`X = 'a'`, `X = #65`) | **False** |
+  | vs a Boolean literal (`X = True`, `X = False`) | **False** |
+  | any **dotted** name whose prefix is unknown (`A.B`, `A.B > 1`, `A.B.C > 1`) | **False** |
+
+  The True cases are an **abort**, not a value: the verdict propagates to the
+  top of the directive and the rest of the expression is discarded. All four of
+  these take the TRUE branch —
+
+  ```pascal
+  {$IF not (X > 1)}        {$IF not not (X > 1)}
+  {$IF ((X > 1))}          {$IF (X > 1) and False}
+  ```
+
+  — so `X > 1` and `not (X > 1)` are True *simultaneously*. Short-circuit still
+  protects, because dcc evaluates strictly left to right and never reaches the
+  name: `{$IF False and (X > 1)}`, `{$IF Defined(NOPE) and (X > 1)}` and
+  `{$IF Declared(X) and (X > 1)}` are all False.
+
+  The False cases are not a value either — they are an error token, silently
+  swallowed at the top of the directive but a hard **E2015 Operator not
+  applicable** the moment it has to feed `and`/`or`: `{$IF X >= '1.0'}`
+  compiles and is False, `{$IF (X >= '1.0') and True}` does not compile.
+- ⚠️ *`SizeOf` of an unresolvable type is `4`* — a real value, not an abort, so
+  `{$IF SizeOf(TNoSuchType) <> 32}` is True while `{$IF SizeOf(TNoSuchType) = 32}`
+  is False. `Declared(X)`/`Defined(X)` likewise answer a plain False and never
+  abort, which is what makes the `{$IF not Declared(X)}` fallback idiom work at
+  all. (Every rule in these three bullets probed by executing both branches, on
+  dcc64 36.0 (D12) and 37.0 — byte-identical results, so this is long-standing
+  behaviour and not a recent change.)
 - ⚠️ *`Declared(X)` is the same circularity, and it is not a rare corner:* it
   asks whether an identifier is in scope, and the scope is built from the token
   stream this very directive decides. It is the standard portability guard —

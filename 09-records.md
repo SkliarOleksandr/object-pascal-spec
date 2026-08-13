@@ -159,6 +159,18 @@ type
   alignment 4 — is **12**. Same eight bytes of payload, different alignment.
 - ⚠️ *`SizeOf` of a CLASS type is the reference, not the instance* —
   `SizeOf(TObject)` is 4/8. The instance size is `TObject.InstanceSize`.
+- ⚠️ *`class var` members contribute neither size nor alignment, and a record
+  with no instance fields at all is **0** bytes.* Both matter to a layout
+  pass, and the second is a real answer rather than a degenerate one:
+  `record class var Q: Integer; end` is 0. Remember that the section RUNS ON
+  (15.1.2) — in `record class var Q: Integer; A: Byte; end` the `A` is a class
+  var too, so that record is 0 bytes as well, and `TR.A := 2` compiles.
+  Even a wide class var aligns nothing: `record A: Byte; class var Q: Int64;
+  var B: Byte; end` is **2**.
+- ⚠️ *A field's type may be an INLINE anonymous enum* — `record A: Byte;
+  F: (r0, r1); end` — sized by the ordinary enum rule (2.2.4) including the
+  positional `{$Z}` state, so the same record under `{$Z4}` is 8 rather
+  than 2.
 - ⚠️ *A set's size is the byte SPAN of its base range — and the rounding is
   platform-dependent.* The span is `Hi div 8 − Lo div 8 + 1`, so the base's
   lower bound matters: `set of 8..15` is **1** byte, `set of 0..8` is **2**.

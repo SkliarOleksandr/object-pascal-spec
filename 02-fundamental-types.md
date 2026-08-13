@@ -277,16 +277,19 @@ type
   | 256 named elements, no explicit values | `0..255` | **1 byte** (boundary — still ok) |
   | 257 named elements, no explicit values | `0..256` | **2 bytes** |
   | 2 named elements, explicit value up to 300 (`spA = 0, spB = 300`) | `0..300` | **2 bytes** |
+  | 1 element with an explicit `65535` | `0..65535` | **2 bytes** (boundary) |
+  | 1 element with an explicit `65536` or `70000` | `0..65536` | **4 bytes** |
   | any of the above under `{$Z4}`/`{$MINENUMSIZE 4}` | — | **4 bytes** |
 
-  So the rule is the same "≤256 possible values fits in a byte" cardinality
-  test as `set of` (§2.4.1's `E2028` boundary): the default is **1 byte**
-  while the highest ordinal in the type is `≤255`, **2 bytes** once it
-  exceeds that (whether reached by element count or by an explicit value),
-  and `{$Z4}`/`{$MINENUMSIZE 4}` (§1.3.1) forces **4 bytes** regardless of
-  range — a directive-state fact the type-layout pass must consult per
+  So the rule keys off the **highest ordinal in the type**, however it is
+  reached — by element count or by an explicit value: **1 byte** while that
+  maximum is `≤255`, **2 bytes** up to `65535`, **4 bytes** above it. The
+  lower bound does not matter (`(c1 = 5, c2 = 9)` is one byte). On top of
+  that, `{$Z2}`/`{$Z4}`/`{$MINENUMSIZE n}` (§1.3.1) raises the result to a
+  floor — a directive-state fact the type-layout pass must consult per
   declaration site, the same positional tracking as `{$SCOPEDENUMS}` above.
-  There is no default 32-bit case; 4 bytes only happens under the directive.
+  An implicit element after an explicit one continues from it, so
+  `(g1, g2 = 300)` spans `0..300` and takes 2 bytes.
 - *AST:* `EnumType { elements: [ { name, explicitValue? } ], scoped: bool }`.
 
 ### 2.2.5 Subrange types

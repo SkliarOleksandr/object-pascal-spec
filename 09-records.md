@@ -132,8 +132,36 @@ type
 
   Measured for `record A: Byte; B: Int64; end`: cap 16 or 8 → 16, cap 4 → 12,
   cap 2 → 10, cap 1 or `packed` → 9. (All of 9.1.2's numbers here come from
-  compiling ~20 record shapes for Win32 and Win64 and printing `SizeOf` at run
-  time.)
+  compiling ~56 record and type shapes for Win32 and Win64 and printing
+  `SizeOf` at run time.)
+- ⚠️ *What each field kind contributes,* since alignment is **not** derivable
+  from size:
+
+  | field type | size | alignment |
+  |---|---|---|
+  | a scalar | its own | `Min(size, 8)` |
+  | `Extended` | 10 (Win32) / 8 (Win64) | 8 |
+  | `string`, `AnsiString`, `WideString`, a dynamic array, an interface, a **class reference**, `PChar` | 1 pointer | pointer |
+  | `ShortString` | 256 | **1** |
+  | `string[N]` | N+1 | 1 |
+  | `Variant` / `OleVariant` | 16 (Win32) / 24 (Win64) | **8 on both** |
+  | a procedural type | 1 pointer | pointer |
+  | `procedure … of object` | 2 pointers | `Min(size, 8)` — **8 on Win32** |
+  | a static array | element size × ∏ dimensions | its **element's** |
+  | a subrange | 1, 2 or 4 — smallest that fits the range | = its size |
+  | a nested record | its own | its own, fixed at ITS declaration |
+
+  Two of those rows are traps. `ShortString` is 256 bytes but byte-aligned, so
+  `record A: Byte; S: ShortString; end` is **257** — clipping the size to 8
+  would give 264. And a method pointer aligns as a scalar of its own size, so
+  on Win32 `record A: Byte; M: TSomeMethod; end` is **16**, while the
+  hand-written `record A: Byte; M: TMethod; end` — two `Pointer` fields, hence
+  alignment 4 — is **12**. Same eight bytes of payload, different alignment.
+- ⚠️ *`SizeOf` of a CLASS type is the reference, not the instance* —
+  `SizeOf(TObject)` is 4/8. The instance size is `TObject.InstanceSize`.
+- ⚠️ *A set's size is the byte span of its base range rounded UP to a power of
+  two* (capped at 32): `set of TEnum` with 8 members is 1, with 9 is 2, with 17
+  is **4** (not 3), and `set of 200..255` is **8** (not 7). `set of Byte` is 32.
 
 ### 9.1.3 Variant records (`case` part)
 

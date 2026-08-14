@@ -355,6 +355,19 @@ var C: TGrid.TCell;     // qualified access
 
 - Nested types are referenced `OuterClass.NestedType`; they obey the enclosing
   class's visibility section.
+- ⚠️ *The QUALIFIER need not be the class that declares the nested type — it may
+  merely INHERIT it.* A nested type is a member like any other, so
+  `TDesc.TNested` resolves through `TDesc`'s ancestors, at any nesting depth and
+  across units. dcc-verified: with `TInner` declaring nested `TDeep` and
+  `TSub = class(TInner)` declaring nothing, `class(TBase.TSub.TDeep)` compiles.
+  This is the qualified counterpart of the bare-name reach described below, and
+  a resolver that searches only the qualifier's OWN members pays the same price
+  as one that misses that. Alcinoe nests this three deep —
+  `TALMemo.TDisabledStateStyle.TTextSettings =
+  class(TALBaseEdit.TDisabledStateStyle.TTextSettings)`, where the middle segment
+  declares no `TTextSettings` and its own ancestor `TBaseStateStyle` does — and
+  the class then loses its whole ancestry, so the diagnostic surfaces one dot
+  away, on `TTextSettings.Create`.
 - A nested CLASS's own methods are implemented with the FULL qualified chain,
   one segment per nesting level: `procedure TGrid.TCell.Method;` (not just
   `TCell.Method;`) — resolve each segment inside the PREVIOUS segment's member

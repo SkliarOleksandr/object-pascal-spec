@@ -49,6 +49,21 @@ type
 
 - The declaration name carries `GenericParams` (`TList<T>`); the parameters are in
   scope throughout the type body.
+- ⚠️ *`<T, U>` is ONE parameter group carrying two names, not two groups* — the
+  separator between groups is `;`, and `,` separates names **within** a group
+  (`<T; U: class>` is two, `<T, U>` is one). A reader that takes the first name
+  of each group silently loses every parameter after the first comma, and a
+  positional binding of actuals to parameters then goes wrong rather than
+  failing.
+- ⚠️ *A generic RECORD has a size, and it is the body laid out with the
+  parameters bound* — `SizeOf(TPair<Byte, Int64>)` is 16 by the ordinary rules
+  of 9.1.2, with `TKey` and `TValue` replaced by the actuals. The parameters
+  can appear anywhere a type can: a field, a static array's element, or the
+  actual of a nested instantiation (`TOuter<T> = record V: TInner<T>; end`),
+  and the substitution has to follow them there.
+- ⚠️ *A generic record may NOT contain a variant part over a parameter* —
+  `E2569 Type parameter 'T' may need finalization - not allowed in variant
+  record`.
 - *AST:* `GenericTypeDecl { name, typeParams[], constraints, body }`.
 
 ### 16.1.2 Overloading by arity

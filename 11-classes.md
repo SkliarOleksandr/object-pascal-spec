@@ -450,4 +450,17 @@ ObjectType = "object" [ "(" Ancestor ")" ] { ClassSection } "end" ;
   types (stack/inline), support inheritance and virtual methods but not interfaces/
   RTTI in the modern sense. Retained for backward compatibility; avoid in new code.
 - Distinguish from `of object` (method-pointer suffix, ch.06) — different context.
+- ⚠️ *Being a value type, it has a LAYOUT* (9.1.2 applies to it unchanged), plus
+  one rule of its own: declaring a **virtual** member appends a VMT pointer
+  **after** the fields, pointer-aligned — and that pointer does **not** raise
+  the type's own alignment. So `object A: Integer; procedure P; virtual; end`
+  is 16 bytes on Win64 while still aligning to 4, and a `Byte` before such a
+  field gives 20, not 24. A derived object whose ancestor already has a VMT
+  does **not** get a second one (that one, plus `C: Byte`, is 20). Fields of a
+  derived object start where the ancestor's storage ended. An `object end` is
+  0 bytes.
+- ⚠️ *Two syntax restrictions dcc enforces here but not on records:* fields must
+  precede methods (`E2169 Field definition not allowed after methods or
+  properties`), and a **variant part is not allowed at all** — `case … of`
+  inside an `object` is a syntax error.
 - *AST:* `ObjectType { … }` (value-type OOP node).

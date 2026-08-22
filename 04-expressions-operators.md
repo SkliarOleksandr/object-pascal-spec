@@ -197,6 +197,15 @@ Inc(P);         // pointer math when enabled
   routine address stored in it, while `@@P` yields the address **of the variable
   itself**. Grammatically it is just `@` applied twice (`"@" Factor` recursion) —
   no new token; the VCL uses it (`LPARAM(@@Hook)` in `Vcl.ActnMenus`).
+- ⚠️ *`@` takes an INSTANCE method's address through the CLASS name, no
+  instance involved* (dcc32 37.0-probed): `P := @TBaseCF.IP;` compiles for a
+  plain (non-class) method `procedure IP;` and yields the code pointer
+  (assignable to `Pointer`). Outside an address-of, the same designator is
+  `E2124 Instance member inaccessible here` — the `@` context is what
+  legalizes it. The vtable-building idiom rests on it (spring4d's
+  `@TComparerInstance.AddRef` tables of `@TClass.Method` entries), so a
+  member-resolution engine must reach instance members through a TYPE
+  qualifier when the expression sits under `@`.
 - `{$POINTERMATH ON}` enables `+`/`-`/`[]` on typed pointers (treating them
   array-like) — a directive-gated semantic; `PByte`/`PAnsiChar` enable it locally.
 - ⚠️ *Do not confuse that with the OLD, unconditional rule:* for a pointer to an
@@ -234,6 +243,15 @@ if Obj is TButton then
 
 - `is` is relational-level; `as` is multiplicative-level (§B.7).
 - Operands must be class or interface references; checked at compile and run time.
+- ⚠️ *The right operand of `is` may be any CLASS-REFERENCE EXPRESSION, not
+  only a type name* (dcc32 37.0-probed): with `CV: TPlainClass` (a `class of`
+  variable) and `function GC: TPlainClass`, both `Obj is CV` and `Obj is GC`
+  compile — the test is then against the class the expression yields at run
+  time. The FMX sources ship it: `if FModel is DefineModelClass then`
+  (`FMX.Presentation.Style`), where `DefineModelClass` is a virtual CLASS
+  FUNCTION returning a metaclass. Official documentation states a type name;
+  the grammar a parser must accept is an expression, and a completion/
+  resolution engine must not filter that position to types only.
 
 ### 4.9.1 `is not` operator
 

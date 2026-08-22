@@ -206,6 +206,22 @@ type
   base class's protected members from a sibling unit without adding a public
   accessor — legal, if discouraged, and considered part of the language
   specification rather than a bug.
+- ⚠️ *A GENERIC class's plain `protected` is enforced only OUTSIDE method
+  bodies* (dcc32 37.0-probed, four ways). Given `TNodeG<T> = class protected
+  FX: Integer; end;` in unit A: a **method** of any class — unrelated,
+  non-generic, in another unit — may read/write `N.FX` on a `TNodeG<Integer>`
+  (or open `TNodeG<T>`) value, while the SAME access from a unit-level
+  routine or a program's main block is `E2362 Cannot access protected
+  symbol`. The other three cells of the matrix behave normally: `strict
+  protected` of a generic is refused even from method bodies, and a
+  NON-generic class's `protected` is refused from methods and unit-level
+  code alike. So the leniency needs exactly (generic target) × (method-body
+  accessor). spring4d's collections lean on it — `TLinkedList<T>`'s methods
+  assign `node.fNext`/`node.fList`, protected members of `TLinkedListNode<T>`
+  declared in another unit with no descent relation — so a checker that
+  applies the written rule to generics reports legal shipping code. Whether
+  this is intended or a dcc visibility-check gap, it is the compiler of
+  record's observable behavior.
 - ⚠️ *Legacy fifth visibility — `automated`:* old OLE-Automation code may declare an
   `automated` section (like `published` but generating Automation dispatch info).
   Unused in the D13 sources, but still accepted by the compiler — the parser should
@@ -406,6 +422,17 @@ var C: TGrid.TCell;     // qualified access
   segment's own ancestry is searched before the outer segments'. A resolver
   that walks only the innermost segment's ancestors mis-reports these
   (16 false undeclared-identifiers in that one RTL unit).
+  One refinement (dcc32 37.0-probed): the OUTER segments contribute name
+  VISIBILITY, not a `Self` — an outer segment's (or its ancestor's) CLASS
+  function/var/const is callable bare from the nested method's body, while
+  its INSTANCE members resolve but fail with `E2124 Instance member
+  inaccessible here` (there is no enclosing-class instance to call them on).
+  So the diagnostic for a mis-scoped resolver differs by member kind: a
+  missed class member surfaces as a false E2003, a missed instance member
+  as the wrong ERROR KIND. FMX ships the class-side case bare —
+  `TWinGestureEngine.TRealTimeStylus.CustomStylusDataAdded` calls
+  `IsGesture(...)`, a class function of `TGestureEngine`, the OUTER class's
+  cross-unit ancestor (`FMX.Gestures.Win`).
 - ⚠️ *A member — including an INHERITED one — outranks a compiler-PREDEFINED
   name.* The implicit System scope is the outermost one, so a class member of
   the same name shadows it throughout the method body, in **every** position.

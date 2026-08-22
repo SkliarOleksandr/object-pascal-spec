@@ -329,6 +329,15 @@ Every unit's interface scope is seeded with **two** units it never names in a
   this order for BOTH plain references and inherited-member lookups inside
   method bodies (both are ordinary last-resort scopes, not just an
   expression-level special case).
+- ⚠️ *`System.` qualifies COMPILER INTRINSICS too, though nothing declares
+  them* (dcc32 37.0-probed): `System.Delete(S, 1, 1)`, `System.Length(S)`
+  and `System.Inc(N)` all compile, exactly like their bare spellings —
+  routinely used to reach the intrinsic past a member of the same name
+  (`System.Delete` inside a class that has its own `Delete`, as
+  `System.WideStrings` does). So the `System` qualifier's namespace is the
+  unit's interface PLUS the compiler-provided names; a resolver or a
+  completion list for `System.` must include the intrinsics, not just what
+  `System.pas` textually declares.
 - *AST:* no node — this is pure resolver seeding, invisible in the parse
   tree; a `uses[]` list never gains a `System`/`SysInit` entry.
 

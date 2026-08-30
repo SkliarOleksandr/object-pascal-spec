@@ -50,6 +50,20 @@ type
 - ⚠️ *Forward type reference allowed:* `PNode = ^TNode` may reference `TNode`
   **before** it is declared, within the same `type` section. The resolver must do
   a two-pass / deferred binding for pointer targets in a type block.
+- ⚠️ *Indexing a pointer to an array works WITHOUT the `^`* — `P: ^TSomeArray;
+  ... P[I]` is legal and means `P^[I]`, dcc-verified both as an expression and
+  as a `with` target, no `{$POINTERMATH}` required (that directive only
+  extends the same courtesy to `PInteger`/`PByte`/... and other non-array
+  typed pointers, §4.8). The element type is the array's, exactly as if the
+  `^` had been written. Real code relies on this routinely (`ImageData[i]`
+  over a `pPixelLine = ^TPixelLine` in image-decoding libraries; a
+  `Stack: ^TStackArray` local in a regex engine's bracket-matching pass), and
+  it holds whether the pointer type has a NAME of its own (`PSomeArray =
+  ^TSomeArray`) or is written inline on the variable (`Stack: ^TStackArray`,
+  no separate pointer-type declaration at all) — a resolver that only chases
+  the array through a NAMED pointer type answers nothing for the inline
+  spelling, and every member reached through such an indexed `with` reads as
+  undeclared.
 - *AST:* `PointerType { targetType }`.
 
 ### 10.1.2 Untyped `Pointer`

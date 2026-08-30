@@ -64,6 +64,28 @@ type
 - A class declared `class;` or `class(TParent);` with no member block is a
   **forward declaration** (completed later in the same type section) — used for
   mutually referencing classes.
+- ⚠️ *A heritage clause cannot name a type declared LATER in the same `type`
+  section* — unlike an ordinary type/const reference (free forward reference
+  within one `type` block, 3.1.1) and unlike a pointer target (10.1.1, its own
+  explicit exception), `class(X)` needs `X` already declared above it; the sole
+  way to name one below is the forward-class form just above (`TFoo = class;`
+  earlier, completed later — that forward declaration itself IS the earlier
+  declaration a later heritage clause sees, so `class(TFoo)` written between
+  the forward and its completion is fine). This matters most for a
+  compatibility-shim idiom real code uses on purpose:
+
+  ```pascal
+  TMyIniFile = class(TIniFile) ... end;   // TIniFile: the IMPORTED one
+  TIniFile = TMyIniFile;                  // re-points the NAME below it
+  ```
+
+  The ancestor is the imported `TIniFile`, never the alias two lines down —
+  a resolver that binds an unqualified heritage reference by ordinary
+  "nearest name in scope" (ignoring that the candidate is declared later)
+  makes the class its own ancestor: the ancestor walk cycles, and with it
+  every inherited member of every user of the shim reads as undeclared. The
+  fix is not to repoint the binding but to DROP it and let the cross-unit
+  `uses`-clause pass resolve the name — where the real ancestor actually is.
 - The optional `[ Abstract ]` in the `ClassType` grammar above is the
   class-level `abstract` directive (the same one in ch.12's `ClassHeader`
   grammar) — it does **not** block instantiation of the class. See

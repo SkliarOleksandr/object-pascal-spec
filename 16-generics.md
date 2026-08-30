@@ -226,6 +226,21 @@ function Max<T>(const A, B: T): T;
   `TFinder.Pick<T>`), so the owner of a list is the segment immediately before
   it. System.Rtti's `GetNamedObject` is the real case: its body calls
   `Obj.HasName`, which only the constraint can answer for.
+- ⚠️ *A value parameter may reuse a type parameter's own name* — dcc-verified:
+
+  ```pascal
+  class function TGenericsCast<T, TT>.Cast(const T: T): TT;
+  ```
+
+  is legal (`T` the type parameter, `T` the parameter typed by it). The type
+  parameters and the value parameter list are two DIFFERENT scopes — the type
+  parameters' own scope sits between the method's declaring scope and the
+  parameter/body scope, so the parameter's `T` shadows the type parameter's
+  `T` for the rest of the signature and body, exactly as an inner block's
+  local shadows an outer one (3.3.1); it is not a same-scope redeclaration. A
+  resolver that collects a generic method's type parameters into the SAME
+  scope as its value parameters (rather than a scope of their own) reports
+  this shape as a false redeclaration error.
 - *AST:* `MethodDecl { typeParams[], … }`.
 
 ---
@@ -273,6 +288,22 @@ P := TPair<string, Integer>.Create('a', 1);
 - Practical implementations keep a speculative parse / backtracking path for this.
   **Document the heuristic in the parser** — this is where most hand-written
   Object Pascal parsers get it wrong.
+- ⚠️ *A closing `>` written with NO space before a following `=` lexes as ONE
+  `>=` token*, a plain maximal-munch consequence with no generics-awareness in
+  it: `TFoo<T, U>= class` and `AList.Sort<T>= ...`. dcc still compiles it (it
+  is real source: a detours library declares `TGenericsCast < T, TT >= class
+  (TObject)`), because dcc's own recursive-descent parser resolves the same
+  ambiguity C++ resolves for nested `>>` closing two templates — expecting a
+  `>` and finding a `>=`/`>>` instead means "consume one `>`'s worth, and leave
+  the rest as the next token", not a syntax error. A parser must do the same
+  splice wherever it expects a bare `>` to close a generic-parameter or
+  type-argument list: accept a fused `>=` (or, for a doubly-nested close,
+  `>>`) as satisfying that `>`, and re-present the remainder (`=`, or a single
+  `>`) as the very next token rather than advancing past it. Skipping the
+  split is not a rare-case shortcut — it silently drops the LAST type
+  parameter or argument in the list (the parser stops scanning for more names
+  the moment the fused token fails to compare equal to a bare `>`), and every
+  subsequent reference to that parameter reads as undeclared.
 - ⚠️ *Args on every dotted segment:* generic arguments may appear on **intermediate**
   segments of a qualified name, not just the last — nested types of generic types
   (`TDictionary<string, Integer>.TPairEnumerator`) and generic-method calls on

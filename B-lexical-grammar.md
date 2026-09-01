@@ -273,17 +273,17 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
 | Group | Intrinsics (introduced, when not original) |
 |---|---|
 | Flow (plain) | `Break` `Continue` `Exit` (`Exit(v)` 2009) `Halt` `RunError` |
-| Ordinal & numeric (plain, const-foldable) | `Abs` `Chr` `Hi` `Lo` `Odd` `Ord` `Pi` `Pred` `Round` `Sqr` `Succ` `Swap` `Trunc` |
+| Ordinal & numeric (plain, const-foldable) | `Abs` `Chr` `Hi` `Lo` `MulDivInt64` `Odd` `Ord` `Pi` `Pred` `Round` `Sqr` `Succ` `Swap` `Trunc` |
 | Type queries (type-arg, compile-time const) | `SizeOf` `TypeInfo` `TypeHandle` ⚠️legacy `Default` (2009) `GetTypeKind` (XE7) `IsManagedType` (XE7) `IsConstValue` (XE7) `HasWeakRef` (XE7) — the XE7 four fold `if`/`case` branches at compile time |
 | Bounds (type-arg or value) | `High` `Low` |
 | Memory (by-ref) | `New` `Dispose` `GetMem` `FreeMem` `ReallocMem` `Initialize` `Finalize` `FillChar` |
 | Strings & dynamic arrays (by-ref where mutating) | `Length` `SetLength` `SetString` `Copy` `Concat` `Delete` `Insert` `Pos`❌(RTL, not intrinsic) — `Insert`/`Delete`/`Concat`/`Copy` work on **dynamic arrays since XE7** |
 | Sets (by-ref) | `Include` `Exclude` |
 | Pointers & addresses (plain) | `Addr` `Assigned` `Ptr` `ReturnAddress` (~XE2) `AddressOfReturnAddress` (~XE2) |
-| Atomics (plain; XE3) | `AtomicIncrement` `AtomicDecrement` `AtomicExchange` `AtomicCmpExchange` — plus `AtomicCmpExchange128`, **64-bit targets only** (see the platform note) |
+| Atomics (plain; XE3) | `AtomicIncrement` `AtomicDecrement` `AtomicExchange` `AtomicCmpExchange` `MemoryBarrier` — plus `AtomicCmpExchange128`, **64-bit targets only** (see the platform note) |
 | Varargs (by-ref arg list; **64-bit targets only**) | `VarArgStart` `VarArgEnd` `VarArgCopy` `VarArgGetValue` (type-arg) — declared NOWHERE, see the grep warning |
 | Special grammar | `Write` `WriteLn` `Read` `ReadLn` `Str` (colon-formatted args, §4.11.2; optional leading file var) `Val` (by-ref out params) `Slice` (open-array args only, §4.11) `Assert` `NameOf` (13.0, identifier arg §4.11.1) |
-| Classic file I/O (by-ref file var) | `Append` `Assign`/`AssignFile` `BlockRead` `BlockWrite` `Close`/`CloseFile` `Eof` `Eoln` `Erase` `FilePos` `FileSize` `Rename` `Reset` `Rewrite` `Seek` `SeekEof` `SeekEoln` `Truncate` — `Flush`❌(RTL, not intrinsic) |
+| Classic file I/O (by-ref file var) | `Append` `Assign`/`AssignFile` `BlockRead` `BlockWrite` `Close`/`CloseFile` `Eof` `Eoln` `Erase` `FilePos` `FileSize` `Rename` `Reset` `Rewrite` `Seek` `SeekEof` `SeekEoln` `SetTextBuf` `Truncate` — `Flush`❌(RTL, not intrinsic) |
 | Directories | `GetDir` only — `ChDir` `MkDir` `RmDir`❌(RTL, not intrinsic) |
 | Variants (plain) | `VarCast` `VarCopy` `VarClear` `VarArrayRedim` — NOT `VarCastOle`/`VarCopyNoInd`/`VarArrayGet`/`VarArrayPut` (see note) |
 | Legacy (old `object` model) | `TypeOf` ⚠️; `Fail` (TP-era, verify current acceptance) |
@@ -334,6 +334,11 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
   is either an intrinsic or a real `System`/`SysInit` declaration — separate
   those two by whether the unit actually declares it. This is how the ❌
   annotations above (`Pos`, `Flush`, `ChDir`/`MkDir`/`RmDir`) were settled.
+- `MemoryBarrier` (procedure), `MulDivInt64` (function), and `SetTextBuf`
+  (procedure) were added to the catalog by exactly that empty-uses probe:
+  all three resolve in a unit with an EMPTY uses clause
+  (dcc64-verified 2026-08; e.g. a no-uses unit calling
+  `MulDivInt64(10, 20, 5)` compiles clean under dcc64 37.0).
 
 ## B.5 Numeric literals
 
@@ -452,6 +457,7 @@ C := 'A';                   // a 1-char string literal; Char if context demands
 ```pascal
 CRLF = ^M^J;   // #13#10
 ```
+
 
 ### B.6.3 Multiline (triple-quoted) string literals
 
@@ -591,7 +597,7 @@ ExprList       = Expression { "," Expression } ;
 Expression   = SimpleExpr [ RelOp SimpleExpr ] ;
 RelOp        = "=" | "<>" | "<" | ">" | "<=" | ">=" | "in" | "is"
              | "is" "not" | "not" "in" ;                (* compound forms 13.0 *)
-SimpleExpr   = [ "+" | "-" ] Term { AddOp Term } ;
+SimpleExpr   = Term { AddOp Term } ;
 AddOp        = "+" | "-" | "or" | "xor" ;
 Term         = Factor { MulOp Factor } ;
 MulOp        = "*" | "/" | "div" | "mod" | "and" | "shl" | "shr" | "as" ;
@@ -600,6 +606,7 @@ Factor       = Designator
              | "(" Expression ")"
              | "not" Factor
              | "@" Factor
+             | ( "+" | "-" ) Factor                       (* unary sign, level 1 *)
              | SetConstructor
              | InlineIfExpr                              (* 13.0; see 05 §5.4.1 *)
              | TypeCast ;
@@ -614,6 +621,11 @@ TypeCast     = TypeRef "(" Expression ")" ;
 - This grammar **encodes the B.7 precedence** structurally (relational → additive
   → multiplicative → factor). Implementations using precedence-climbing/Pratt
   parsing must reproduce the same four levels and left-associativity.
+- The unary sign lives in `Factor`, not in `SimpleExpr` (an earlier revision had
+  `SimpleExpr = [ "+" | "-" ] Term ...`, which contradicted the B.7 table by
+  putting the sign below `*`/`and`). Probe: `Writeln(-1 and 2)` prints `2`,
+  i.e. `(-1) and 2` - unary minus binds at level 1, above `and`
+  (dcc64-verified 2026-08).
 - `[ ... ]` is overloaded: a **set constructor** in expression position vs.
   **indexing** in a `Selector`. Position disambiguates.
 - `TypeCast` vs. `call`: `TypeName(Expr)` is a type cast when the callee names a

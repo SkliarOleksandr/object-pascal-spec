@@ -13,7 +13,7 @@ InterfaceType = ( "interface" | "dispinterface" ) [ "(" Ancestor ")" ]
                   [ GUID ]
                   { InterfaceMember }
                 "end" ;
-GUID          = "[" StringLiteral "]" ;            (* '{xxxxxxxx-....}' *)
+GUID          = "[" ConstExpr "]" ;                (* '{xxxxxxxx-....}' or a string const *)
 InterfaceMember = MethodHeading ";" { MethodDirective }
                 | PropertyDecl ;                   (* interface properties: accessors only *)
 ```
@@ -46,9 +46,13 @@ type
 
 **Semantics & parsing notes**
 
-- ⚠️ *GUID grammar:* `[ '{...}' ]` — a string literal in brackets, immediately
+- ⚠️ *GUID grammar:* `[ '{...}' ]` — a bracketed constant expression, immediately
   after the (optional) ancestor. Don't confuse with an attribute (also `[...]`,
   ch.19) — context (interface body, GUID format) disambiguates.
+- ⚠️ *The GUID need not be a literal* — a **named string constant** is accepted
+  too: with `const SID_IFoo = '{...}';` in scope, `IFoo = interface [SID_IFoo]`
+  compiles (dcc64-verified 2026-08). The production is `"[" ConstExpr "]"`,
+  constrained semantically to a compile-time string in GUID format.
 - Interfaces have **no fields, no visibility sections, no method bodies**. All
   members are implicitly public. Properties list only accessor method names.
 - Default ancestor is `IInterface` (≡ `IUnknown`).

@@ -108,7 +108,9 @@ is **inferred**.
 ```ebnf
 InlineVarStmt = "var" IdentList [ ":" TypeRef ] [ ":=" Expression ] ";" ;
 (* note ':=' here, an executable initializer, vs '=' for a section ConstExpr.
-   Multiple names are legal: `var V, S: string;` — System.SysUtils.pas *)
+   Multiple names are legal: `var V, S: string;` — System.SysUtils.pas.
+   TypeRef is the FULL B.11 production, structural forms included — see the
+   notes below. *)
 ```
 
 **Example**
@@ -153,6 +155,12 @@ end;
   rejected: `E2026 Constant expression expected`. Type inference for an
   untyped inline `const` follows the same rule as inline `var` — the static
   type of the initializer expression, not a narrowed constant-folded type.
+- ⚠️ *The `:` slot takes full structural type syntax, not just named type
+  references:* `var A: array[0..1] of Byte;` and `var S: set of Byte;` both
+  compile inside a `begin`/`end` block (dcc64-verified 2026-08). The `TypeRef`
+  in the grammar above therefore means the complete B.11 production
+  (`array`/`set`/`record`/`^`/`string[N]` bodies included), not merely
+  `TypeName`.
 - *AST:* `InlineVar { name, type?, init?, pos }` as a statement node.
 
 ### 3.1.4 `absolute` variables (overlay)

@@ -439,7 +439,11 @@ C := 'A';                   // a 1-char string literal; Char if context demands
   must fold them.
 - ⚠️ *Char vs. string:* a single-character literal `'A'` has an ambiguous type
   resolved by context — `Char` where a `Char` is expected, otherwise a 1-length
-  `string`. Carry this as a "char-or-string literal" until typing.
+  `string`. Carry this as a "char-or-string literal" until typing. Where the
+  context asks for the literal's OWN type (`var C := 'A'`, `const C = 'A'`,
+  3.1.3/3.2.1) it is `Char` exactly when the folded literal is one UTF-16
+  unit — `'A'`, `''''`, `#65`, `#$41`, `^M` — and `string` otherwise: `''`,
+  `'ab'`, `'a'#0`, and `#$1F600`, which is a surrogate pair (dcc 37.0).
 - `#n` gives the character with ordinal `n` (decimal or `$hex`). `^X` caret
   notation (e.g. `^M` = `#13`) is also accepted.
 - *AST:* `StrLit { segments[] }` or a folded constant value.

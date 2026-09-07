@@ -534,6 +534,17 @@ type
   member and not the closure's — `System.Bindings.Outputs` does exactly this.
   `@ValueFunc` is how the value itself is named instead.
 
+  The same rule applies to an OVERLOADED routine's bare name: it means the
+  overload that needs no arguments, and that overload may be an ancestor's
+  when the declarations carry `overload` (6.3.1). dcc 37.0: `TLab = class
+  ... constructor Create(const A, B: string); overload; end;` then
+  `var L := TLab.Create;` compiles and calls `TObject.Create`; without the
+  `overload` directive the derived declaration hides the ancestor's and the
+  same line is `E2035 Not enough actual parameters`. An all-defaulted
+  redeclaration (`function GetOffset(AInclude: Boolean = True): TRect;`)
+  is itself callable by name and is the one chosen over an ancestor's
+  parameterless `GetOffset: TPoint`.
+
   Two shapes are NOT called this way, and a resolver needs both to stop it: a
   procedural type with a parameter the CALLER must supply, and a `procedure`
   type, which has no result to take a member from. The same

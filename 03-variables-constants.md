@@ -141,6 +141,37 @@ end;
   produces false E2004. See 05 §5.5.1/§5.5.2.
 - *Type inference:* with `:=` and no `: TypeRef`, the type is the static type of the
   initializer expression. `var X := 1` ⇒ `Integer`.
+- ⚠️ *What a LITERAL initializer infers (dcc 37.0, dcc32 and dcc64, printing
+  `GetTypeName(TypeInfo(T))` through a generic method):*
+  - an integer literal takes the narrowest of `Integer`, `Cardinal`, `Int64`,
+    `UInt64` that holds its value **after the sign is applied**: `2147483647`
+    ⇒ Integer, `2147483648` and `$FFFFFFFF` ⇒ Cardinal, `4294967296` ⇒ Int64,
+    `18446744073709551615` ⇒ UInt64; `-2147483648` ⇒ Integer,
+    `-2147483649` ⇒ Int64. A folded constant expression follows the same rule
+    (`5000000000 + 1` ⇒ Int64), and a named true constant carries the type it
+    was inferred with (`const CBig = 5000000000; var X := CBig` ⇒ Int64).
+  - a real literal is `Extended` on Win32. **On Win64 a real literal written
+    without an exponent, with at most four fractional digits and inside
+    Currency's range is `Currency`**: `1.5`, `0.1`, `2.0`, `1.50`, `-1.5`,
+    `1.5 + 1.5` and `922337203685477.5807` ⇒ Currency, while `3.14159`,
+    `1.50000`, `1e3`, `1.5e0`, `922337203685478.0` and `A / 2` ⇒ Extended.
+    `TCurrencyHelper` exists in System.SysUtils, so `X.ToString` compiles
+    either way, but `X.Exponent` is E2003 on Win64. Probed on Win64 only;
+    the other 64-bit targets are assumed to share it (Extended is
+    Double-sized there too).
+  - a string literal denoting exactly one UTF-16 unit is `Char` (`'a'`,
+    `''''`, `#65`, `#$41`, `^M`); anything else is `string` (`''`, `'ab'`,
+    `'a'#0`, `#$1F600` — a surrogate pair).
+  - `True` ⇒ Boolean; `@X` ⇒ Pointer; `nil` is accepted (`var P := nil`
+    compiles); `[1, 2]` ⇒ an anonymous set type; a bare class name ⇒ an
+    anonymous class-reference type.
+- ⚠️ *A routine name as the initializer is a CALL when the routine needs no
+  arguments* (6.6.1 — parameterless, or every parameter defaulted): `var N :=
+  GF.Add` with `Add: TStringList; overload` beside `Add(A: Integer): Integer;
+  overload` infers TStringList. A routine that still requires an argument is
+  `E2035 Not enough actual parameters`, not a procedural value.
+- ⚠️ *Only one name may be initialized:* `var X, Y := 5;` is `E2196 Cannot
+  initialize multiple variables` (dcc 37.0).
 - ⚠️ *Inline `const` keeps the `=` token but drops the constant-expression
   requirement.* An inline `const` (a `const` declaration appearing as a
   statement inside a block) is written `const Ident [: TypeRef] = Expression;`
@@ -253,7 +284,14 @@ const
 - The RHS must be evaluable at compile time (B.10), which includes constant
   folding of operators, `Ord`, `Length` of string consts, set constructors, etc.
 - *Constant type:* inferred from the expression (numeric literals take the
-  smallest fitting type unless the expression forces wider).
+  smallest fitting type unless the expression forces wider) — the same literal
+  rules as an inline `var` (3.1.3): `100` ⇒ Integer, `5000000000` ⇒ Int64,
+  `'a'` ⇒ Char, `'abc'` ⇒ string, `1.5` ⇒ Extended on Win32 / Currency on
+  Win64 (dcc 37.0).
+- ⚠️ *A true constant HAS that type for member access:* `const CI = 100;`
+  then `CI.ToString`, and `const CS = 'abc';` then `CS.Length`, both compile
+  (dcc 37.0) — the helper is looked up on the inferred type, so a resolver
+  must record it rather than treat the constant as untyped.
 - *AST:* `ConstDecl { name, value, inferredType }`.
 
 ### 3.2.2 Typed constants (& writeable-constants directive)

@@ -512,6 +512,85 @@ Excel.ActiveWorkbook.Charts[1].SeriesCollection.Add(
   error (`E2066`). It is a member call or nothing.
 - *AST:* `NamedArg { name, value }` within the call or index node.
 
+### 4.11.4 Result types of the value-returning intrinsics
+
+| | |
+|---|---|
+| **Introduced** | Pascal/D1 core; per-name tags as in B.4.3 |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+The documentation gives most intrinsics a loose signature ("returns an
+integer"); the compiler's answer is exact and, in a few places, surprising.
+Everything below was probed on dcc32 and dcc64 37.0 (2026-09-07) by assigning
+each call to a record variable and reading the type dcc names in
+`E2010 Incompatible types: 'TProbe' and '<type>'`; the `var X := Intrinsic(...)`
+inference (3.1.3) agrees with every row. Where the two compilers differ, both
+answers are given.
+
+**Fixed result, whatever the argument**
+
+| Intrinsic | Result | Notes |
+|---|---|---|
+| `Ord(X)` | `Integer` | even of an `Int64`/`UInt64`/`NativeInt` argument |
+| `Chr(X)` | `Char` | |
+| `SizeOf(T\|X)`, `Hi(X)`, `Lo(X)` | `Integer` | `Hi`/`Lo` of any width, literals included |
+| `Trunc(X)`, `Round(X)` | `Int64` | of a `Single` too; `Trunc(I64)` of an integer is `E2008`, `Round(I)` is accepted |
+| `MulDivInt64` | `Int64` | |
+| `Assigned`, `Odd`, `IsManagedType`, `IsConstValue`, `HasWeakRef`, `Eof`, `Eoln`, `SeekEof`, `SeekEoln` | `Boolean` | |
+| `Pi` | `Extended` | dcc64 prints it as `Double`, which is what `Extended` IS on a 64-bit target; `var X := Pi` reads `Extended` on both |
+| `Addr(X)`, `Ptr(N)`, `ReturnAddress`, `AddressOfReturnAddress`, `TypeInfo(T)`, `TypeHandle(T)` | `Pointer` | the untyped pointer, not `^T` or `PTypeInfo` |
+| `GetTypeKind(T\|X)` | `System.TTypeKind` | |
+| `Length(X)` | `Integer`; `NativeInt` for a **dynamic array** | so `Length(DynArr)` is `Int64` on dcc64 and `Integer` on dcc32; a string, static array, `ShortString` or `Variant` is `Integer` on both |
+
+**The ordinal widening rule** (shared by `Pred`, `Succ`, `Low`, `High`, `Abs`
+of an integer):
+
+- `Byte`, `ShortInt`, `Word`, `SmallInt`, `Cardinal`, a subrange, a literal:
+  **`Integer`** - `Pred(B)` of a `Byte` is an `Integer`, `High(Cardinal)` is
+  an `Integer`.
+- `Int64` **and `UInt64`**: **`Int64`** - `Succ(U64)` is an `Int64`,
+  `High(UInt64)` is an `Int64`.
+- `NativeInt`, `NativeUInt`: `NativeInt` (i.e. `Integer` on dcc32, `Int64` on
+  dcc64) - the only rows the two compilers disagree on.
+- An enum, `Char`, `AnsiChar`, `WideChar`, `Boolean`: **the argument's own
+  type** - `Pred(E)` is the enum, `Succ(AC)` an `AnsiChar`.
+- A subrange OVER an `Int64` range (`1..5000000000`): `Int64`.
+
+**`Low`/`High` of a non-ordinal**
+
+| Argument | `Low` | `High` |
+|---|---|---|
+| static array | index type, widened as above: `array[2..5]` and `array[Word]` give `Integer`, `array[TEnum]` gives `TEnum`, `array['a'..'z']` gives `Char`, `array[Boolean]` gives `Boolean` | same |
+| dynamic array (value or type) | `Integer` | `NativeInt` (`Int64` on dcc64) |
+| `string`, `AnsiString`, `WideString`, `ShortString` values | `Integer` | `Integer` |
+| the long-string TYPE itself (`High(string)`) | `Integer` | `E2198 High cannot be applied to a long string` |
+| a set type or value | `E2008` | `E2008` |
+
+**Argument-dependent**
+
+| Intrinsic | Rule (dcc32 / dcc64 where they differ) |
+|---|---|
+| `Abs(X)` | integer: the widening rule (`Abs(Byte)` = `Integer`, `Abs(UInt64)` = `Int64`, `Abs(NativeUInt)` = `NativeInt`). Real: **`Extended` on dcc32 for every real type**; on dcc64 `Currency` stays `Currency` and `Comp` stays `Comp` (their arithmetic is integral there), every other real is `Extended` (printed `Double`). `Abs(2.5)` is a real. `Abs(Variant)` is a real |
+| `Sqr(X)` | integer: `Integer` for anything up to 32-bit SIGNED, but a 32-bit **unsigned stays `Cardinal`**, and the 64-bit ones keep their signedness (`Int64`, `UInt64`, `NativeInt`, `NativeUInt`). Real: `Extended` for every real, **`Currency` and `Comp` included** (unlike `Abs`) |
+| `Swap(X)` | a 16- or 32-bit integer keeps its type (`Word`, `SmallInt`, `Integer`, `Cardinal`); `Byte`, `Int64` and a literal give `Integer` |
+| `Copy(S, I, N)` / `Copy(A, I, N)` | the FIRST argument's type: `AnsiString` stays `AnsiString`, `ShortString` stays `ShortString`, a string literal is `string`, a dynamic array (incl. `TArray<T>`) stays that array type; `Copy(A)` with no range works for a dynamic array and is `E2035` for a string; a static array is `E2008` |
+| `Concat(A, B, ...)` | all arguments of ONE type: that type (`AnsiString`, `WideString`, `UTF8String`, `RawByteString`, a dynamic array type) - with two exceptions: **`ShortString`+`ShortString` is `AnsiString`** and **`AnsiChar`+`AnsiChar` is `ShortString`**. Mixed string kinds, `Char` operands and literals: `string` |
+| `Default(T)` | `T` for a record, an ordinal, a real, a string, a STATIC array. **`Pointer` for every reference type** - class, interface, dynamic array, procedural/method/reference type, class reference, pointer: `var X := Default(TObj); X.Free` is `E2018 Record, object or class type required` and `var A := Default(TDynI); A[0]` is `E2016` |
+| `AtomicIncrement`/`AtomicDecrement`/`AtomicExchange`/`AtomicCmpExchange` | the first argument's type (`Integer`, `Cardinal`, `Int64`, `UInt64`, `NativeInt`, `Pointer`); an object reference is `E2008` |
+
+**Semantics & parsing notes**
+
+- ⚠️ *A typer that gives `Ord` "the argument's type" or `Trunc` "Integer" will
+  produce false `E2010`s at the next assignment* - `I64 := Trunc(D)` is fine,
+  `var N := Ord(I64)` is an `Integer`. The rows above are the contract.
+- ⚠️ *`Length(DynArr)` is the one platform-dependent `Length`.* It shows in
+  `var L := Length(A)` on dcc64: `L` is an `Int64`, and comparing it to an
+  `Integer` counter is a widening, not an error.
+- The dcc64 `Currency`/`Comp` exceptions under `Abs` match the 64-bit literal
+  rule in 3.1.3: on that target `Currency` arithmetic does not promote to a
+  real.
+
 ---
 
 ## 4.12 Operator overloading (cross-reference)

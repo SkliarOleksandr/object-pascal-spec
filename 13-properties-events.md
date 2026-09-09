@@ -85,6 +85,17 @@ type
   property is field-backed or method-backed. See §13.1.6 for the one exception —
   a `var` parameter inside the property's own *setter*, gated behind
   `{$VARPROPSETTER}`.
+- ⚠️ *Redeclaration.* A descendant may redeclare an inherited property **without a
+  type**: `property Items;` (visibility only), `property Y read GetX;` (new
+  accessor), `property X default 5;` (streaming specifier). All three are the
+  SAME property - dcc resolves the redeclaration against the nearest inherited
+  property of that name, and the redeclared form inherits its type. A
+  redeclaration **with a type** (`property X: string read FS;`) is a NEW property
+  that hides the inherited one, like an undecorated same-named method (12.3):
+  a bare `property X;` below it refers to the hiding one. dcc-verified (dcc64
+  36.0, 2026-09-09) with a five-class chain. An editor treating the two forms
+  alike either misses uses on rename (bare) or merges two unrelated properties
+  (typed).
 - *AST:* `PropertyDecl { name, type, reader?, writer?, index?, … }`.
 
 ### 13.1.2 Array properties

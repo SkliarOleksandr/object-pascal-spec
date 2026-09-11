@@ -428,6 +428,11 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   during/before tokenisation.
 - `{$IF}` evaluates a **compile-time constant expression** that may use
   `Defined(X)`, `Declared(X)`, and predefined consts like `CompilerVersion`.
+- `{$IFDEF}`, `{$IFNDEF}`, `{$DEFINE}` and `{$UNDEF}` read the **leading
+  identifier** of their argument and ignore whatever follows it - dcc-probed
+  (35.0 and 37.0 agree): `{$ifdef CPU386)}` tests `CPU386` (Delphi 11's
+  `getmem.inc` ships that stray paren), `{$DEFINE FOO BAR}` defines only
+  `FOO`, `{$UNDEF FOO)}` undefines `FOO`.
 - `{$IFOPT X+}`/`{$IFOPT X-}` tests the current **state of a switch directive**
   (e.g. `{$IFOPT R-}` = "if range checking is off") — ties the conditional
   pre-pass to the switch-state stack of 1.3.1. Used in the RTL (`System.pas`,

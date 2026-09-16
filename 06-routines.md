@@ -245,6 +245,17 @@ procedure Show(Msg: string; Modal: Boolean = True);
   parameters must too. Defaults must be **constant expressions** and are only
   allowed on value/`const` parameters (not `var`/`out`). Enforce both.
 - Interacts with overloading (6.3) — ambiguous calls are a semantic error.
+- ⚠️ *A trailing comma at the call site is accepted in ONE case* (dcc-probed,
+  dcc32 36.0 and 37.0 agree): `H(1, 2,)` compiles when the callee is not
+  overloaded, every parameter is supplied, and the LAST parameter has a
+  default - the empty slot reads as "the default, already given". Real code
+  ships it (a client unit, ImageEn). Everything else is an error: a parameter
+  still due gives `E2029 Expression expected but ')' found` (`G(True, 1,)`
+  with two defaults), no default on the last parameter or an overloaded
+  callee gives `E2034 Too many actual parameters` (`P(1, 2,)`, `H(1, 2,,)`),
+  an empty slot anywhere else is E2029 (`H(,)`, `H(1,,2)`), and an index list
+  never takes it (`X[0,]` is E2029). A tolerant parser should accept the
+  trailing comma and leave the verdict to the arity check.
 - ⚠️ *Dynamic-array and interface-typed parameters may default only to `nil`.*
   For dynamic arrays, any other value — an array-literal constructor or a typed
   constant of the same array type — is rejected outright, because it is not

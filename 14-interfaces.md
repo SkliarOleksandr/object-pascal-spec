@@ -148,6 +148,19 @@ type
   declarations the way it does for a qualified method implementation header
   (`TList<T>.Add` in 16 §16.3); doing so declares bogus symbols (`string`, `T`)
   into the class scope and yields false E2004.
+- ⚠️ *The class-method name is NOT always checked* (dcc-probed, dcc32 37.0,
+  2026-09-16; UNDOCUMENTED): when an inherited member already satisfies the
+  interface method AND that member is declared in an ancestor class which
+  itself declares an interface list - any interface, related or not -
+  `function IFoo.GetX = NoSuchMethod;` compiles and the clause is silently
+  ignored (the inherited method answers the interface call; a real target in
+  the same position IS honoured). Plain classes between that ancestor and the
+  declaring class do not matter. The same clause is `E2003 Undeclared
+  identifier` when the satisfying member is declared in an interface-less
+  ancestor (even with an interface-declaring class further up), or when
+  nothing implements the method. Real code ships the ignored form (a third-party layout unit, two
+  clauses naming a method that exists nowhere). A tolerant analyzer should not
+  report the name under an interface-declaring ancestor.
 
 ---
 

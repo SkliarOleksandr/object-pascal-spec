@@ -25,8 +25,11 @@ spelling on identifier tokens (needed for diagnostics and `NameOf`, 13.0).
 
 ## B.2 Whitespace & comments
 
-Whitespace (space, tab, line breaks) separates tokens and is otherwise
-insignificant (**except inside multiline string literals**, B.6.3).
+Whitespace separates tokens and is otherwise
+insignificant (**except inside multiline string literals**, B.6.3). For dcc
+every control character `#0`..`#31` is whitespace, not only space, tab and
+line breaks - a stray `#$12` after a semicolon or an embedded `#0` compiles
+silently (probed dcc64 35.0, 2026-09-16); `#$7F` is E2038 "Illegal character".
 
 ### B.2.1 Comment forms
 
@@ -392,7 +395,7 @@ const
 
 ```ebnf
 RealLiteral = Digit { [ "_" ] Digit }
-              [ "." Digit { [ "_" ] Digit } ]
+              [ "." [ Digit { [ "_" ] Digit } ] ]   (* the fraction may be EMPTY *)
               [ ( "e" | "E" ) [ "+" | "-" ] Digit { Digit } ] ;
 ```
 
@@ -400,6 +403,10 @@ RealLiteral = Digit { [ "_" ] Digit }
 
 - Must contain a `.` fraction **or** an exponent to be a real literal; otherwise
   it lexes as an integer.
+- The fraction may be empty: `100.` is a real literal when the `.` is followed
+  by nothing that can start another token - `100. - X` and `X := 1.;` compile
+  (probed with dcc64 35.0, 2026-09-16). `1..2` is still a range, and `100.e2`
+  is member access on the integer `100` (E2018), not a real with an exponent.
 - Default type is `Extended`/`Double` (platform-dependent); see ch.02.
 - `$`/`%` prefixes are integer-only — no hex/binary floats.
 

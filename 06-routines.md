@@ -246,9 +246,11 @@ procedure Show(Msg: string; Modal: Boolean = True);
   allowed on value/`const` parameters (not `var`/`out`). Enforce both.
 - Interacts with overloading (6.3) — ambiguous calls are a semantic error.
 - ⚠️ *A trailing comma at the call site is accepted in ONE case* (dcc-probed,
-  dcc32 36.0 and 37.0 agree): `H(1, 2,)` compiles when the callee is not
-  overloaded, every parameter is supplied, and the LAST parameter has a
-  default - the empty slot reads as "the default, already given". Real code
+  dcc32 36.0 and 37.0 agree; UNDOCUMENTED - the Embarcadero docwiki only
+  states that empty slots such as `SomeFunction(,,X)` are illegal, and no
+  public source describes this form, checked 2026-09-16): `H(1, 2,)`
+  compiles when the callee is not overloaded, every parameter is supplied,
+  and the LAST parameter has a default - the empty slot reads as "the default, already given". Real code
   ships it (a client unit, ImageEn). Everything else is an error: a parameter
   still due gives `E2029 Expression expected but ')' found` (`G(True, 1,)`
   with two defaults), no default on the last parameter or an overloaded

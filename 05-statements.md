@@ -675,6 +675,17 @@ end;
     for exactly the collisions this rule exists to describe. The failure is not
     a missing `E2003`: the name binds to something of the WRONG TYPE, so it
     surfaces later and elsewhere as a bogus `E2010 Incompatible types`.
+  - *The override covers INHERITED members, and that is where a two-tier
+    resolver leaks:* a target whose type is declared in the current unit but
+    descends from a class in another one (`TMy = class(TControl)`, or any class
+    with no clause at all — the implicit `TObject`) is only HALF open to a
+    same-unit pass. Its own members are in scope; the inherited ones are not, so
+    `with C do Name := 'x'` with `C: TMy` and a local `Name: Integer` keeps the
+    local — and a pass that revisits only the bodies whose target it could NOT
+    type never comes back to this one. dcc-verified: the line compiles, `Name`
+    is `TControl.Name`, in a plain body, a `with R, C do` mixed with a same-unit
+    record, and inside an anonymous method declared in the body. A record has no
+    such tier: its member set is complete where it is declared.
 - ⚠️ *A target after the first is resolved INSIDE the targets before it.* This
   is the point of the multi-target form and not merely a shorthand for several
   independent targets: target *k* is looked up in the scope opened by targets
@@ -739,7 +750,7 @@ end;
   | typecast | `with TVarData(X) do` | the cast's TYPE, not the callee's |
   | `as` cast | `with Obj as TSub do` | |
   | dereference | `with P^ do` | the POINTEE, chasing alias chains |
-  | index | `with Arr[I] do` | element type, or a default array property |
+  | index | `with Arr[I] do` | element type, or a default array property; a comma list peels ONE LEVEL PER INDEX — `with M[I, J] do` over `TMatrix = array of TRow; TRow = array of TRec` opens TRec, not TRow (dcc-verified; a resolver that peels once per bracket pair opens the row and every member is `E2003`) |
   | `inherited Name` | `with inherited Canvas do` | 12.1.2 — the member is looked up from the ANCESTOR of the enclosing method's class, never from the class itself (`Vcl.ExtCtrls`) |
   | class reference | `with C do` where `C: class of TBase` | exposes TBase's class vars and class methods (15.2.1) |
   | bare class TYPE NAME | `with TBase do Tick` | same reach as the class reference — legal, and easy to miss because the target resolves to a TYPE rather than a value |

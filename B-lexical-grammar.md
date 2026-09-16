@@ -419,7 +419,7 @@ RealLiteral = Digit { [ "_" ] Digit }
 StringLiteral = StringElement { StringElement } ;      (* adjacency = concatenation *)
 StringElement = QuotedString | ControlChar | MultilineString ;
 QuotedString  = "'" { ?any char except "'"? | "''" } "'" ;
-ControlChar   = "#" IntLiteral ;                       (* e.g. #13  #$0A *)
+ControlChar   = "#" IntLiteral | CaretChar ;           (* e.g. #13  #$0A  ^M *)
 ```
 
 **Example**
@@ -445,7 +445,7 @@ C := 'A';                   // a 1-char string literal; Char if context demands
   unit — `'A'`, `''''`, `#65`, `#$41`, `^M` — and `string` otherwise: `''`,
   `'ab'`, `'a'#0`, and `#$1F600`, which is a surrogate pair (dcc 37.0).
 - `#n` gives the character with ordinal `n` (decimal or `$hex`). `^X` caret
-  notation (e.g. `^M` = `#13`) is also accepted.
+  notation (e.g. `^M` = `#13`) is a third string element, B.6.2.
 - *AST:* `StrLit { segments[] }` or a folded constant value.
 
 ### B.6.2 Caret control characters
@@ -454,13 +454,79 @@ C := 'A';                   // a 1-char string literal; Char if context demands
 |---|---|
 | **Introduced** | Pascal (pre-1995) |
 | **Deprecated** | — |
-| **Status** | ✅ Current |
+| **Status** | ✅ Current (Turbo Pascal legacy; still accepted by dcc 35.0-36.0) |
 
-`^X` denotes a control character (ordinal of uppercased `X` minus 64).
+`^X` is a one-character string element: the caret followed by **exactly one**
+source character, with nothing between them. It is the third `StringElement`
+of B.6.1 and folds with adjacent `'..'` and `#n` elements into one literal.
+
+**Grammar**
+
+```ebnf
+CaretChar = "^" ?any single character with ordinal < 128? ;
+```
+
+**Example**
 
 ```pascal
-CRLF = ^M^J;   // #13#10
+const
+  CRLF  = ^M^J;              // #13#10 - two elements, one 2-char string
+  Line  = 'ab'^M#10'cd';     // folds with the other element kinds, Length = 6
+  Bell  = ^G;                // #7, type Char (one UTF-16 unit, B.6.1)
+  Esc   = ^[;                // #27
+  Tab   = ^i;                // #9  - lowercase is uppercased first
+var
+  C: Char;
+begin
+  case C of
+    ^I:     ...;             // usable wherever a Char constant is
+    ^M, ^J: ...;
+  end;
+  if C in [^A..^Z] then ...; // set of control characters
+end;
 ```
+
+**Semantics (dcc 35.0 and 36.0 probed, identical)**
+
+- *Value:* `Ord(UpCase(X)) xor 64`. For the classic range this is the textbook
+  "minus 64":
+
+  | Source | Ordinal | | Source | Ordinal |
+  |---|---|---|---|---|
+  | `^A` .. `^Z`, `^a` .. `^z` | 1 .. 26 | | `^\` | 28 (FS) |
+  | `^@` | 0 (NUL) | | `^]` | 29 (GS) |
+  | `^[` | 27 (ESC) | | `^^` | 30 (RS) |
+  | `^?` | 127 (DEL) | | `^_` | 31 (US) |
+
+  ⚠️ dcc does not stop at that table. **Every** character with ordinal below
+  128 is accepted after the caret and mapped by the same xor: `^1` = 113
+  (`'q'`), `^!` = 97 (`'a'`), `^;` = 123, `^'` = 103 (the quote does **not**
+  open a string), and even whitespace - `^` followed by a space is 96, by a
+  tab is 73, by a CR is 77 (`'M'`). So `^ M` is the character 96 followed by a
+  stray identifier `M` (E2029 `';' expected`), not `^M`. Real code only uses
+  the table; a tolerant parser should still consume exactly one character.
+- *Exactly one character:* `^Mx` is `^M` followed by the identifier `x`
+  (E2029). The character after the caret is never the start of an identifier,
+  number, string or comment - the lexer must take it raw, before any other
+  token rule runs.
+- *Ordinal 128 and above:* not a caret character. dcc parses the caret as a
+  pointer dereference and fails with E2017 `Pointer type required`
+  (`^Ж`, `^` + byte $80 or $FF).
+- *Typing:* one element is `Char` (assignable to `Char` and `AnsiChar`,
+  `SizeOf` = 2 as a constant); two or more elements are `string`, exactly as
+  for `#n` (B.6.1 char-vs-string rule).
+- *Caret vs. dereference vs. pointer type:* the meaning of `^` is decided by
+  **position**, never by what follows it:
+  - in **operand** position (start of an expression, after an operator or `(`,
+    `[`, `,`, `:=`, a `case` label, a set element) a caret is a CaretChar;
+  - **after** an operand (`P^`, `P^^A`) it is the postfix dereference (ch.10) -
+    `P^^A` is `(P^)^` then `A`, hence E2017 when `P^` is not a pointer, and
+    `X^M` with an integer `X` is the same error, not a concatenation;
+  - in a **type** position (`PM = ^M`, ch.10) it is the pointer-type
+    constructor even when `M` is a single letter that would otherwise be `^M`.
+- *AST:* a `CaretChar` literal node carrying the raw two-character text; its
+  value is `Chr(Ord(UpCase(c)) xor 64)`, or it folds into the enclosing
+  `StrLit`.
 
 
 ### B.6.3 Multiline (triple-quoted) string literals

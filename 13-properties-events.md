@@ -224,6 +224,12 @@ property Caption: string read FCaption write SetCaption stored FHasCaption;
   value) — it does **not** initialize the field. Common misconception; note it.
 - `stored` takes a boolean constant/field/method controlling whether to persist.
 - Only meaningful for `published` properties with RTTI.
+- ⚠️ *A hint directive on a property sits BEFORE the semicolon, after the
+  last specifier:* `property P: Integer read FP deprecated;` compiles, while
+  `property P: Integer read FP; deprecated;` is an error (dcc 37.0 probed
+  2026-09-17 - the second `deprecated` is read as a field name). A parser
+  must accept `deprecated ['msg'] | platform | library | experimental` as a
+  terminator of the specifier list.
 
 ### 13.1.6 Put-by-reference setters (`{$VARPROPSETTER}`)
 

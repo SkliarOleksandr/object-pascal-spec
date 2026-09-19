@@ -756,6 +756,10 @@ end;
   | bare class TYPE NAME | `with TBase do Tick` | same reach as the class reference — legal, and easy to miss because the target resolves to a TYPE rather than a value |
   | interface-typed designator | `with I do Go` | |
   | parenthesised designator | `with (R) do` | see the caveat below |
+  | function call WITH arguments | `with GetRec(I) do` | the RESULT type of the overload the ARGUMENTS select (6.3.1) — not of the nearest declaration of the name; a constructor with arguments is still the CLASS |
+  | generic METHOD, type arguments written | `with TGH.CreateControlWith<TImage>(Owner, Parent) do WrapMode := ...` | the result type with the written arguments substituted — `T` is TImage here (16.5.1); when they are not written they are inferred from the arguments the same way (an FMX grid library, 4 sites) |
+  | generic CLASS instantiation as the qualifier | `with TFmxObjectFactory<TLayout>.CreateWithParent(P) do StyleName := ...` | a static class function's `T` result closed over the instantiation — TLayout (same library, 20 sites in one style builder) |
+  | member chain through an OUTER target | `with Col do with Footers.Add do` | `Footers` is a member of the outer target, resolved by the outer with scope; the inner target types from there — including when `Footers` also names a used unit (see the qualifier rule below) |
 
 - ⚠️ *A call target is subject to OVERLOAD RESOLUTION, against an empty argument
   list.* The syntax provides no arguments, so the target selects the arity-0
@@ -798,6 +802,32 @@ end;
   because the with scope is opened *inside* the enclosing body — the
   enclosing method's own and inherited members; then used units; then the
   implicit `System`/`SysInit` units.
+- ⚠️ *The override rule holds in QUALIFIER position too, against a used UNIT's
+  name.* A dotted `uses` entry makes its last segment a name in the outermost
+  scope (1.2.3), and a with member outranks it exactly as it outranks a
+  global: in a unit that uses `Lib.Footers`, `with Col do with Footers.Add do
+  AggregateFunction := ...` compiles and means `Col.Footers.Add` (dcc64 37.0,
+  probed 2026-09-19 with a three-unit fixture; the real shape is a grid
+  library's column dialog over its `...DataGrid.Footers` unit). A resolver
+  that decides "`Footers.X` is unit-qualified" by TEXT - matching the used
+  units' last segments before it has looked at the with scope - never types
+  the inner target, and the body is `E2003` again. The same text match is
+  right for `System.Footers.X`, where the unit is a LONGER prefix and no
+  member is asked about: only the bare head of the chain is subject to the
+  with scope.
+- ⚠️ *Implementation guidance, from the shapes above having been fixed one at
+  a time:* the target's type is **the expression typer's answer**, and a
+  resolver must not keep a SECOND typer for with targets. Every hand-kept
+  target dispatch fell behind the expression typer by exactly the forms the
+  next corpus used - the cast to a nested type, the class-reference
+  constructor, `inherited Name`, the overload selected by arguments, the
+  generic method with written arguments, the generic instantiation as a
+  qualifier - and each miss cost a whole body of false `E2003`, never one
+  name. What the with position ADDS to the expression typer is small and
+  stated above: a bare type name or class reference opens the CLASS scope, a
+  bare overloaded name selects the arity-0 overload, parentheses demote the
+  target to a value, the implicit pointer dereference does not apply. Those
+  are rules about the position; the typing itself is the ordinary one.
 - A target may be any designator, not just a variable — and a resolver must
   type every form, or the whole body reads as undeclared (each was a real
   false-E2003 source in the D13 RTL):

@@ -379,6 +379,22 @@ type
   implementation header `class operator TFontStyleExt.In(...)` ship in
   FMX.Graphics.pas — the name position after `operator` (and after `.` in the
   qualified form) must accept keywords.
+- ⚠️ *An operator name is not a member name:* `class operator Negative`
+  beside `property Negative: Boolean read IsNegative` compiles (RudysBigNumbers'
+  `Velthuis.BigIntegers.BigInteger` ships exactly that pair), and so does a
+  field, a method (`function Negative: Boolean`, `procedure Negative`) or a
+  nested constant of the operator's name, declared before or after the
+  operator. The two are neither a redeclaration (no E2004) nor overloads of
+  each other (no E2252), and member access (`A.Negative`, `R.Negative`)
+  reaches the non-operator member. The operator itself is unreachable by
+  name: with no other member so named, `R.Negative(A)` is `E2003 Undeclared
+  identifier: 'Negative'` - operators are reached only through their operator
+  token or conversion. Between themselves operators still overload as
+  routines do: a second `class operator Negative(const V: R): R` with
+  identical parameters is E2252. (dcc64 37.0, probed 2026-09-24.)
+  *Implementation note:* a resolver that files operators in the member name
+  table must not let one clash with, chain onto, or shadow a same-named
+  member - the member owns the name.
 - `Implicit`/`Explicit` define conversions to/from other types — they drive
   implicit/explicit cast resolution.
 - ⚠️ *`Implicit`/`Explicit` may overload by RESULT TYPE ALONE* — a deliberate

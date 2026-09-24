@@ -15,6 +15,7 @@ ClassMethod    = "class" ( "procedure" | "function" | "constructor" | "destructo
                  { MethodDirective | "static" } ;
 ClassProperty  = "class" "property" ... ;          (* as ch.13, class-scoped *)
 ClassRefType   = "class" "of" TypeRef ;
+TypeOfType     = "type" "of" ( TypeRef | "interface" ) ;  (* 15.2.2, type decl RHS only *)
 HelperType     = "class" "helper" [ "(" Ancestor ")" ] "for" TypeRef ClassBody "end"
                | "record" "helper" "for" TypeRef ClassBody "end" ;
 ```
@@ -250,6 +251,109 @@ end;
   an ordinary (instance) method, valid on an object instance
   (`Inst.ClassType`) but not on the class itself.
 - *AST:* `ClassOf { baseClass }`.
+
+### 15.2.2 `type of` types (undocumented)
+
+| | |
+|---|---|
+| **Introduced** | Delphi 8 for .NET (a relic of the CLR compiler); the native compiler accepts it by XE at the latest, Delphi 7 does not |
+| **Deprecated** | - |
+| **Status** | ⚠️ UNDOCUMENTED - not in the docwiki; dcc64 37.0-probed |
+
+A type whose values reference a TYPE rather than an instance - `class of`'s
+shape, but over any named type and over interfaces, which `class of` refuses
+(`TC = class of IInterface` does not compile). On .NET it carried a
+`RuntimeTypeHandle`; the .NET RTL declared
+`TInterfaceRef = type of interface` so that `Supports` could take any
+interface type as a parameter. On the native compilers it survives as a
+pointer-sized type that the parser and type checker still know.
+
+**Grammar**
+
+```ebnf
+TypeOfType = "type" "of" ( TypeRef | "interface" ) ;
+```
+
+Only as the WHOLE right side of a type declaration: `TypeDecl = Ident "="
+TypeOfType ";"`.
+
+**Example**
+
+```pascal
+type
+  TC1 = class of TForm1;
+  TC2 = type of TForm1;         // new
+  // TC3 = class of IInterface; // E2029 - does not compile
+  TC4 = type of IInterface;     // new
+  TIntfRef = type of interface; // any interface type (the .NET RTL's form)
+```
+
+**Semantics & parsing notes** (dcc64 37.0-probed)
+
+- *Where it may appear:* only after `=` in a type declaration, local and
+  nested type sections included. `var V: type of TObject` is
+  `E2029 Type expected but 'TYPE' found`; `packed type of` is `E2006`;
+  `type type of` is `E2029`.
+- *The operand is a type NAME:* a class, interface, record, enumeration,
+  procedural type, dynamic-array alias (`TBytes`), simple type (`Integer`,
+  `Pointer`) or dotted (`System.TObject`). Like `class of`, the operand may be
+  declared LATER in the same type section, with no forward declaration - and
+  that holds for a record as well as a class; the RTL relies on it
+  (`Datasnap.DSReflect`: `TDSAdapterClassType = type of TDSAdapterClass;`
+  directly above the class, then `TDSAdapterClassType(FClassRef).Create(...)`).
+  A later `type` section does not count (`E2003`). Rejected: a keyword type
+  (`string`, `class`, `record`, `object`, `dispinterface` - `E2029 Identifier
+  expected`), a type constructor (`array of Integer`), generic arguments
+  (`TList<Integer>` - `';' expected but '<'`), and a class-reference type
+  (`type of TComponentClass` - `E2110 Type expected`). The one keyword
+  accepted is `interface`.
+- *Over a class it behaves as `class of`:* `TC2 := TForm1`, assignment both
+  ways with a `class of` variable of the same class, assignment to `TClass`,
+  `V.ClassName`, `V.Create(...)` and `O is V` all compile and work;
+  `V := TObject` against `type of TComponent` is `E2010 Incompatible types:
+  'T' and 'class of TObject'`. It is still a distinct type for overloading:
+  `F(C: TComponentClass)` and `F(C: T)` coexist.
+- *Over anything else its value is the target's `PTypeInfo`:* a type NAME
+  assigned to it compiles to that type's RTTI pointer
+  (`V := Cardinal; Pointer(V) = TypeInfo(Cardinal)` is `True`). Which names
+  are accepted follows the RTTI type KIND for simple types and identity for
+  declared ones:
+
+  | `type of` | accepts | rejects (`E2010`) |
+  |---|---|---|
+  | `Integer` | `Integer`, `Cardinal`, `Byte`, `Word`, a subrange `0..5` | `Int64`, `NativeInt` on Win64 (= `Int64`), `Boolean`, `Char`, `Double` |
+  | `Int64` | `Int64`, `UInt64` | `Integer` |
+  | `Double` | `Single` | |
+  | `TE` (enum) / `TR` (record) | itself | another enum / record |
+  | `Pointer` | `PInteger` | |
+
+  The name is accepted only as the right side of an assignment (a `Result :=`
+  included): as an argument, in a comparison, parenthesised or as a typed
+  constant's value it reads as a typecast (`E2029 '(' expected`). Besides
+  names: `SizeOf` is a pointer, `nil` and an untyped `Pointer` assign both
+  ways, and `TypeInfo(X)` is accepted for ANY X, not just the operand.
+  Members are not reachable: over a record `V.X` is `E2124 Instance member
+  'X' inaccessible here` - the lookup is class-side, as through a class
+  reference.
+- *A class target holds the class (VMT) pointer, NOT its `PTypeInfo`:*
+  `C := TComponent; Pointer(C) = Pointer(TComponent)` is `True` and
+  `= TypeInfo(TComponent)` is `False` - the same value a `class of` holds.
+- *An interface NAME is never a value:* `V := IA` against `type of
+  interface`, `type of IInterface` or `type of IA` is `E2010 Incompatible
+  types: 'T' and 'TGUID'` (a GUID-less interface: `E2232 ... no interface
+  identification`) - the name reads as its GUID, the relic of the .NET
+  meaning. Only `TypeInfo(IA)` or `nil` fill such a variable.
+- *Compatibility is structural by target:* two `type of Integer` types assign
+  to each other; `type of Integer` and `type of string`, or `type of interface`
+  and `type of IInterface`, do not (`E2010`).
+- ⚠️ *`O is V` over an interface target compiles and is meaningless:* with
+  `V: type of interface` holding `TypeInfo(IInterface)`, `TComponent.Create(nil)
+  is V` is `False` - the value is compared as if it were a class. Only the
+  class-target form has working `is`.
+- `TypeInfo(T)` of the `type of` type itself compiles.
+- *AST:* `ClassOf { target }`, flagged as the `type of` form; no child for
+  `type of interface`. Resolvers treat it as a class reference to the target,
+  which is exact for classes and harmless otherwise.
 
 ---
 

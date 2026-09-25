@@ -209,6 +209,20 @@ function Max<T>(const A, B: T): T;
 
 - Type arguments may be **explicit** (`Max<Integer>(a, b)`) or **inferred** from
   the value arguments (`Max(a, b)`) — see 16.5.
+- ⚠️ *A generic method with no required parameters is CALLED without
+  parentheses, type arguments and all* — the ordinary paren-less call (ch.06),
+  unchanged by the `<...>`. `Node.GetData<TItem>` in a value position is a call
+  whose type is the result with `T := TItem`, exactly like
+  `Node.GetData<TItem>()`: `var A := Node.GetData<TItem>;` makes `A` a
+  `TItem`, `Node.GetData<TItem>.Site` reads the member straight off it, and
+  `var Z: Integer := Node.GetData<TItem>;` is E2010 `Integer` vs `TItem`
+  (dcc64 37.0, probed 2026-09-25; VirtualTreeView's `TVirtualNode.GetData<T>`
+  is the everyday case). The parse gives no help here — the §16.3.1 follower
+  rule reads `Id<Args>` followed by `;` as type arguments, and with no `(`
+  there is no call node at all, only the instantiation — so the typer must
+  decide it: `Id<Args>` whose `Id` binds a ROUTINE, in a value position, is a
+  call. Typing it as a type expression (it is shaped like `TList<Integer>`)
+  yields nothing, or the open `T`, and every member after it goes dark.
 - ⚠️ *Constraints live on the DECLARATION here too* (§16.4.1), so a generic
   method's implementation header repeats a bare `<T>`:
 
@@ -514,6 +528,27 @@ var X := Max(3, 7);          // T inferred as Integer, X inferred as Integer
   string)` in front of an ancestor's `GetValue<T>(const APath: string)` takes
   the call unless the arity is checked; the RTL's own JSON types are shaped
   exactly like that.
+
+  The same rule decides between OVERLOADS in one type. A plain and a generic
+  method may share a name and a parameter list, differing only in the type
+  parameters:
+
+  ```pascal
+  TVirtualNode = packed record
+    function GetData(): Pointer; overload;
+    function GetData<T>(): T; overload;
+  end;
+  ```
+
+  `Node.GetData<TItem>` (with or without `()`) is the generic one and a
+  `TItem`; bare `Node.GetData` is the plain one and a `Pointer`
+  (`Node.GetData.Site` is E2671). Declaration order does not matter either
+  way (dcc64 37.0, probed 2026-09-25, both orders). So written type arguments
+  FILTER the candidates before value arguments are looked at: only generic
+  methods with that many type parameters remain. A resolver that picks by
+  value arguments alone sees two parameterless candidates, takes the first
+  (the `Pointer` one), and the written `<TItem>` then has nothing to
+  instantiate.
 - Inference combines with inline-var inference for terse code.
 
 ---

@@ -55,6 +55,59 @@ Q := A div B;   R := A mod B;   F := A / B;   // F is floating-point
   (resolved by operand type). For records, `+` may be user-overloaded (ch.09).
 - Operand promotion follows the numeric ladder (ch.02); mixed int/real ⇒ real.
 
+### 4.2.1 Result type of an operator expression
+
+| | |
+|---|---|
+| **Introduced** | Pascal (pre-1995); inference through `var X :=` 10.3 |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+The type an operator expression has - what `var X := A op B` infers (3.1.3)
+and what a member access on `(A op B)` is looked up on. Probed on dcc32 and
+dcc64 37.0 (2026-09-25) through `GetTypeName(TypeInfo(T))` of the inferred
+variable, over VARIABLES of each type; a constant expression folds and is
+typed by its value instead (3.2.1).
+
+| Expression | dcc32 | dcc64 |
+|---|---|---|
+| `B + B`, `B * B` (Byte), `W * W` (Word), `B shl 2`, `Sub + Sub` (a subrange) | anonymous subrange | same |
+| `Sh + Sh` (ShortInt), `-B` | `Integer` | same |
+| `not B` | `Byte` - `not` keeps its operand's type (`not I64` is `Int64`) | same |
+| `I + C` (Integer, Cardinal) | `Int64` | same |
+| `C + C` | `Cardinal` | same |
+| `I + I64`, `U64 + I` | `Int64`, `UInt64` - the 64-bit operand's type | same |
+| `NI + I` (NativeInt) | `Integer` | `Int64` |
+| `I div B`, `I shl 2` | `Integer` | same |
+| `MyI + MyI` (`TMyI = type Integer`) | `Integer` - the distinct type is lost | same |
+| `I / I` | `Extended` | same |
+| `Sg + Sg`, `Sg + I`, `Sg * D`, `E + D`, `DT + 1` (TDateTime), `-Sg` | `Extended` - real arithmetic is Extended whatever the operands | same |
+| `D + Cu`, `Cu + I`, `Cu + Cu`, `Cu * Cu`, `-Cu` | `Extended` | **`Currency`** |
+| `5000000000 + 1` | `Int64` - literals by value | same |
+| `1.5 + 1.5` | `Extended` | `Currency` |
+| `1.5 + 1` | `Extended` | `Extended` |
+| `Ch + Ch`, `Ch + S`, `S + A` (string, AnsiString) | `string` | same |
+| `A + A`, `AC + A` (AnsiChar) | `AnsiString` | same |
+| `AC + AC` | anonymous | same |
+| `P + 1` (PChar) | `PWideChar` - the pointer's type | same |
+| `B > I`, `Bo and Bo` | `Boolean` | same |
+
+**Semantics & parsing notes**
+
+- ⚠️ *Arithmetic on narrow integers is NOT the wider operand's type.* A typer
+  that answers "the wider of the two" gives `B + B` a Byte; dcc computes it
+  in an anonymous subrange of Integer, and a resolver is closest to that
+  with Integer. `not` is the exception that does keep the operand's type.
+- ⚠️ *A 32-bit signed/unsigned mix is Int64,* not the left or the right
+  operand's type.
+- ⚠️ *There is no Single or Double arithmetic.* Every real operation yields
+  Extended - which on dcc64 is the 8-byte type, so `Sg + Sg` there is a
+  Double-sized Extended - except that on dcc64 an operation with a Currency
+  operand stays Currency (Currency arithmetic is integral on that target,
+  as `Abs` shows in 4.11.4).
+- An operand whose type is a record with overloaded operators takes the
+  operator's declared result type (4.12).
+
 ---
 
 ## 4.3 Logical (Boolean) operators & short-circuit

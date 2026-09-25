@@ -274,7 +274,7 @@ TrueConstDecl = Ident "=" ConstExpr ";" ;
 
 ```pascal
 const
-  Max = 100;            // Integer
+  Max = 100;            // sized by value - see below; `var X := Max` is Integer
   Pi  = 3.14159;        // Extended
   Hi  = 'Hello';        // string
 ```
@@ -283,15 +283,73 @@ const
 
 - The RHS must be evaluable at compile time (B.10), which includes constant
   folding of operators, `Ord`, `Length` of string consts, set constructors, etc.
-- *Constant type:* inferred from the expression (numeric literals take the
-  smallest fitting type unless the expression forces wider) — the same literal
-  rules as an inline `var` (3.1.3): `100` ⇒ Integer, `5000000000` ⇒ Int64,
-  `'a'` ⇒ Char, `'abc'` ⇒ string, `1.5` ⇒ Extended on Win32 / Currency on
-  Win64 (dcc 37.0).
-- ⚠️ *A true constant HAS that type for member access:* `const CI = 100;`
+- *Constant type:* inferred from the expression. What an inline `var X := C`
+  gets from it follows the literal rules of 3.1.3: `100` ⇒ Integer,
+  `5000000000` ⇒ Int64, `'a'` ⇒ Char, `'abc'` ⇒ string, `1.5` ⇒ Extended on
+  Win32 / Currency on Win64 (dcc 37.0). The constant's OWN type - the one a
+  member access on it sees - is narrower; see below.
+- ⚠️ *A true constant HAS a type for member access:* `const CI = 100;`
   then `CI.ToString`, and `const CS = 'abc';` then `CS.Length`, both compile
-  (dcc 37.0) — the helper is looked up on the inferred type, so a resolver
+  (dcc 37.0) — the helper is looked up on the constant's type, so a resolver
   must record it rather than treat the constant as untyped.
+- ⚠️ *An initializer that is an OPERATOR over other constants has a type
+  too,* by the operator rules of 4.2.1: `const KindA = 'S'; KindB = 'T';
+  Kinds = KindA + KindB;` is a `string`, and `Kinds.CountChar(C)` binds to
+  TStringHelper. A resolver that types only literal initializers leaves every
+  constant built from named constants - a common way to spell a character
+  class - with no type, and every member reached through it with no
+  declaration.
+- ⚠️ *The constant's own type is narrower than what `var X := C` infers*
+  (dcc32 and dcc64 37.0, probed 2026-09-25 by reading which record helper a
+  member access binds to - each System.SysUtils helper's `MaxValue`
+  differs - and `GetTypeName(TypeInfo(T))` through a generic method):
+  - an integer constant is typed by its VALUE: the first of `ShortInt`,
+    `Byte`, `SmallInt`, `Word`, `Integer`, `Cardinal`, `Int64`, `UInt64`
+    that holds it. `0`, `127`, `-128` find TShortIntHelper; `128`, `255`
+    TByteHelper; `256`, `32767`, `-129` TSmallIntHelper; `32768`, `65535`
+    TWordHelper; `65536`, `-32769`, `2147483647` TIntegerHelper;
+    `2147483648` TCardinalHelper; `4294967296` TInt64Helper. A FOLDED
+    expression follows the same rule (`C + 1`, `C div 3`, `(C + 1) * 2`,
+    `not C`, a class member constant `TFoo.K`). `SizeOf(C)` of `const C =
+    100` is 1, and a generic argument `C` infers an anonymous subrange
+    (`GetTypeName` prints `:2`).
+  - a typecast or a typed intrinsic fixes the type instead of the value:
+    `Byte(5)` is a Byte, `Integer(100)` an Integer, `High(Byte)` a Byte,
+    `High(Integer)` an Integer, `Length('abc')` and `SizeOf(T)` an Integer,
+    `Trunc`/`Round` an Int64, `Ord('A')` and `Ord(High(Char))` a Word; but
+    `Ord(E)` of an enum value is by value again (a ShortInt). A folded
+    expression OVER such a constant is by value: `Byte(5) + Byte(5)` is a
+    ShortInt, and `not Byte(5)` folds to -6, a ShortInt - where `not B` over
+    a Byte VARIABLE is a Byte (4.2.1).
+  - a real literal written like a Currency (no exponent, at most four
+    fractional digits, in range) is a **Currency constant on both
+    compilers**: `const R = 1.5;` binds TCurrencyHelper, and `SizeOf(R)` is
+    8 on dcc32 too (an Extended is 10 there), while `var X := R` is Extended
+    on dcc32 (3.1.3). A folded `R + 1` is Extended on dcc32 and Currency on
+    dcc64; `R + R2` over two such constants is Currency on both; `R / 2` and
+    `3.14159 + R` are Extended.
+  - a REAL typecast does not survive: `Double(1.5)` and `Single(2)` are
+    Extended constants (TExtendedHelper), not Double and Single.
+  - a typecast to a user SUBRANGE type (`TSub(3)` with `TSub = 1..10`) keeps
+    the subrange inside its own unit - no helper applies, `C.MaxValue` is
+    E2671, as for a variable of a subrange type - but read from ANOTHER unit
+    the same constant binds by value (TShortIntHelper).
+  - `var X := C` widens: an integer constant narrower than 32 bits gives an
+    Integer (a `SizeOf` constant and `2147483647` give an anonymous 32-bit
+    subrange instead), and `const R = 1.5` gives an Extended on dcc32. "The
+    constant's type" and "the type of a variable initialized from it" are
+    two answers. The constant's own type decides which sibling helper a
+    member binds to - and so, for a member one sibling lacks (`Exponent` is
+    not on TCurrencyHelper), whether it binds at all.
+- ⚠️ *An equality comparison is a constant expression:* `const B = S =
+  'abc';` is a Boolean constant. Token by token it also reads as a
+  declaration whose initializer is missing, followed by the next declaration
+  `S = 'abc';` - a parser that recovers from a missing initializer must not
+  take that reading when the name after the first `=` is on the same line.
+- A set constructor (`const S = [1, 2]`, `[meA, meB]`) and `nil` give an
+  ANONYMOUS type. A constant `[]` passed to a generic method, or used as the
+  initializer of an inline `var`, crashes dcc 37.0 with `F2084 Internal
+  Error` on both compilers.
 - *AST:* `ConstDecl { name, value, inferredType }`.
 
 ### 3.2.2 Typed constants (& writeable-constants directive)

@@ -104,6 +104,36 @@ P(42);
   open across the whole embedded `Block` — a classic source of confusing syntax
   errors when hand-written parsers close the call too early.
 - *AST:* `AnonMethod { kind, params[], resultType?, body, captured[] }`.
+- ⚠️ *A literal converts to a `reference to` type ONLY* (dcc-verified, dcc32
+  37.0). Neither an `of object` method pointer nor a plain procedural type
+  accepts one, even with an identical signature, and a parameter is no
+  different from a variable:
+  ```pascal
+  uses System.Classes;          // TNotifyEvent = procedure(Sender: TObject) of object
+  type TPlain = procedure(A: Integer);
+  var E: TNotifyEvent; P: TPlain;
+  procedure Take(AEvent: TNotifyEvent); begin end;
+  begin
+    E := procedure(Sender: TObject) begin end;  // E2010 Incompatible types: 'TNotifyEvent' and 'Procedure'
+    P := procedure(A: Integer) begin end;       // E2010 Incompatible types: 'TPlain' and 'Procedure'
+    Take(procedure(Sender: TObject) begin end); // E2010 Incompatible types: 'TNotifyEvent' and 'Procedure'
+  ```
+  The target's signature must match the literal's: parameter count and
+  procedure-vs-function, a generic reference type (`TProc<Integer>`) with its
+  type arguments applied.
+  - *Overload resolution follows from it (6.3.1):* a candidate whose parameter
+    the literal cannot convert to is not a candidate at all, whichever order
+    the overloads are declared in. With `Make(AEvent: TNotifyEvent = nil)` and
+    `Make(AProc: TProc)`, `Make(procedure begin end)` calls the `TProc` one;
+    with `Take(AProc: TProc)` and `Take(AProc: TProc<Integer>)`,
+    `Take(procedure(X: Integer) begin end)` calls `TProc<Integer>` and
+    `Take(procedure begin end)` calls `TProc`. A resolver that scores the
+    literal as merely "some procedural value" ties every such pair and picks
+    by declaration order.
+  - *Parentheses change nothing:* `Make((procedure begin end))` — the usual
+    way a multi-line literal argument gets written — resolves exactly like the
+    bare literal. A resolver testing the ARGUMENT node for the literal shape
+    must look through the parenthesis node first.
 - ⚠️ *A function returning a `reference to` value needs a double call to invoke
   the closure* (dcc-verified, dcc32 37.0). Given
   `function GetShowMethod: TIntProc;` (`TIntProc = reference to procedure(N: Integer)`):

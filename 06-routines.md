@@ -389,6 +389,12 @@ function Area(C: TCircle): Double; overload;
   `E2004 Identifier redeclared: 'F'` — the *same* diagnostic dcc32 gives for a
   plain non-overloaded re-declaration, not an overload-specific error.) A
   resolver's overload key must be the parameter-type signature only.
+- ⚠️ *An anonymous-method literal argument removes every candidate it cannot
+  convert to* — an `of object` or plain procedural parameter, or a
+  `reference to` of another signature — so `Make(TNotifyEvent)` beside
+  `Make(TProc)` is not a tie for `Make(procedure begin end)`: dcc calls the
+  `TProc` one in either declaration order. The rule and its probes are in
+  [17.2.1](17-anonymous-methods.md#1721-inline-procedurefunction-literals).
 - *Parser impact:* none beyond recording the directive; resolution is semantic.
 
 ---

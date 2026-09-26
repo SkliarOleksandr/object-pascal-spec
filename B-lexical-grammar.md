@@ -626,6 +626,10 @@ Word operators are reserved words (B.4.1): `and or xor not div mod shl shr in is
   This is the single most common precedence surprise; the parse tree follows the
   table strictly — do not special-case it.
 - `as`/`is` are at multiplicative/relational levels respectively (see ch.12).
+  ⚠️ One exception to the table: a TYPE NAME on the right of `is` ends that
+  operand, and the result continues as the left operand of the following
+  multiplicative/additive operators - `O is TFoo and C` is `(O is TFoo) and C`
+  (see 04 §4.9, dcc64 37.0-probed).
 - `^` is both a **prefix** (pointer type, `^T`) and a **postfix** (dereference,
   `p^`) operator depending on position (see ch.10).
 
@@ -703,6 +707,13 @@ TypeCast     = TypeRef "(" Expression ")" ;
   putting the sign below `*`/`and`). Probe: `Writeln(-1 and 2)` prints `2`,
   i.e. `(-1) and 2` - unary minus binds at level 1, above `and`
   (dcc64-verified 2026-08).
+- The selectors of a `Designator` bind before a prefix operator, a literal's
+  included (dcc64 37.0, probed 2026-09-26): `-2.ToString` is `-(2.ToString)`
+  (`E2015`, not the string `'-2'` - write `(-2).ToString`), `-I.Plus1` is
+  `-(I.Plus1)`; `not 5 = 7` is `(not 5) = 7` (False), `not` taking only its
+  Factor.
+- ⚠️ `is` departs from this grammar when its right operand is a type name: see
+  §B.7 and 04 §4.9.
 - `[ ... ]` is overloaded: a **set constructor** in expression position vs.
   **indexing** in a `Selector`. Position disambiguates.
 - `TypeCast` vs. `call`: `TypeName(Expr)` is a type cast when the callee names a

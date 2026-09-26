@@ -283,6 +283,24 @@ Caption := if Connected then 'Online' else 'Offline';
   result type; that common type is the type of the whole expression.
 - *Evaluation:* short-circuit — only the selected branch is evaluated (contrast
   with the `IfThen` RTL functions, which evaluate both arguments).
+- ⚠️ *Extent and precedence* (dcc64 37.0, probed 2026-09-26 - the grammar
+  above is exactly what dcc does): the inline `if` is a **Factor** - it may
+  stand as any operand (`X := 1 + if C then 10 else 20` compiles, `-if C then
+  1 else 2` too) - and each of its three parts is a full `Expression`, so the
+  `else` branch runs to the end of the enclosing expression: `if C then 1
+  else 2 + 3` is `if C then 1 else (2 + 3)` (C true gives 1, not 4), `100 -
+  if C then 10 else 20 - 5` is `100 - (if C then 10 else (20 - 5))`, `-if C
+  then 1 else 2 + 3` is `-(if C then 1 else (2 + 3))`, and a relational
+  operator is taken too: `B := if C then 1 else 2 = 2` is `E2010 'Integer'
+  and 'Boolean'` (the `else` branch is `2 = 2`). Only parentheses end it
+  early: `(if C then 1 else 2) + 3`. Nested forms need none: `if C1 then if
+  C2 then 1 else 2 else 3`, `if C1 then 1 else if C2 then 2 else 3`.
+- ⚠️ *Not a constant expression:* `const K = if True then 1 else 2;` is
+  `E2026 Constant expression expected`.
+- ⚠️ *No target type reaches the branches:* with `A: TArray<Integer>`, `A :=
+  if C then [1] else [2]` is `E2010` (the constructors read as sets), and so
+  is `A := if C then A + [X] else A`; array-valued branches without a
+  constructor work (`if C then A else A2`, `if C then A + A2 else A2`).
 - *AST:* `InlineIf { cond, thenExpr, elseExpr }`.
 
 ---

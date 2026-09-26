@@ -171,6 +171,15 @@ B := A + [4, 5];       // concatenation (XE7+)
   context, sharing syntax with set constructors (§B.9). The target **type**
   disambiguates set vs. array — the type-checker decides; the parser keeps a
   generic "bracket constructor" node.
+- ⚠️ *The target type does not reach into parentheses* (dcc64 37.0, probed
+  2026-09-26). With `A: TArray<Integer>`, `A := [X] + A` and `A := [X, X]`
+  compile, but `A := ([X] + A)` and `F(([X] + A))` (a `TArray<Integer>`
+  parameter) are `E2008 Incompatible types`, and `A := ([X, X])` is `E2010
+  'TArray<Integer>' and 'Set'`: inside parentheses the constructor is typed
+  on its own and reads as a set. A constructor after an array operand is
+  typed by that operand, parenthesized or not: `A + [X]` and `(A + [X])`
+  concatenate alike. An inline `if` passes no target type to its branches
+  either (05 §5.4.1).
 - *AST:* `ArrayLiteral { elements[] }` (or shared `BracketConstructor`).
 - `Insert(Item, DynArray, Index)` and `Delete(DynArray, Index, Count)` are
   intrinsics that mutate a **dynamic array** in place — inserting a value (or,

@@ -321,6 +321,17 @@ type
 - ⚠️ *Parser ambiguity with sets/case:* `lo..hi` ranges appear in subrange types,
   set constructors (B.9), `case` labels, and array bounds. The `..` token is the
   marker; the surrounding context determines the production.
+- ⚠️ *A `(` at the start of a subrange TYPE opens an enumerated type* (2.2.4),
+  in every type position (dcc64 37.0, probed 2026-09-26): a type declaration
+  `T = (-1)..1`, the type of a var, field, typed constant or inline var, an
+  array index in any dimension (`array[(-1)..1]`, `array[0..1, (N - 1)..N]`),
+  `set of (0)..7`, `array of (-1)..1` - all `E2029 Identifier expected` or,
+  with a name inside, `E2004 Identifier redeclared` (`(N - 1)..N` declares N
+  as an enumeration value). A lower bound that must be parenthesized is
+  written with a leading factor, `T = 1 * (N - 1)..N`; a `(` later in the
+  type is harmless (`0..(N - 1)`). In EXPRESSION positions a range takes the
+  parenthesis: `case` labels `(-1)..1:`, variant-part labels `(-1): (...)`,
+  set elements `[(-1)..1]`.
 - Bounds must be compile-time constants of the same ordinal base type.
 - *AST:* `Subrange { lo, hi, baseType }`.
 

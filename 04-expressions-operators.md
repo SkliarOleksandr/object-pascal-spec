@@ -250,6 +250,19 @@ Inc(P);         // pointer math when enabled
   routine address stored in it, while `@@P` yields the address **of the variable
   itself**. Grammatically it is just `@` applied twice (`"@" Factor` recursion) —
   no new token; the VCL uses it (`LPARAM(@@Hook)` in `Vcl.ActnMenus`).
+  `@(@P)` is the same address as `@@P` (dcc64 37.0, probed 2026-09-26).
+- ⚠️ *`@P` of a procedural variable is a DESIGNATOR, and parentheses make it a
+  value* (dcc64 37.0, probed 2026-09-26): `@P := GetProcAddress(...)` assigns
+  the variable (the RTL's delay-load idiom) and `(@P) := ...` is `E2064 Left
+  side cannot be assigned to`; `F(@P)` passes the variable to a `var Pointer`
+  parameter and `F((@P))` is `E2197 Constant object cannot be passed as var
+  parameter`. The operand of `@` does not take parentheses either where it
+  names a routine: `@(Proc)` and `@(F)` are `E2036 Variable required`,
+  `@(TFoo.M)` `E2076`; of a variable, field, element or dereference they
+  change nothing (`@(R.F)`, `@(A[1])`, `@(P^)` give the addresses of `@R.F`,
+  `@A[1]`, `@P^`).
+- *Extent:* `@` reaches over the whole selector chain after it - `@R.F` is
+  `@(R.F)`, `@A[1]` is `@(A[1])`, `@P^` is `@(P^)` (the same probe).
 - ⚠️ *`@` takes an INSTANCE method's address through the CLASS name, no
   instance involved* (dcc32 37.0-probed): `P := @TBaseCF.IP;` compiles for a
   plain (non-class) method `procedure IP;` and yields the code pointer
@@ -305,6 +318,26 @@ if Obj is TButton then
   FUNCTION returning a metaclass. Official documentation states a type name;
   the grammar a parser must accept is an expression, and a completion/
   resolution engine must not filter that position to types only.
+- ⚠️ *A TYPE NAME on the right of `is` is taken alone, and the result goes on*
+  (dcc64 37.0, probed 2026-09-26). The precedence table says `O is TFoo and C`
+  is `O is (TFoo and C)`; dcc compiles it as **`(O is TFoo) and C`** - the
+  RTL and VCL are full of `if Obj is TFoo and (...) then` (19 sites in 13
+  Studio units). The type name - a class, an alias of one, a metaclass type,
+  qualified (`System.TObject`, `TFoo.TInner`), generic (`TBox<Integer>`,
+  `TBox<Integer>.TInner`), `&`-escaped - ends the right operand, and the `is`
+  result then continues as the LEFT operand of the multiplicative and
+  additive operators that follow: `O is TFoo or C and D` is `(O is TFoo) or
+  (C and D)`, `O is TFoo + 1` is `(O is TFoo) + 1` (`E2008`), `O is TFoo and
+  C = D` is `((O is TFoo) and C) = D`; `is not` alike. Any other right
+  operand follows the table: with a metaclass variable `CV`, a function `GC`,
+  an element `A[0]` or `ClassType`, `O is X and C` is `O is (X and C)` -
+  `E2015`. The LEFT operand is never affected: `C and O is TFoo` is `(C and
+  O) is TFoo` (`E2015`), and `in` has no such rule: `X in S and C` and `X in
+  [1, 2] and C` are `X in (S and C)` - `E2015`.
+  - For a parser this means: read the right operand of `is` as a FACTOR,
+    then continue the term and simple-expression loops with the `is` node
+    as their left operand. On valid code that is exact - the only right
+    operand followed by `and`/`or`/`+`... that compiles is a type name.
 
 ### 4.9.1 `is not` operator
 

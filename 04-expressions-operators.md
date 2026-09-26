@@ -334,16 +334,32 @@ if Obj is TButton then
   result then continues as the LEFT operand of the multiplicative and
   additive operators that follow: `O is TFoo or C and D` is `(O is TFoo) or
   (C and D)`, `O is TFoo + 1` is `(O is TFoo) + 1` (`E2008`), `O is TFoo and
-  C = D` is `((O is TFoo) and C) = D`; `is not` alike. Any other right
-  operand follows the table: with a metaclass variable `CV`, a function `GC`,
-  an element `A[0]` or `ClassType`, `O is X and C` is `O is (X and C)` -
-  `E2015`. The LEFT operand is never affected: `C and O is TFoo` is `(C and
+  C = D` is `((O is TFoo) and C) = D` (with `O` no TFoo, `C` True and `D`
+  False it is True, where `(O is TFoo) and (C = D)` would be False); `is
+  not` alike. Any other right operand follows the table: with a metaclass
+  variable `CV`, a function `GC`, an element `A[0]`, `ClassType`, a typed
+  constant, a cast `TFooClass(CV)` or even a PARENTHESIZED type name `(TFoo)`,
+  `O is X and C` is `O is (X and C)` - `E2015`, while `O is X` alone compiles
+  for each. The LEFT operand is never affected: `C and O is TFoo` is `(C and
   O) is TFoo` (`E2015`), and `in` has no such rule: `X in S and C` and `X in
   [1, 2] and C` are `X in (S and C)` - `E2015`.
-  - For a parser this means: read the right operand of `is` as a FACTOR,
-    then continue the term and simple-expression loops with the `is` node
-    as their left operand. On valid code that is exact - the only right
-    operand followed by `and`/`or`/`+`... that compiles is a type name.
+- ⚠️ *The table's grouping on the right of `is` also COMPILES* where an
+  overloaded operator yields a class reference (dcc64 37.0, probed
+  2026-09-26): with `R: TRec` and `class operator LogicalAnd(const A: TRec;
+  B: Boolean): TClass`, `O is R and C` is `O is (R and C)` and compiles
+  (`O is R` alone is `E2015`); so do `O is R + 1` over an `Add` operator,
+  `O is GetRec and C` (a parameterless function returning a TRec), `O is (R)
+  and C` and `O is RA[0] and C`.
+  - For a parser this means: read the right operand of `is` as a FACTOR.
+    When that factor is NAME-SHAPED - an identifier, a dotted chain, type
+    arguments - take it for the type name: build the `is` node, then
+    continue the term and simple-expression loops with it as their left
+    operand. Any other factor (a parenthesis, a call, an index, a literal)
+    is a value: continue ITS term and simple-expression loops as the right
+    operand, the table's grouping. That is exact on valid code but for one
+    shape no parser can tell apart: a name-shaped VALUE whose overloaded
+    operator yields a class reference (`O is R and C` above) - telling a
+    type name from a value takes name resolution.
 
 ### 4.9.1 `is not` operator
 

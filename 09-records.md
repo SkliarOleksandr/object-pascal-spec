@@ -225,6 +225,10 @@ type
   parentheses, not statements. The leading token is `case` inside a record body
   (vs. statement context). The tag field is optional (`case OrdinalType of` with no
   name).
+- *Variant labels are constant EXPRESSIONS:* `-1: (A: Integer)`, `1 + 1: (B:
+  Byte)` and a parenthesized `(-1): (...)` all compile (dcc64 37.0, probed
+  2026-09-26) - a `(` opening a label is no enumerated type, unlike one
+  opening a subrange TYPE (2.2.5).
 - ⚠️ *A named tag is a REAL FIELD, not an annotation on the type.* `case Tag:
   T of` **declares** `Tag` as an ordinary field of the record: it occupies
   storage and is freely readable and assignable (`R.Tag := 1`). dcc-verified

@@ -624,7 +624,8 @@ Word operators are reserved words (B.4.1): `and or xor not div mod shl shr in is
 - ⚠️ *Boolean operators bind tighter than relational.* `a > 0 and b > 0` parses as
   `a > (0 and b) > 0` → type error. Real code must write `(a > 0) and (b > 0)`.
   This is the single most common precedence surprise; the parse tree follows the
-  table strictly — do not special-case it.
+  table strictly — do not special-case it (the one exception dcc makes is `is`
+  with a type name on its right - next note).
 - `as`/`is` are at multiplicative/relational levels respectively (see ch.12).
   ⚠️ One exception to the table: a TYPE NAME on the right of `is` ends that
   operand, and the result continues as the left operand of the following

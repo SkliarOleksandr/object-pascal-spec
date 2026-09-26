@@ -21,7 +21,9 @@ Four precedence levels, all binary operators left-associative. Full table in
 - ⚠️ Restating the critical surprise: `not` (unary, level 1) and `and`/`or`
   (levels 2/3) bind **tighter than the relational operators** (level 4), so
   `a = b and c` parses as `a = (b and c)`. The AST follows the table; never
-  special-case it.
+  special-case it - but for the ONE exception dcc makes: a type name on the
+  right of `is` ends that operand, `O is TFoo and C` is `(O is TFoo) and C`
+  (§4.9, dcc64 37.0-probed 2026-09-26).
 - *AST:* `BinaryOp { op, left, right }`, `UnaryOp { op, operand }`.
 - ⚠️ *Precedence governs GROUPING, not evaluation ORDER* — and for the actual
   arguments of a routine call, evaluation order is unspecified by the language.
@@ -199,6 +201,10 @@ Both := S1 * S2;
 
 - `in` is a relational-level operator; its RHS is a set value or set constructor
   `[ … ]` (§B.9 `SetConstructor`).
+- *The RHS of `in` is a full simple expression* - no type-name exception as
+  for `is` (§4.9): `X in S + [3]` is `X in (S + [3])`, and `X in S and C` /
+  `X in [1, 2] and C` are `X in (S and C)` - `E2015` (dcc64 37.0, probed
+  2026-09-26). Write `(X in S) and C`.
 - `not in` (13.0) is the negated membership test, parsed as the `not`+`in` pair at
   relational level.
 
@@ -359,6 +365,8 @@ if Obj is not TButton then Exit;
 **Semantics & parsing notes**
 
 - Parsed as the `is`+`not` token pair at relational level (no new token, §B.4.1).
+- ⚠️ §4.9's type-name rule holds here too: `O is not TFoo and C` is `(O is not
+  TFoo) and C` (dcc64 37.0, probed 2026-09-26).
 - *AST:* either a `BinaryOp { op: isNot }` or `UnaryOp(not, IsExpr)` — pick one
   representation and normalise.
 

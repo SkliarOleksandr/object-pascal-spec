@@ -149,9 +149,23 @@ end;
 
 **Semantics & parsing notes**
 
-- *Scope:* a compound statement does **not** introduce a new declaration scope by
-  itself — but **inline `var`/`const` declarations** (10.3+) inside it are scoped
-  to the enclosing routine block from their point of declaration (see 5.5.1).
+- *Scope:* a compound statement declares nothing by itself, but it IS the scope
+  of the **inline `var`/`const` declarations** (10.3+) written in it: such a
+  name is visible from its declaration to the compound's `end` and no further -
+  used after the block it is E2003 (undeclared); two sibling blocks may each
+  declare the same name; a nested block may not redeclare a name an enclosing
+  block of the routine declared (E2004) (see also 5.5.1; dcc64 37.0, probed
+  2026-09-26).
+- *Finalization:* a managed inline variable is finalized at the end of its
+  block. So is the temporary holding a call statement's DISCARDED managed
+  result (`S;` for a function returning a string, an interface, a dynamic array
+  or a record with managed fields): at the end of the statement list the call
+  stands in - a routine's own block: its epilogue; as the body of an `if`, a
+  loop, a `case` branch, a `with` or an exception handler, at the end of that
+  statement. A `begin`/`end` around such a call therefore moves the
+  finalization up to the call; around any other statement it changes nothing in
+  the code (dcc64 37.0, probed 2026-09-26: a runtime destructor trace, and
+  byte-identical `.dcu` files for every other shape).
 - *Empty body:* `begin end` is legal.
 - *AST:* `Block { statements[] }`.
 
@@ -188,6 +202,13 @@ else
 
 - ⚠️ *Dangling `else`:* the grammar is ambiguous; resolve with the standard rule —
   an `else` binds to the **nearest** preceding `if` that has no `else`.
+  The rule holds where a `case` or an `except` part could take the `else` too:
+  in `case X of 1: if A then B else C end` and in `except on E: T do if A then
+  B else C end` the `else` is the `if`'s - C runs for X = 1 when A is False,
+  resp. for an exception of type T - and a second `else` goes on to the case or
+  the except part; after a `;` (`1: if A then B; else C`) it is theirs (dcc64
+  37.0, probed 2026-09-26 at run time and by wrapping each branch in
+  `begin`/`end`: byte-identical `.dcu`).
 - ⚠️ *No `;` before `else`:* a semicolon after the `then`-branch terminates the
   `if` statement, leaving `else` orphaned → syntax error. The parser must treat a
   `;` immediately before `else` as an error (common mistake worth a clear
@@ -240,6 +261,10 @@ end;
   type. Overlap is a compile error.
 - *`else` vs `otherwise`:* the standard keyword is `else`; some dialects accept
   `otherwise` — Delphi uses `else`.
+- ⚠️ *case-`else` vs `if`-`else`:* an `else` right after a branch whose
+  statement is an `if` without `else` is that `if`'s (5.3.1); the case gets
+  one only after a `;` or after the `if`'s own `else` branch. A nested `case`
+  takes the `else` before the outer one does.
 - *AST:* `CaseStmt { selector, branches: [ { labels[], body } ], elseBranch? }`.
   Keep label ranges as `{ lo, hi }` pairs.
 
@@ -591,8 +616,17 @@ end;
 - *`goto` and `label` ARE reserved words* (unlike Break/Continue/Exit).
 - *Label declaration:* every target label must be declared in a `label` section of
   the same block; numeric labels (digit sequences) are permitted.
-- *Jump restrictions:* cannot jump **into** a structured statement from outside it,
-  nor **out of / into** a procedure or function. Enforce in semantic analysis.
+- *Jump restrictions:* never **out of / into** a procedure or function. Into a
+  structured statement dcc is more permissive than standard Pascal, and not
+  uniformly (dcc64 37.0, probed 2026-09-26): a `goto` INTO a compound
+  statement, a `while` or `for` body or a `case` branch compiles and runs (into
+  a `for` body the counter is undefined - W1036 only); one into or out of a
+  `try` statement, a `for-in` whose enumerator has a destructor, or a block
+  that declares an inline variable is E2127; one into either branch of an `if`
+  - with or without an `else`, the target in a compound or not - stops the
+  compiler with an internal error (F2084 `IRBB366`). Enforce what dcc enforces
+  in semantic analysis; a label on a statement in an `if` branch that a `goto`
+  outside it targets is code dcc cannot compile.
 - *AST:* `LabelDecl`, `LabeledStmt { label, stmt }`, `GotoStmt { label }`.
 
 ### 5.6.5 `Halt`

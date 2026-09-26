@@ -84,6 +84,12 @@ end;
 - The bound identifier `E` is scoped to that handler's `Statement`; the instance is
   **freed automatically** when the handler exits (do **not** `Free` it).
 - `else` (no type) catches anything unmatched.
+- ⚠️ *except-`else` vs `if`-`else`:* an `else` right after a handler whose
+  statement is an `if` without `else` is that `if`'s (5.3.1) -
+  `on E: EAbort do if A then B else C` runs C for an EAbort when A is False
+  and lets any other exception propagate; the except part gets the `else` only
+  after a `;` or after the `if`'s own `else` branch (dcc64 37.0, probed
+  2026-09-26).
 - *AST:* `ExceptOn { varName?, excType, body }`.
 
 ---

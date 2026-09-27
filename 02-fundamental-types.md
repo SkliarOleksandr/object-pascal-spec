@@ -332,6 +332,24 @@ type
   type is harmless (`0..(N - 1)`). In EXPRESSION positions a range takes the
   parenthesis: `case` labels `(-1)..1:`, variant-part labels `(-1): (...)`,
   set elements `[(-1)..1]`.
+- ⚠️ *Where the upper bound ends* (dcc64 37.0, probed 2026-09-27). Both
+  bounds are whole expressions (`ConstExpr`), relational operators included -
+  `T = False..1 < 2` and `T = False..1 = 1` are valid, with the bounds
+  `1 < 2` and `1 = 1`. The one exception is the declared type of a variable
+  of a `var`/`threadvar` section and of a typed constant (a class's or
+  record's `const` too), where `=` introduces the initializer: there a
+  top-level `=` ends the upper bound of the subrange that closes the type -
+  directly, or as the element of `set of` or of an array - so
+  `const A: 0..31 = 5;`, `var V: 0..31 = 7;` and
+  `const S: set of 0..31 = [1, 2];` are initialized declarations. Only `=`:
+  `const A: False..1 < 2 = True;` has the bound `1 < 2` and the value
+  `True`. The lower bound still takes `=` (`const A: 1 = 1..True = True;`
+  compiles), so does an array index inside its brackets
+  (`const A: array[False..1 = 1] of Integer = (1, 2);`), and so do the
+  fields of a record or class, a `class var` and a `var` section in a record
+  or class body - fields, where no initializer can follow. A local
+  variable's `=` is taken for the initializer and refused as such (`E2195
+  Cannot initialize local variables`), as is a thread variable's (E2194).
 - Bounds must be compile-time constants of the same ordinal base type.
 - *AST:* `Subrange { lo, hi, baseType }`.
 

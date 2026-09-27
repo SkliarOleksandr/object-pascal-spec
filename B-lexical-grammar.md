@@ -233,9 +233,15 @@ winapi     write      writeonly
   errors on unrelated names in unrelated units — 283 of them, on a real code
   base, from a single `Unsafe = class` line in one core unit.
   - The trap has a mirror worth knowing: `var X: procedure; cdecl = nil;` IS a
-    directive followed by `=` — an initializer placed after the calling
-    convention. That form is legal only in a VAR section, which is exactly what
-    keeps it distinguishable from the two above.
+    directive followed by `=` - an initializer placed after the calling
+    convention, in a typed constant too (`const C: procedure; cdecl = CP;`).
+    What keeps it apart from the two above is WHERE dcc looks at all: a
+    directive after a declaration's `;` exists only behind a procedural type
+    that closes the declared type, and only a calling convention, `far` or
+    `near` begins it - then dcc takes the word whatever follows it (`var V:
+    procedure; stdcall: Integer;` is E2029; ch.06 §6.6.1). `Unsafe` and
+    `Index` begin none, and nothing after a non-procedural declaration is a
+    directive (dcc64 37.0).
 - *`noreturn`* (13.0) is a new directive on procedure declarations;
   *`dependency`* modifies `external` declarations (ch.06 §6.7.1).
 

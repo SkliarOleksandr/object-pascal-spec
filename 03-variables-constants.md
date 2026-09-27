@@ -94,7 +94,11 @@ var
 - ⚠️ *Procedural-type variables put the calling convention after the `;`, and
   may still carry an initializer after it:*
   `SSL_COMP_free_compression_methods : procedure; cdecl = nil;`
-  (IdSSLOpenSSLHeaders.pas).
+  (IdSSLOpenSSLHeaders.pas). The directives are the procedural type's (6.6.1)
+  and the initializer is the variable's - a name in it is a reference like any
+  other. A typed constant (`const C: procedure; cdecl = CP;`), an inline const
+  and an inline var (`var P: procedure; stdcall := SP;`) take the same shape
+  (dcc64 37.0).
 - Uninitialized globals are zero-filled; uninitialized **locals** are *not*
   (except managed types) — a semantics/codegen concern.
 

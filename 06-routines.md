@@ -507,13 +507,37 @@ Directives controlling argument passing/cleanup ABI.
 **Grammar**
 
 ```ebnf
-CallConv = "register" | "stdcall" | "cdecl" | "pascal" | "safecall" | "winapi" | "fastcall" ;
+CallConv      = "register" | "stdcall" | "cdecl" | "pascal" | "safecall" | "winapi" ;
+CallDirective = CallConv | "far" | "near" | "varargs" | "overload"
+              | "export" | "assembler" ;
+              (* what may stand where no ";" separates: before a heading's ";",
+                 in a procedural type (6.6.1), before an anonymous method's body
+                 (17.2.1, without "overload") *)
 ```
 
 **Semantics & parsing notes**
 
 - All are **directives** (B.4.2). `register` is the Delphi default; `winapi` maps to
-  the platform's native API convention (`stdcall` on Win32, etc.).
+  the platform's native API convention (`stdcall` on Win32, etc.). `fastcall` is
+  not one: `procedure P fastcall;` is `E2070 Unknown directive: 'fastcall'`
+  (dcc64 37.0).
+- ⚠️ *Where no `;` separates, only a `CallDirective` may stand* (dcc64 37.0,
+  probed 2026-09-27 with every directive word in each position): before a
+  routine heading's `;` (`function F(...): Bool stdcall;`, `procedure M
+  overload;`), in a procedural type (6.6.1) and before an anonymous method's
+  body (17.2.1). The conventions, the legacy `far` and `near`, `varargs`,
+  `export`, `assembler`, and `overload` but in an anonymous method (there dcc
+  crashes: `F2084 Internal Error: E17608`). A hint there is `E1030 Invalid
+  compiler directive` (`procedure P deprecated;`, `function F: Integer
+  inline;` alike), any other directive `E2070 Unknown directive` (`procedure M
+  virtual;`). Several may run together - `function printf(Fmt: PAnsiChar):
+  Integer cdecl varargs; external 'msvcrt.dll';` - and the heading's `;` must
+  follow the run (`procedure P stdcall` + `begin` is E2029). After that `;` the
+  full directive list applies as usual.
+- Several conventions may be written - `procedure cdecl register begin ...
+  end`, `procedure of object stdcall; cdecl` - and the LAST one is the
+  routine's or the type's: assignment compatibility follows it (`E2009
+  Incompatible types: 'Calling conventions differ'`, `E2010` for a literal).
 - ⚠️ *Placement is loose (all corpus-shipped):* the convention may follow the
   heading **without** a separating semicolon (`function F(...): Bool stdcall;`,
   System.SysUtils.pas), appear inside anonymous-method literals before the body
@@ -548,9 +572,17 @@ and closures (`reference to`, ch.17).
 **Grammar**
 
 ```ebnf
-ProceduralType = ( "procedure" | "function" )
+ProceduralType = [ "reference" "to" ] ( "procedure" | "function" )
                  [ "(" [ FormalParams ] ")" ] [ ":" ResultType ]
-                 [ "of" "object" | "reference" "to" ] [ CallConv ] ;
+                 { CallDirective } [ "of" "object" { CallDirective } ] ;
+DeclaredProcType = ProceduralType [ ";" DirStart { CallDirective } ] ;
+DirStart       = CallConv | "far" | "near" ;
+                 (* DeclaredProcType: where the procedural type closes a
+                    declaration's type - a type declaration, a variable of
+                    any section, a field, a typed or inline constant, an
+                    inline var - directly or as an array's element; never
+                    after "reference to". "reference to" only in a type
+                    declaration. *)
 ```
 
 **Example**
@@ -603,7 +635,47 @@ type
     `function(AControl: TControl = nil): TStyleServices` reads as a value at
     every call site that wants the default.)
 - `of object` and `reference to` use the directives/reserved words `object` and
-  `reference`; `reference` is a directive (B.4.2).
+  `reference`; `reference` is a directive (B.4.2). `reference to` is a type
+  declaration's alone: `var V: reference to procedure;` is `E2003 Undeclared
+  identifier: 'reference'` (dcc64 37.0).
+- ⚠️ *The directives stand in two places* (dcc64 37.0, probed 2026-09-27):
+  - written into the type, before and after `of object`: `procedure stdcall`,
+    `function(A: Integer): Integer cdecl`, `procedure stdcall of object`,
+    `reference to procedure stdcall` - any `CallDirective` (6.5.1);
+  - after a `;`, where the type closes a declaration's type: `TFn =
+    function(...): X; stdcall;`, `P: procedure; cdecl = nil;` (the initializer
+    after the directives is the variable's), `A: array[0..1] of procedure;
+    stdcall;` (the element's), `F: procedure; stdcall end` as a record's last
+    field, `(F: procedure; stdcall)` in a variant part, `class var F:
+    procedure; stdcall;`, `const C: procedure; cdecl = CP;`, and inline `var
+    P: procedure; stdcall := SP;` / `const C: procedure; cdecl = CP;`.
+  Either way the directives are the TYPE's: `procedure; stdcall` and `procedure
+  stdcall` are one type (the same `E2009 Calling conventions differ` against a
+  register routine), so a tree keeps them on the type node, the `;` of the
+  second form included.
+- ⚠️ *The run after the `;` is exactly one, and a convention, `far` or `near`
+  starts it - whatever follows.* After `var P: procedure;` in a block, `pascal;`
+  is P's convention and a routine named `pascal` is NOT called; `var V:
+  procedure; stdcall: Integer;` is `E2029 ';' expected but ':' found`, and
+  `register := 1` after it is P's initializer (`E2010`). `varargs`, `overload`,
+  `export` and `assembler` start no run (`var V: procedure; varargs: Integer;`
+  declares a variable `varargs`; after `var P: procedure;` the statement
+  `varargs;` calls a routine) but may continue one (`; cdecl varargs`). A
+  second run is the next declaration: `var V: procedure; stdcall; cdecl:
+  Integer;` declares `cdecl`, and `...; stdcall; cdecl;` is E2029. The run
+  ends where the declaration goes on - `;`, the `=` of a variable's or a
+  constant's initializer, an inline var's `:=`, a field list's `end` or `)`,
+  a statement list's end - and not at `case` or a visibility word (`F:
+  procedure; stdcall private` takes `private` for a directive: E2070). No run
+  after `reference to procedure;` (E2029), a type alias (`T = TP; stdcall;`)
+  or any other type.
+- ⚠️ *A hint after the type is the DECLARATION's:* `T = procedure library;`
+  warns `W1001 Symbol 'T' is specific to a library`, `var V: procedure
+  library;` of V. Written inside a directive run a hint is `E1030 Invalid
+  compiler directive` (`procedure deprecated`, `procedure; cdecl platform`,
+  `procedure stdcall library`); after an initializer it is the variable's as
+  anywhere (`P: procedure; cdecl = nil platform;`, W1002). A typed constant
+  takes no hint before its `=` (`const C: Integer platform = 1;` is E2029).
 
 ---
 

@@ -9,9 +9,11 @@ Procedural types recap → [ch.06 §6.6](06-routines.md#66-procedural-types).
 
 ```ebnf
 AnonMethodType = "reference" "to" ( "procedure" | "function" )
-                 [ "(" FormalParams ")" ] [ ":" ResultType ] ;
+                 [ "(" FormalParams ")" ] [ ":" ResultType ]
+                 { CallDirective } ;                      (* 6.5.1, 6.6.1 *)
 AnonMethodExpr = ( "procedure" | "function" )
                  [ "(" FormalParams ")" ] [ ":" ResultType ]
+                 { CallDirective }                        (* but "overload" *)
                  Block ;                                  (* a literal, used as an expression *)
 ```
 
@@ -64,7 +66,9 @@ type
   well). A resolver must track `reference to` types as their own nominal kind —
   never unify them with a structurally-matching user interface just because both
   lower to "interface with one method called Invoke".
-- *AST:* `AnonMethodType { kind: proc|func, params[], resultType? }`.
+- *AST:* `AnonMethodType { kind: proc|func, params[], resultType?,
+  directives[] }` - `reference to procedure stdcall` keeps its convention,
+  and only written into the type: no run after a `;` (6.6.1).
 
 ---
 
@@ -103,7 +107,17 @@ P(42);
   **after** the literal's `end`. The parser must keep the argument-list nesting
   open across the whole embedded `Block` — a classic source of confusing syntax
   errors when hand-written parsers close the call too early.
-- *AST:* `AnonMethod { kind, params[], resultType?, body, captured[] }`.
+- *AST:* `AnonMethod { kind, params[], resultType?, directives[], body,
+  captured[] }`.
+- ⚠️ *Directives may stand before the body* - `function(ErrorCode: HResult;
+  ...): HResult stdcall begin` (FMX.WebBrowser.Win.pas) - and the literal's
+  type follows them (dcc64 37.0, probed 2026-09-27): the conventions, `far`,
+  `near`, `export`, `assembler` and `varargs`; `overload` there crashes dcc
+  (`F2084 Internal Error: E17608`), a hint is `E1030`, a `;` before them
+  `E2029`. A `stdcall` literal assigned to a plain `reference to function`
+  is `E2010 Incompatible types`, and a plain literal to a `reference to ...
+  stdcall` alike. Written twice, the last convention wins (`procedure cdecl
+  register begin end` is a register literal).
 - ⚠️ *A literal converts to a `reference to` type ONLY* (dcc-verified, dcc32
   37.0). Neither an `of object` method pointer nor a plain procedural type
   accepts one, even with an identical signature, and a parameter is no

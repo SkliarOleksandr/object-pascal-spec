@@ -71,6 +71,11 @@ begin Result := A + B; end;
 - A function whose `Result` is never assigned returns an undefined value (managed
   types excepted) — a hint/warning, not a parse error.
 - *AST:* `Routine { kind, name, params[], resultType?, directives[], body? }`.
+  The name of an implementation header is dotted (`ImplName`) and the header
+  may drop both the parameter list and the result type (6.1.2), so `function
+  A.B;` - the method `B` of class `A` - and `function A: B;` hold the same two
+  identifiers (dcc64 37.0 compiles both). A tree that keeps the name segments
+  and the result type as sibling nodes must mark the segments.
 
 ### 6.1.2 Forward declarations
 
@@ -244,6 +249,11 @@ procedure Show(Msg: string; Modal: Boolean = True);
 - ⚠️ *Trailing-only rule:* once one parameter has a default, **all following**
   parameters must too. Defaults must be **constant expressions** and are only
   allowed on value/`const` parameters (not `var`/`out`). Enforce both.
+- ⚠️ *A default takes ONE name:* `procedure P(A, B: Integer = 0)` is `E2237
+  Parameter 'B' not allowed here due to default value`, `const A, B` alike
+  (dcc64 37.0). So `(A: T = X)` - one name, a type, a default - and `(A, T:
+  X)` - two names and a type - are both valid and both three identifiers: a
+  tree that keeps them as sibling nodes must mark where the names end (3.1.1).
 - Interacts with overloading (6.3) — ambiguous calls are a semantic error.
 - ⚠️ *A trailing comma at the call site is accepted in ONE case* (dcc-probed,
   dcc32 36.0 and 37.0 agree; UNDOCUMENTED - the Embarcadero docwiki only
@@ -329,6 +339,10 @@ procedure FillZero(var Buf; Count: Integer);
 - Only `var`/`const`/`out` parameters may be untyped (a bare value param needs a
   type). Inside, the parameter is typeless and usually reinterpreted via a cast or
   `absolute`.
+- A LIST of untyped names is legal in every mode: `procedure P(out A, B; var
+  C, D; const E, F);` compiles, while a value list without a type is `E2067
+  Missing parameter type` (dcc64 37.0). Hence `(const A, B)` - two untyped
+  names - beside `(const A: B)` - one name of type `B`.
 
 ---
 

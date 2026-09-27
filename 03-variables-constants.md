@@ -53,7 +53,12 @@ var
 - A `var` section may appear at unit level, in a routine `Block`, and in a class
   (as fields, ch.11). Declaration sections may **interleave** with `const`/`type`
   in any order (B.12).
-- *AST:* one `VarDecl { names[], type, init? }` (or split per name).
+- *AST:* one `VarDecl { names[], type, init? }` (or split per name). A tree
+  that keeps the names, the type and the initializer as bare sibling nodes
+  must record where the names end: `P, T: C` and `P: T = C` (3.1.2) are both
+  three identifiers, and so are a parameter's `(A, T: X)` and `(A: T = X)`
+  (6.2). Only the separators tell them apart, so without the mark every
+  consumer of the tree has to re-read the tokens.
 
 ### 3.1.2 Initialized (global) variables
 
@@ -80,7 +85,9 @@ var
 - The initializer must be a **constant expression**.
 - ⚠️ Only one identifier may be initialized — `var A, B: Integer = 0;` is illegal.
   The parser should reject an `=` initializer when `IdentList` has more than one
-  name.
+  name (dcc64 37.0: `E2196 Cannot initialize multiple variables`). A routine's
+  local `var` section takes no initializer at all, for one name as for several:
+  `E2195 Cannot initialize local variables`.
 - ⚠️ *Hint directives may sit BETWEEN the type and the initializer:*
   `Default8087CW: Word platform = $033F;` (System.pas). Parse hints in both
   positions.
@@ -171,7 +178,10 @@ end;
   overload` infers TStringList. A routine that still requires an argument is
   `E2035 Not enough actual parameters`, not a procedural value.
 - ⚠️ *Only one name may be initialized:* `var X, Y := 5;` is `E2196 Cannot
-  initialize multiple variables` (dcc 37.0).
+  initialize multiple variables` (dcc 37.0), and so is the typed
+  `var X, Y: Integer := 5;` (dcc64 37.0). A type or an initializer is
+  required: `var X;` is `E2029 ':' expected but ';' found`. An inline `const`
+  declares ONE name: `const A, B = 5;` is `E2029 '=' expected but ',' found`.
 - ⚠️ *Inline `const` keeps the `=` token but drops the constant-expression
   requirement.* An inline `const` (a `const` declaration appearing as a
   statement inside a block) is written `const Ident [: TypeRef] = Expression;`
@@ -192,7 +202,12 @@ end;
   in the grammar above therefore means the complete B.11 production
   (`array`/`set`/`record`/`^`/`string[N]` bodies included), not merely
   `TypeName`.
-- *AST:* `InlineVar { name, type?, init?, pos }` as a statement node.
+- *AST:* `InlineVar { names[], type?, init?, pos }` as a statement node. With
+  the type and the initializer both optional, the identifiers alone do not
+  fix the shape: `var X: K` and `var X := K` are two identifiers each, `var
+  X, Y: K` and `var X: Y := K` three. A tree that keeps them as sibling nodes
+  must record the names, and whether a single node after them is the type or
+  the initializer.
 
 ### 3.1.4 `absolute` variables (overlay)
 

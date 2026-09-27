@@ -106,6 +106,17 @@ end.
 - ⚠️ *Two-scope visibility:* names declared in `interface` are exported (visible to
   importers); names in `implementation` are unit-private. The name-resolution pass
   must model these as two nested scopes.
+- ⚠️ *...but one scope for redeclaration.* An `implementation` declaration that
+  takes an `interface` name is `E2004 Identifier redeclared` - a `var` beside an
+  interface `var`, a `type` beside a `const`, a routine beside a `type`, a
+  `label`, an enumeration value on either side (dcc64 37.0, probed 2026-09-27).
+  Three kinds of pair compile: a routine's implementation or an overload the
+  implementation adds (their mismatches are `E2037`/`E2267`, never `E2004`), a
+  used unit's name on either side (`implementation uses B` beside an interface
+  `var B`; an implementation `var B` hiding an interface `uses B`), and two
+  types of different generic arity (`G<T>` beside `G`; two `G<T>` clash). A
+  forward class declared in the interface cannot be completed in the
+  implementation: `E2004` and `E2086`.
 - *Forward completeness:* routines declared in `interface` must be defined in
   `implementation`; the interface declaration acts as an implicit forward.
 - `initialization`/`finalization` are reserved words; the legacy bare `begin … end`

@@ -553,21 +553,41 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
     (`Declared(System.Embedded)`, in a platform header unit). Stopping at the
     dot asks about `System`, which is a unit name and answers True — the
     opposite branch.
-  - the second pass must **not** consult the unit's OWN declarations. The guard
-    idiom declares the name inside the text it guards, so answering from the
-    previous pass's model makes the answer flip every round: declared, so skip
-    the text, so not declared, so take the text.
+  - the second pass must **not** consult the unit's OWN declarations WHOLE.
+    The guard idiom declares the name inside the text it guards, so
+    answering from the previous pass's model makes the answer flip every
+    round: declared, so skip the text, so not declared, so take the text.
   - ...but dcc itself answers the unit's own names BY POSITION, like
-    constants above: a name declared textually ABOVE the directive is
-    declared - in the interface or the implementation, and a routine's
-    LOCAL declaration inside that routine's body (`var temp: PTimSort;`
-    then `{$IF Declared(temp)} temp := ts; {$IFEND}` in the body, Spring4D)
-    - while a name declared below, or inside its own `not Declared` guard,
-    is not until after it. Leaving the own scope out entirely drops real
-    code (a Windows header's guards over its own earlier record types:
-    E2065). A lookup of the own declarations that lie before the directive's
-    offset is exact and cannot oscillate: the guarded declaration is always
-    after its guard (probed, dcc64 37.0).
+    constants above: a name declared textually ABOVE the directive and in
+    scope there is declared - in the interface or the implementation, and a
+    routine's LOCAL declaration inside that routine's body (`var temp:
+    PTimSort;` then `{$IF Declared(temp)} temp := ts; {$IFEND}` in the body,
+    Spring4D) - while a name declared below, or inside its own `not
+    Declared` guard, is not until after it. Leaving the own scope out
+    entirely drops real code (a Windows header's guards over its own earlier
+    record types: E2065). A lookup of the own declarations that lie before
+    the directive's offset is exact and cannot oscillate: the guarded
+    declaration is always after its guard (probed, dcc64 37.0).
+  - The scope is the one in effect at the directive (probed 2026-09-27,
+    dcc64 37.0): in a routine's body its locals, parameters, local
+    constants, the routine's own name and - in a method - the class's
+    fields are declared; a local of ANOTHER routine, earlier or later, is
+    not, nor a local of a routine NESTED in this one; an inline `var` counts
+    from its own declaration on. A forward declaration counts (`TFoo =
+    class;` above, the full `TFoo` below: declared between them). The
+    unit's own name and a name in its `uses` clause are declared. A
+    generic's bare name is NOT: with only `TG<T>` declared,
+    `Declared(TG)` is False - the same rule that makes a bare name skip a
+    same-named generic (16.1.2).
+  - "Above the directive" means in the stream being DECIDED, not in the
+    first pass's: an earlier guard the second pass flips can add or remove
+    a declaration a later guard asks about. FMX.Skia.Canvas declares a
+    record under `not DECLARED(RTLVersion132)` - guessed True on the first
+    pass, False once System answers - and asks `DECLARED(<that record>)`
+    before using it; read off the first-pass model, the use stays and the
+    record goes (E2003). A guard reads only what lies above it, so the
+    decisions settle top down: re-decide until the own-name answers agree
+    with the stream they produced.
 - *AST:* conditional structure is usually resolved away before the syntax tree;
   optionally retained as trivia for tooling.
 

@@ -453,7 +453,13 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   1. **Multiple `{$ELSE}` in one chain** — `{$IF}…{$ELSE}…{$ELSE OTHERCPU}…{$ENDIF}`
      compiles; each `$ELSE` activates iff no earlier branch was taken.
   2. **Trailing junk after a `{$IF}` expression** is ignored —
-     `{$IF SizeOf(Extended) >= 10)}` (stray `)`) compiles.
+     `{$IF SizeOf(Extended) >= 10)}` (stray `)`) compiles. The rule is
+     "the first complete expression decides": `{$IF Defined(A) Defined(B)
+     and Defined(C)}` (a missing `and`, in Spring4D) is `Defined(A)`,
+     `{$IF 0 > 0)}` is False, `{$IF Defined(X) any words}` is `Defined(X)`,
+     `{$IF SizeOf(Pointer) = 8 SizeOf(Integer) = 2}` is the first comparison.
+     An operator left without its right operand is not junk: `{$IF not
+     Defined(X) or}` is E2015 (probed, dcc64 37.0).
   3. Trailing text after `{$ELSE}`/`{$ENDIF}`/`{$IFEND}` is an ignored
      comment (`{$ENDIF OTHERCPU}`, `{$ELSE !CPUX86}`) — widely used.
 - ⚠️ *`{$IF}` sees unit constants:* the real compiler evaluates `$IF` with
@@ -551,6 +557,17 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
     idiom declares the name inside the text it guards, so answering from the
     previous pass's model makes the answer flip every round: declared, so skip
     the text, so not declared, so take the text.
+  - ...but dcc itself answers the unit's own names BY POSITION, like
+    constants above: a name declared textually ABOVE the directive is
+    declared - in the interface or the implementation, and a routine's
+    LOCAL declaration inside that routine's body (`var temp: PTimSort;`
+    then `{$IF Declared(temp)} temp := ts; {$IFEND}` in the body, Spring4D)
+    - while a name declared below, or inside its own `not Declared` guard,
+    is not until after it. Leaving the own scope out entirely drops real
+    code (a Windows header's guards over its own earlier record types:
+    E2065). A lookup of the own declarations that lie before the directive's
+    offset is exact and cannot oscillate: the guarded declaration is always
+    after its guard (probed, dcc64 37.0).
 - *AST:* conditional structure is usually resolved away before the syntax tree;
   optionally retained as trivia for tooling.
 

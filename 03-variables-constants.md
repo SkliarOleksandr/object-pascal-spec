@@ -402,6 +402,20 @@ const
   conversion that exists *only* in constant-initializer position. Used throughout
   the D13 sources (`Vcl.AxCtrls`, tethering, Winapi headers). The parser sees an
   ordinary string initializer; the constant-evaluator must handle the conversion.
+- ⚠️ *A string expression initializes an array of `Char`/`AnsiChar` - but
+  not in parentheses.* `C: array[0..5] of AnsiChar = 'abc' + 'def';` compiles
+  (the string fills the array, a concatenation of literals and string
+  constants included); `= ('abc' + 'def')` is E2010 "Incompatible types:
+  'AnsiChar' and 'string'": a `(` at the start of a structured type's value
+  opens the aggregate, and the parenthesized string becomes its only
+  ELEMENT. The same in every value position - a typed constant's, an
+  initialized variable's, an aggregate element's (`array[0..1] of
+  array[0..2] of AnsiChar = (('ab' + 'c'), 'def')` fails), a record
+  constant's field value. For a scalar value (`Integer = (1 + 2)`, a string,
+  a set, a `Byte` element) the parentheses are an ordinary expression. So a
+  parser can tell the aggregate from a parenthesized expression only by the
+  declared type; mORMot's character tables are written this way (probed on
+  dcc64 37.0).
 - *AST:* `TypedConstDecl { name, type, value, writeable }`.
 
 ### 3.2.3 `resourcestring`

@@ -407,6 +407,10 @@ RealLiteral = Digit { [ "_" ] Digit }
   by nothing that can start another token - `100. - X` and `X := 1.;` compile
   (probed with dcc64 35.0, 2026-09-16). `1..2` is still a range, and `100.e2`
   is member access on the integer `100` (E2018), not a real with an exponent.
+  Nor does the `.` stay with the number before a `)`: `.)` is the legacy
+  alternate for `]` (B.7), so `(X * 100.)` lexes as `100` `.)` - E2029 "')'
+  expected but ']' found" - where `(X * 100. )` compiles (dcc64 37.0; a tool
+  that inserts parentheses must leave a space there).
 - Default type is `Extended`/`Double` (platform-dependent); see ch.02.
 - `$`/`%` prefixes are integer-only — no hex/binary floats.
 

@@ -268,6 +268,18 @@ type
   - A LOCAL nested type inside a routine body is the one case that stays
     properly scoped: its enum's values are NOT visible outside that routine
     (real E2003) — a routine is not a struct, so the climb never starts.
+- ⚠️ *An injected value is a declaration of the scope it is injected into*,
+  and it clashes there like any name - `E2004` (dcc64 37.0, probed 2026-09-27):
+  with a `var`, `const`, `type`, routine or `label` of the same name declared
+  before or after it (`type TE = (G, H); var G: Integer;` fails, and so does
+  the reverse order), with another enum's value (`TA = (G, H); TB = (G, K)`),
+  with the enum's own type name (`type G = (G, H)`), and across the two
+  sections of a unit (§1.1.2). A nested type's enum clashes at the section the
+  climb above ends in: its value against a unit-level `var`, not against a
+  field or method of its own class. What compiles: a scoped enum's values, a
+  used unit's name, a generic type of the value's name (its arity is part of
+  it), and anything in a nested scope - a routine's parameter or local, a
+  field of a class.
 - ⚠️ *Default storage size follows the ordinal RANGE, not the element count* —
   dcc-verified, dcc32 37.0, via `SizeOf` on a variable of each enum type:
 

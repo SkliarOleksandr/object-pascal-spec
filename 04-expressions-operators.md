@@ -478,6 +478,14 @@ TypeInfo(TMyEnum);             // takes a TYPE -> PTypeInfo
 - ⚠️ *`A` may not be a dynamic array* — `Slice(D, 3)` with `D: array of Integer`
   is `E2016 Array type required`, even in a perfectly good argument position.
   A static array and an open-array parameter both work.
+- ⚠️ *`Assert` reports the line of the token AFTER its call*, not the line of
+  the call: the line is a constant argument of `System._Assert` in the code,
+  taken when the parser stands on the next token. `if C then` / `Assert(X)` /
+  `else` on three lines reports the `else`'s line, `Assert(X)` with its `;`
+  on the next line that line. So a reformatting that only moves the token
+  after an `Assert` - an `end` put right behind the `)`, a line break before
+  a `;` - changes the compiled code (dcc64 and dcc32 37.0, probed
+  2026-09-27).
 
 ### 4.11.1 `NameOf` intrinsic
 

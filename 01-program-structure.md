@@ -60,6 +60,8 @@ end.
 - The legacy `(Input, Output)` program parameter list is accepted and ignored.
 - ⚠️ The file ends with `end.` — the trailing **`.`** terminates the compilation
   unit; tokens after it are ignored.
+- ⚠️ The program's name is declared in its global scope: a global of the same
+  name is `E2004 Identifier redeclared` (see §1.1.2 for the whole rule).
 - *AST:* `Program { name, uses, block }`.
 
 ### 1.1.2 The unit file
@@ -116,6 +118,28 @@ end.
   unit`). The same rule applies to a program's own name vs. its `.dpr` file.
   A checker that resolves `uses` entries by file path (§1.2.2) can rely on
   this identity holding for every unit that actually compiles.
+- ⚠️ *The module's own name is declared in its global scope - when that name
+  is ONE identifier.* A unit-level declaration spelled like the unit's name is
+  `E2004 Identifier redeclared`, in the `interface` and the `implementation`
+  section alike and case-insensitively (`unit U; ... var u: Integer;` fails):
+  `var`, `threadvar`, `const`, `resourcestring`, a non-generic `type`, a
+  routine (both of its headers report), an enumeration value. A program's and
+  a library's name work the same way (`program P; var P: Integer;` fails).
+  What compiles is everything in a NESTED scope - a routine's local `var`,
+  `const` or `type`, a parameter, a class or record field, method or property,
+  a generic type parameter - and two module-level shapes: a GENERIC type
+  (`type U<T> = class end;` in unit `U`: the declared name carries its arity),
+  and anything in a unit with a DOTTED name, which is no single identifier
+  (`unit NS.U;` compiles `var U`, `var NS` and `type U = class end`;
+  `unit NS.Sub.U;` compiles `var Sub`). The name stays usable as a qualifier
+  of the unit's own names (`U.P` in U's initialization). dcc-verified, dcc64
+  37.0, 2026-09-27. This is the other side of §1.2.1's hiding rule: a
+  declaration may hide a USED unit's name, never its own module's. Where it
+  bites in practice: the Form Designer names a form's or data module's global
+  variable after its `Name`, so a data module named after its own unit
+  (`SpikeData` in `SpikeData.pas`) gets `var SpikeData: TSpikeData;` - an
+  E2004 nothing warns about until the build. A checker must report E2004 for
+  such a declaration rather than let it hide the unit identifier.
 - *AST:* `Unit { name, interfaceDecls, implDecls, init?, final? }`.
 
 ### 1.1.3 Library & package files
@@ -201,7 +225,10 @@ uses
   name from that point on — the unit stays reachable via its fully-qualified
   name. dcc-verified in the RTL: Winapi.WinSock2 declares
   `QOS = _QualityOfService` while using Winapi.Qos (leaf name `Qos`). A resolver
-  that treats this as a redeclaration produces false E2004.
+  that treats this as a redeclaration produces false E2004. A plain (undotted)
+  used name hides the same way (dcc64 37.0: `uses B; var B: Integer;`
+  compiles). The module's OWN name is the exception - redeclaring it is E2004
+  (§1.1.2).
 - *AST:* ordered `uses[]` per section, each `{ qualifiedName, path? }`.
 
 ### 1.2.2 Dotted (namespaced) unit names

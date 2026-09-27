@@ -146,6 +146,27 @@ end;
   (dcc-verified: two consecutive `for var LWord in ...` loops compile fine). A
   resolver applying the general to-end-of-block rule to for-header declarations
   produces false E2004. See 05 §5.5.1/§5.5.2.
+- ⚠️ *No redeclaration within one body:* an inline `var`/`const` or a `for var`
+  counter may not take a name its body already holds - `E2004 Identifier
+  redeclared` (dcc64 37.0, probed 2026-09-27). A routine's body holds its
+  parameters, its locals, `Result` and the inline declarations of its
+  enclosing blocks that are still in scope: `procedure P(G: Integer); begin
+  var G := 1; end;` fails, and so does `begin var G := 1; begin var G := 2;
+  end; end`. The module's own body - the initialization section, the legacy
+  `begin` form, a program's or library's main block - holds every module-level
+  name, the interface's and the implementation's alike, at any block depth
+  (`unit U; interface var G: Integer; implementation initialization begin var
+  G := 1; end; end.` fails). The finalization section is a body of its own:
+  its inline vars may take a module-level name. An anonymous method and a
+  nested routine start a new body too. An `on E: T do` variable may hide an
+  outer name, but an inline declaration inside that handler may not take `E`.
+  What an inline declaration MAY hide: a name of an enclosing BODY (a global
+  from a routine, a field from a method, an outer routine's local from a
+  nested routine, a module-level name from the finalization section), a used
+  unit's name, a generic type's name (its arity is part of it) and a name
+  whose block has ended. Every statement list is such a block: a `repeat`
+  body, the `try`, `except` and `finally` parts and a `case` statement's
+  `else` part end their inline declarations' scope as `begin ... end` does.
 - *Type inference:* with `:=` and no `: TypeRef`, the type is the static type of the
   initializer expression. `var X := 1` ⇒ `Integer`.
 - ⚠️ *What a LITERAL initializer infers (dcc 37.0, dcc32 and dcc64, printing
@@ -485,7 +506,10 @@ Where a name is visible and how long its storage lives.
   routine body and live for the call's duration.
 - *Inline locals* (3.1.3) are visible only **from declaration point to end of the
   enclosing statement block** — narrower than the routine. Shadowing an outer name
-  with a later inline `var` is legal and position-dependent.
+  with a later inline `var` is legal and position-dependent only across bodies -
+  a global, a field, an outer routine's local; a name of the inline var's own
+  body (a parameter, a local, an enclosing block's inline var, in the module's
+  body any module-level name) is `E2004` (3.1.3).
 - ⚠️ *A managed-type inline/block-scoped local's LIFETIME, not just its
   visibility, ends at the enclosing sub-block* — it is finalized when that
   inner `begin … end` exits, not when the routine returns. dcc-verified,

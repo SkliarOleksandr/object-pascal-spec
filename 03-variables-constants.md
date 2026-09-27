@@ -152,8 +152,20 @@ end;
   parameters, its locals, `Result` and the inline declarations of its
   enclosing blocks that are still in scope: `procedure P(G: Integer); begin
   var G := 1; end;` fails, and so does `begin var G := 1; begin var G := 2;
-  end; end`. The module's own body - the initialization section, the legacy
-  `begin` form, a program's or library's main block - holds every module-level
+  end; end`. An implementation's body holds what its declaration and its kind
+  bring as well: the parameters and `Result` a header that omits them leaves
+  to the declaration, `Self` in a method with one (an instance method, a
+  constructor, a non-static class method, a record's or a helper's method -
+  not a `class ... static` one), and the method's OWN type parameters
+  (`procedure TC.M<T>`), not its class's (`procedure TG<T>.M` may declare a
+  `T`). These hold against an ordinary local too: `var Self`, `var Result`,
+  `var T`, or a `var G` beside a declared `(G: Integer)` the header omitted,
+  are `E2004` - and a parameter named `Result` in a function, `Self`, or like
+  the method's type parameter is `E2004` once, reported at the
+  implementation's `begin`. The routine's own name is not its body's: `var F
+  := 1` in function `F` compiles. The module's own body - the initialization
+  section, the legacy `begin` form, a program's or library's main block -
+  holds every module-level
   name, the interface's and the implementation's alike, at any block depth
   (`unit U; interface var G: Integer; implementation initialization begin var
   G := 1; end; end.` fails). The finalization section is a body of its own:

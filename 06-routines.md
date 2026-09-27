@@ -108,6 +108,14 @@ ForwardOrExternal = "forward" ";" | ExternalDecl ;
   the implementation's own body scope in this case — omitting them is not
   the same as the routine having zero parameters. See ch.11 §11.1.3 for the
   method-pairing rule this interacts with.
+- ⚠️ *An overloaded name's implementation repeats its parameter list*, so a bare
+  header can only complete the overload WITHOUT parameters: beside `procedure
+  M(A: Integer); overload;` and `procedure M; overload;`, a bare `procedure
+  TC.M;` is `M;` - `A` is not in its body, and a local named `A` compiles.
+  With no such overload the bare header is `E2037 Declaration of 'M' differs
+  from previous declaration` (dcc64 37.0, probed 2026-09-27). A resolver that
+  takes the overload chain's head instead gives the body another overload's
+  parameters.
 - *AST:* link the forward header to its later body; one logical routine.
 
 ---

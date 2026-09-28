@@ -248,6 +248,20 @@ type
   0..9 of`). A parser that accepts only a type name here fails on the `(` and
   then desynchronises: the branch LABELS get read as field names and
   `(Radius: Double)` as an enum type.
+- ⚠️ *The grammar takes ANY type there; the check comes later, at the labels*
+  (dcc64 37.0, probed 2026-09-28): `case T: Double of 0: (...)` and `case S:
+  set of Byte of [1]: (...)` compile (the set tag is a real 32-byte field),
+  `case A: array[0..1] of Byte of 0:` is E2010 at the label, and a pointer,
+  file, string or procedural tag crashes the compiler (F2084 internal error).
+  So an `of` inside the tag type is no end of it: `set of Byte of` is one tag
+  type and its `of`. A `(` opening it is an enum, as everywhere a type starts
+  (`case T: (1)..(5) of` is E2029).
+- *Line breaks do not matter:* `case` NEWLINE `Tag: Byte of`, and even `Tag`
+  NEWLINE `: Byte`, is the tag. A variant part has at least one branch
+  (`case T: Byte of end` is E2029), so a valid one always has a branch label's
+  `:` at depth 0 after the tag type's `of` and before any `;` or `end` - the
+  lookahead that tells a tag from a field typed below an unfinished `case`
+  (`case` NEWLINE `Reserve: array[0..3] of Byte;` reaches its `;` first).
 - Branch fields belong to the **enclosing record**, not to a sub-scope — every
   branch's fields, at every nesting depth, are members of the same record and
   must collect into its one member scope.

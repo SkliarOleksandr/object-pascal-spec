@@ -457,6 +457,15 @@ type
   resolver that keys helpers by symbol identity: a plain alias
   (`UInt32 = Cardinal`) must be followed to the type it names, and the names
   that are seeded separately have to be grouped by hand.
+- ⚠️ *`NativeInt`/`NativeUInt` join the group of the integer of their size* -
+  dcc 37.0 defines `WEAK_NATIVEINT` on every target (1 §1.3.2): a weak alias.
+  On dcc32 a `record helper for Integer` is a `NativeInt` value's and one for
+  `NativeUInt` a `Cardinal`'s; on dcc64 the same with `Int64`/`UInt64`, and
+  the other size's helper is `E2003` (`E2018` where the type has no helper at
+  all). That is why `System.SysUtils` declares no `TNativeIntHelper` under
+  `WEAK_NATIVEINT`: `N.ToString` of a `NativeInt` is `TIntegerHelper`'s on
+  dcc32 and `TInt64Helper`'s on dcc64 (`N.Size` 4 and 8). dcc32/dcc64 37.0,
+  probed 2026-09-29.
 - ⚠️ *...but `T = type Base` is a DISTINCT type* (2 §2.5.1), so a helper for it
   is NOT a helper for `Base`, and — since at most one helper is active per type
   (§15.3.3) — registering it as one HIDES the real `Base` helper. Real shape:

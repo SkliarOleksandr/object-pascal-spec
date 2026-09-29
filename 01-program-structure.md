@@ -489,6 +489,35 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   `Xml.*`, DUnit).
 - Symbols come from `{$DEFINE}`, project options, and built-ins (`MSWINDOWS`,
   `CPUX64`, `CONSOLE`, etc.).
+- ⚠️ *The built-in set is the compiler's, and the documentation's list is wrong
+  in both directions.* Probed on every installed dcc 37.0 with `--no-config`
+  over 1056 symbols (every one the Studio source tests plus the documented
+  ones), 2026-09-29. Every target defines `CONDITIONALEXPRESSIONS`, `UNICODE`,
+  `VER370`, `DCC`, `NATIVECODE`, `MANAGED_RECORD`, `WEAKREF`, `WEAKINTFREF` and
+  `WEAK_NATIVEINT`; then:
+
+  | Compiler | Adds |
+  |---|---|
+  | dcc32 | `MSWINDOWS WIN32 CPU386 CPUX86 CPU32BITS ASSEMBLER UNDERSCOREIMPORTNAME` |
+  | dcc64 | `MSWINDOWS WIN64 CPUX64 CPU64BITS ASSEMBLER` |
+  | dccosx64 | `MACOS MACOS64 OSX OSX64 POSIX POSIX64 CPUX64 CPU64BITS EXTERNALLINKER LLVM PIC` |
+  | dccosxarm64 | `MACOS MACOS64 OSX OSX64 POSIX POSIX64 CPUARM CPUARM64 CPU64BITS EXTERNALLINKER LLVM PIC` |
+  | dcciosarm64 | `IOS IOS64 MACOS MACOS64 POSIX POSIX64 CPUARM CPUARM64 CPU64BITS EXTERNALLINKER LLVM PIC` |
+  | dcciossimarm64 | the same plus `IOSSIMULATOR` |
+  | dccaarm | `ANDROID ANDROID32 POSIX POSIX32 CPUARM CPUARM32 CPU32BITS EXTERNALLINKER LLVM PIC` |
+  | dccaarm64 | `ANDROID ANDROID64 POSIX POSIX64 CPUARM CPUARM64 CPU64BITS EXTERNALLINKER LLVM PIC` |
+
+  No target defines `CPUINTEL` (not Win32, Win64 or macOS Intel), Android 32
+  defines `ANDROID32` (not `ANDROID32ARM`), both macOS targets define `OSX` and
+  `OSX64` (the Arm one too), and `UNDERSCOREIMPORTNAME` is dcc32's alone. The
+  RTL takes other branches for the difference: `System.SysUtils` declares
+  `TNativeIntHelper`/`TNativeUIntHelper` only `{$IF not defined(WEAK_NATIVEINT)}`
+  (so there are none - §15.3.2), `System.TypInfo` and
+  `System.Generics.Collections` have `WEAKREF` code. Not probed here: Linux64,
+  WinArm64 (no compiler installed).
+- ⚠️ *The switch start state* (what `{$IFOPT}` sees before any directive) is the
+  same on every target: `A C D G H I L N O P V X Y` on, the rest off - `N+`
+  included, although `$N` has done nothing for decades.
 - ⚠️ *`{$DEFINE}`/`{$UNDEF}` (and switch changes) are LOCAL to the unit being
   compiled* — a batch preprocessor must reset to the project define-set per
   file. Leaking one unit's defines into the next mis-branches conditional

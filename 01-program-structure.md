@@ -120,7 +120,14 @@ end.
 - *Forward completeness:* routines declared in `interface` must be defined in
   `implementation`; the interface declaration acts as an implicit forward.
 - `initialization`/`finalization` are reserved words; the legacy bare `begin … end`
-  before `end.` is an older equivalent of `initialization`.
+  before `end.` is an older equivalent of `initialization`. It takes no
+  `finalization` part: `begin S; finalization T; end.` is `E2029 'END'
+  expected but 'FINALIZATION' found`. The two spellings compile to the same
+  code, but not to the same `.dcu`: under `$D+ $L+` the section's line
+  records differ (on one line with its statements too; the word's case and
+  column do not matter), under `-$D- -$L-` the files are identical - a
+  tool that reprints a unit keeps the word as written (dcc64/dcc32 37.0,
+  probed 2026-09-29).
 - ⚠️ *The unit's declared name must match its file name* (dotted names too:
   `unit MyProject.Unit1;` must live in `MyProject.Unit1.pas`) — dcc-verified,
   dcc32 37.0: a file `Foo.pas` containing `unit Bar;` fails with

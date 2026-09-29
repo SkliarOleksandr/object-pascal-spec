@@ -829,6 +829,18 @@ end;
   scan for the closing `end` must require the preceding character to be neither
   an identifier character **nor `@`**. BASM also accepts double-quoted strings
   (`CMP AL,"'"`, System.SysUtils.pas).
+- ⚠️ *Conditional compilation decides where the body ends - a lexer alone
+  cannot.* Only LIVE text switches the mode: a live `asm` opens it, a live
+  `end` closes it; an `asm` or `end` in a skipped branch does neither
+  (`function R: Cardinal; {$IFDEF FPC} asm {$ENDIF}` followed by a real
+  `asm ... end;` compiles, and so does an `end` inside a skipped branch of an
+  asm body). Skipped text is always scanned as Pascal, inside an asm body
+  too: `{$IFDEF NEVER} cmp al, "{" {$ENDIF}` there opens a `{` comment that
+  swallows the `$ENDIF` (`E2280 Unterminated conditional directive`), and so
+  does a skipped `"'"` (a Pascal string to the end of the line), while a
+  skipped `'x{'` is a string. The mode runs on through `{$I}`: an include
+  inside an asm body is BASM text (`"'"` there compiles), and an `end` in the
+  included file closes the includer's body (dcc32 37.0, probed 2026-09-29).
 - Pascal identifiers (locals, params, globals) may be referenced from BASM —
   symbol resolution *into* the asm body is a semantic/codegen concern; the parser
   only needs to capture the raw text/tokens.

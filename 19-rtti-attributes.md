@@ -210,6 +210,23 @@ type
   `AttributeUsageAttribute`) to declare that a given attribute class may only
   be attached to certain kinds of declarations; a resolver must not invent or
   enforce such a restriction.
+- ⚠️ *A group annotates the next member, whatever ends before it*
+  (dcc-verified, dcc64 37.0, RTTI-probed 2026-09-30): after a `var`,
+  `const` or `type` section - at unit level, in a routine's declarations,
+  and in a class or record body after a `var`, `class var`, `const` or
+  nested `type` section - a group followed by no name of that section is
+  the attribute of the routine, method or property after it:
+  `class var F: Integer; [A] procedure M;` gives `M` the attribute `A`, and
+  so does `const C = 1; [A] [B] procedure M;` (both). It crosses a
+  visibility word: `private [A] public procedure M;` and
+  `class var F: Integer; [A] public procedure M;` annotate `M`, and
+  `const C = 1; [A] strict private FX: Integer;` annotates the field `FX`.
+  A group before a name of the section is that declaration's
+  (`var X: Integer; [A] Y: Integer;`). A group with no member after it - before
+  a class's `end`, before `implementation`, before a routine's `begin` - is
+  `E2289 Unresolved custom attribute`. The ancestry check still applies
+  where the group lands: `var GX: Integer; [TNotAnAttr] procedure P;` is
+  E2010.
 - *AST:* attach `attributes: [ { type, args[] } ]` to the annotated declaration node.
 
 ### 19.3.3 Compiler-recognized ("magic") attributes

@@ -96,6 +96,19 @@ type
 
 - `packed` is a **reserved word** prefix. Alignment affects layout/`SizeOf`, not
   parsing — but record-compatibility for interop depends on it.
+- ⚠️ *Where `packed` may stand* (dcc-verified, dcc64 37.0, 2026-09-30):
+  before `record`, `array` (static and dynamic), `set of`, `file` (typed
+  and untyped), `class` (a forward `packed class;` and `packed class of T`
+  too) and `object` - as a declared type, a variable's, a field's, a typed
+  constant's or an inline variable's type, and as an array's or a file's
+  element type. Before anything else it is `E2006 PACKED not allowed
+  here`: a type name (`packed TR`, `packed Integer`), `^T`, an enumeration,
+  a subrange (also as a set's base, `set of packed 0..3`), `string` and
+  `string[N]`, `interface`, a procedural type, a record helper, and a second
+  `packed`. In a parameter's type it is `E2029 Identifier expected`, and
+  after a distinct alias's `type` (`T = type packed record`) too. It comes
+  before `class`, never after its modifiers: `packed class sealed`
+  compiles, `class sealed packed` is E2029.
 - ⚠️ *Semi-documented `end align N` clause:* a record may end with
   `end align 16;` — the RTL ships it with a conditional operand:
   `end align {$IFDEF CPU64BITS} 16 {$ELSE} 8 {$ENDIF};`

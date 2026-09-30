@@ -198,6 +198,22 @@ property Items[I: Integer]: TItem read GetItem; default;
   must treat a same-name property redeclaration as an overload, not an E2004.
   (An earlier revision of this section said "one array property per class may be
   marked default" — that was wrong.)
+- ⚠️ *One bracket, all the parameters:* a default property of several index
+  parameters takes them in ONE bracket list, exactly as many as it declares -
+  `S[C, R]` over `property At[C, R: Integer]: TCells ... default` is one call,
+  `GetAt(C, R)`, and its type is `TCells`. This is NOT the array rule of 8.1.2
+  (`M[i, j]` = `M[i][j]`): `S[1][2]` is `E2035 Not enough actual parameters`,
+  `S[1, 2, 3]` `E2034 Too many actual parameters`, and the result is indexed
+  with a bracket of its own - `N[1, 2][3]` over a `string` property is a
+  `Char`. A typer that takes one expression per level, as for an array, types
+  `S[C, R]` one level too deep: off `TCells` through ITS default property to
+  the element, off a `string` to `Char` (dcc-verified 2026-09-30).
+- ⚠️ *The comma list does not cross from an array into a default property:*
+  over `A: array[0..3] of TCells`, `A[0, 1]` is `E2016 Array type required` -
+  the array's normalisation (8.1.2) runs out at the element, which is not an
+  array; `A[0][1]` is the form, the second bracket the property's. The same
+  one level down: `G[0, 1, 2]` over `array[0..3, 0..3] of TCells` is E2016
+  (dcc-verified 2026-09-30).
 - *AST:* `isDefaultArrayProp: true`.
 
 ### 13.1.5 Streaming specifiers: `default`, `nodefault`, `stored`

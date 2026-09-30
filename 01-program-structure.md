@@ -688,6 +688,16 @@ IncludeDirective = "{$I" FileRef "}" | "{$INCLUDE" FileRef "}" ;
   positions/diagnostics. `{$I %ENV%}` and `{$I %DATE%}` forms inject special
   values.
 - Beware include cycles; cap recursion.
+- ⚠️ *Where the file is looked for - beside the UNIT, not beside the include
+  that names it.* dcc32/dcc64 37.0 probed with an elimination loop (every
+  candidate directory holds the file, each run deletes the one taken), for an
+  include named by the unit and for one named by an include, plain and with a
+  subdirectory (`sub\inner.inc`): beside the unit (or program) being compiled,
+  then the current directory, then `-I`, then the project file's directory -
+  then F1026. Never beside the include file that names it, never on `-U`
+  alone. So `inc\outer.inc` doing `{$I inner.inc}` reads the `inner.inc` next
+  to the unit, not `inc\inner.inc`, and with only the latter present the unit
+  does not compile. (2026-09-30.)
 
 ### 1.3.4 `{$PUSHOPT}` / `{$POPOPT}`
 

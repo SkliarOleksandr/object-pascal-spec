@@ -277,6 +277,23 @@ procedure DoIt; override; final;
 
 - `sealed`/`final` are **directives** (B.4.2). The resolver must reject a class
   deriving from a `sealed` class, and an `override` of a `final` method.
+- ⚠️ *Where the class modifiers stand* (dcc-verified, dcc64 37.0,
+  2026-09-30): `abstract` and `sealed` follow `class` or `object` (an
+  object type takes both too) right after the word, before the ancestors -
+  `class sealed(TBase)`, a forward `class abstract;`, `class
+  sealed(TObject);` stopping at its ancestors. dcc takes the word there
+  whatever follows it: `class` NEWLINE `abstract: Integer;` is E2029, not a
+  field named `abstract`; after the ancestors a field may be named so
+  (`class abstract(TObject) abstract: Integer; end` compiles). A repeat is
+  one (`class abstract abstract` compiles to the `.dcu` of `class
+  abstract`), both together are `E2383 ABSTRACT and SEALED cannot be used
+  together`. After `record`, `interface` and `dispinterface` the word is a
+  member's name: `record abstract: Integer; sealed: Byte; end` compiles,
+  `record sealed end` is E2029 (a field with no type). A helper takes
+  neither (`class sealed helper for T` and `class helper sealed for T`:
+  E2029). `packed` comes before `class`: `packed class sealed` compiles,
+  `class sealed packed` does not. Deriving from a sealed class is `E2353
+  Cannot extend sealed class`.
 - *AST:* `isSealed` on class, `isFinal` on method.
 
 ---

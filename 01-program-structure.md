@@ -662,6 +662,16 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
     record goes (E2003). A guard reads only what lies above it, so the
     decisions settle top down: re-decide until the own-name answers agree
     with the stream they produced.
+  - The same holds for a constant's VALUE in a `{$IF}`: the declaration read
+    is the one in the decided stream, above the directive, else an
+    import's. Spring4D's shape: `{$IF not Declared(CPP_ABI_ADJUST)} const
+    CPP_ABI_ADJUST = 0; {$IFEND}` then `{$IF CPP_ABI_ADJUST > 0)}` - System
+    declares `CPP_ABI_ADJUST = 3 * SizeOf(Pointer)` when it defines
+    `CPP_ABI_SUPPORT` itself (`{$IF DEFINED(WIN64) or
+    DEFINED(EXTERNALLINKER)}` in System.pas), so the guard drops the own 0
+    and dcc64 takes the second branch with 24, dcc32 not (0). Read off the
+    first pass's model - which guessed the guard the other way and holds the
+    own 0 - the value is stale (probed, dcc32/dcc64 37.0, 2026-09-30).
 - *AST:* conditional structure is usually resolved away before the syntax tree;
   optionally retained as trivia for tooling.
 

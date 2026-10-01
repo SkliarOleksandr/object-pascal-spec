@@ -175,7 +175,7 @@ bundle of units (BPL).
 
 ```ebnf
 ExportsClause = "exports" ExportEntry { "," ExportEntry } ";" ;
-ExportEntry   = Ident [ "index" ConstExpr ] [ "name" ConstExpr ] [ "resident" ] ;
+ExportEntry   = Ident [ "(" ParamList ")" ] [ "index" ConstExpr ] [ "name" ConstExpr ] [ "resident" ] ;
 RequiresClause = "requires" IdentList ";" ;
 ContainsClause = "contains" ContainsEntry { "," ContainsEntry } ";" ;
 ContainsEntry  = QualifiedIdent [ "in" StringLiteral ] ;   (* uses-like paths *)
@@ -189,6 +189,7 @@ ContainsEntry  = QualifiedIdent [ "in" StringLiteral ] ;   (* uses-like paths *)
   section) — the entries take effect when the unit is linked into a library. The
   RTL uses this (`System.Internal.MachExceptions.pas`). The parser must accept
   `ExportsClause` as a declaration in units, not only in library files.
+- *Entry clauses (dcc64 37.0, probed 2026-10-01):* `index`, `name` and `resident` come in THAT order only, each at most once - `Q name 'a' index 3`, `Q resident name 'a'`, a repeated `name` / `index` / `resident` are all E2029 (", or ; expected"). `name` and `index` take any constant expression (`name 'a' + 'b'`, a named constant); an overload is picked by a parameter list - `P(A: Integer) name 'a'` (parameter NAMES are required: `P(Integer)` is E2067) - and the same routine may be exported twice under two names. An entry may be a bare `Q;`.
 - ⚠️ *A library may omit the main `begin`-block entirely:*
   `library X; ... exports Foo name 'Test'; end.` (DUnit's testXpgenLib.dpr).
 - `requires`/`contains` are package-only clauses: `requires` names other

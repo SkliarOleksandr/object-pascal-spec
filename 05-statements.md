@@ -615,7 +615,7 @@ end;
 
 - *`goto` and `label` ARE reserved words* (unlike Break/Continue/Exit).
 - *Label declaration:* every target label must be declared in a `label` section of
-  the same block; numeric labels (digit sequences) are permitted.
+  the same block; numeric labels (digit sequences) are permitted. A label number is read as written, hex included: `label $A; goto $A;` compiles (dcc64 37.0, probed 2026-10-01, x-f16 L04) while `label 010` and `goto 10` are different labels (E2003) - the label is its text, not its value. Any number of digits is accepted (`99999`); a negative or real number is E2029, two labels without a comma too (E2029), a label set twice E2073, a label declared and used but never set E2074.
 - *Jump restrictions:* never **out of / into** a procedure or function. Into a
   structured statement dcc is more permissive than standard Pascal, and not
   uniformly (dcc64 37.0, probed 2026-09-26): a `goto` INTO a compound

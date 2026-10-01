@@ -705,9 +705,9 @@ Binds a routine to an external library function instead of a Pascal body.
 
 ```ebnf
 ExternalDecl = "external" [ ConstExpr ]            (* library name *)
-               [ "name" ConstExpr | "index" ConstExpr ]
-               [ "dependency" ConstExpr { "," ConstExpr } ]   (* linked-lib hints *)
-               [ "delayed" ] ";" ;
+               { "name" ConstExpr | "index" ConstExpr  (* each at most once, *)
+               | "dependency" ConstExpr { "," ConstExpr }  (* in any order *)
+               | "delayed" } ";" ;
 ```
 
 **Example**
@@ -734,7 +734,15 @@ function MessageBox(hWnd: HWND; lpText, lpCaption: PChar; uType: UINT): Integer;
 - `dependency` (directive) lists additional libraries the import needs at link
   time — used mainly by the mobile/posix toolchains
   (`external libc name 'dlopen' dependency 'dl'`).
-- *AST:* `Routine { …, external: { lib, symbol?, index?, delayed } }`.
+- *Clauses (dcc64 37.0 and the Android / macOS compilers, probed):* `name` and `index` may both be given, and the clauses
+  may come in ANY order - `external 'k' index 3 name 'Q'`, `external 'k' delayed name 'Q'` and `external 'k' name 'Q'
+  delayed` all compile. Each clause is accepted ONCE: a repeated `name`, `index` or `delayed` is E1030. The library
+  expression is the first expression after `external` unless that word is `name`: `external name 'Q'` has no
+  library (it parses; E2065 is the separate "unsatisfied forward or external declaration"), while `external index 3` and
+  `external delayed` read `index` / `delayed` as the library's EXPRESSION - an undeclared identifier, E2003. `dependency` is accepted
+  by the non-Windows compilers only (Win64: E2070 unknown directive) and `delayed` by the Windows ones only (the Android and
+  macOS compilers: E2070); a list of values follows `dependency`, comma-separated, before or after `name`.
+- *AST:* `Routine { …, external: { lib?, symbol?, index?, dependency[]?, delayed } }`.
 
 ---
 

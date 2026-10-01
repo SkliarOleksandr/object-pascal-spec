@@ -237,6 +237,16 @@ procedure GetSize(out W, H: Integer);
 
 - `out` is a **directive** (B.4.2), keyword only in this position. Like `var`, the
   argument must be an lvalue.
+- ⚠️ *`out` is also a legal parameter NAME* (dcc64 37.0, probed 2026-10-01):
+  `procedure P(out: Integer)` declares a value parameter named `out`, and
+  `procedure Q(out out: Integer)` an `out` parameter named `out`. The word is
+  the modifier exactly when a name or an attribute group follows it
+  (`out [Ref] X` compiles, as `var [Ref] X` and `const [Ref] X` do). `var` and
+  `const` are reserved words: `(var: Integer)` is E2029.
+- ⚠️ *One modifier per parameter:* `const var X` and `var const X` are `E2029
+  Identifier expected`; `const out X` reads `out` as the name (`E2029 ';', ')'
+  or '=' expected but identifier 'X' found`), `out const X` is `E2067 Missing
+  parameter type`.
 
 ### 6.2.5 Default (optional) parameters
 

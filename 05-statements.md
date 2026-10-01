@@ -855,15 +855,16 @@ end;
   enclosing method's own and inherited members; then used units; then the
   implicit `System`/`SysInit` units.
 - ⚠️ *The override rule holds in QUALIFIER position too, against a used UNIT's
-  name.* A dotted `uses` entry makes its last segment a name in the outermost
-  scope (1.2.3), and a with member outranks it exactly as it outranks a
-  global: in a unit that uses `Lib.Footers`, `with Col do with Footers.Add do
-  AggregateFunction := ...` compiles and means `Col.Footers.Add` (dcc64 37.0,
-  probed 2026-09-19 with a three-unit fixture; the real shape is a grid
-  library's column dialog over its `...DataGrid.Footers` unit). A resolver
-  that decides "`Footers.X` is unit-qualified" by TEXT - matching the used
-  units' last segments before it has looked at the with scope - never types
-  the inner target, and the body is `E2003` again. The same text match is
+  name.* An undotted `uses` entry is a name in the outermost scope (1.2.3),
+  and a with member outranks it exactly as it outranks a global. In a unit
+  that uses `Lib.Footers`, `with Col do with Footers.Add do AggregateFunction
+  := ...` compiles and means `Col.Footers.Add` (dcc64 37.0, probed 2026-09-19
+  with a three-unit fixture; the real shape is a grid library's column dialog
+  over its `...DataGrid.Footers` unit) - there not even by outranking: a
+  dotted entry's last segment is no name at all (1.2.3, probed 2026-10-01).
+  A resolver that decides "`Footers.X` is unit-qualified" by TEXT - matching
+  the used units' last segments before it has looked at the with scope -
+  never types the inner target, and the body is `E2003` again. The same text match is
   right for `System.Footers.X`, where the unit is a LONGER prefix and no
   member is asked about: only the bare head of the chain is subject to the
   with scope.

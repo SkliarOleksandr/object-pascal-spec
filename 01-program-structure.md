@@ -341,6 +341,22 @@ disambiguate.
   unit `A` member `B` member `C`, or namespaced unit `A.B.C`. Resolution tries
   unit-name matches greedily, then falls back to member access. Keep the raw
   dotted token list on the AST so the resolver can re-segment.
+- ⚠️ *A unit qualifies by the name WRITTEN in the `uses` entry - whole, never
+  its last segment.* An undotted entry is an identifier in the outermost scope:
+  with `uses Log` (resolved by `-NS Ns` to `Ns.Log`), `Log.Tail` qualifies and
+  `Log('a')` is E2029 - the unit name hides the unit's own routine `Log`. A
+  dotted entry declares no single identifier at all: with `uses Ns.Log`,
+  `Log('a')` calls the routine and `Log.Tail` is E2035 (the routine, called
+  short of its argument); with `uses Ns.Other`, `Other.F` and a bare `Other` are
+  E2003; with `uses System.SysUtils`, `SysUtils.IntToStr` is E2003; in unit
+  `Ns.Own`, `Own.G` is E2003 while `Ns.Own.G` compiles. A namespace-resolved
+  entry does not qualify by its resolved name either: `uses B.C` resolved by
+  `-NS A` to `A.B.C` takes `B.C.T`, and `A.B.C.T` is E2003 - except under
+  `System`, which is a unit itself: with `uses SysUtils`, `System.SysUtils.
+  IntToStr` compiles. dcc64 37.0, probed 2026-10-01. A resolver that binds a
+  dotted entry under its last segment captures every bare call of a routine
+  spelled like it - a logging unit `X.Log` exporting `Log` left its 40 calls
+  with no references.
 
 ### 1.2.4 Implicit units (`System`, `SysInit`)
 

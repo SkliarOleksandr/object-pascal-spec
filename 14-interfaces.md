@@ -53,6 +53,19 @@ type
   too: with `const SID_IFoo = '{...}';` in scope, `IFoo = interface [SID_IFoo]`
   compiles (dcc64-verified 2026-08). The production is `"[" ConstExpr "]"`,
   constrained semantically to a compile-time string in GUID format.
+- ⚠️ *Any constant expression, ONE of them* (dcc64 37.0, probed 2026-10-01): a
+  qualified constant `[U.SID]`, a typed `TGUID` constant, a concatenation
+  `['{...-' + '...}']`, `[SID + '']` and a parenthesized `[(SID)]` all compile;
+  `['{...}', 'x']` is E2029; a string not in GUID format is `E2204 Improper
+  GUID syntax`.
+- ⚠️ *GUID or attribute is decided by TYPE, in the first bracket only:* `[X]`
+  right after the head (and ancestor) is the GUID when X is a string or TGUID
+  constant, and the first member's attribute group when X is an attribute
+  class (`interface [TAttr] procedure P;` - RTTI: no GUID, P has the
+  attribute). Any LATER bracket is an attribute group, a string included: a
+  second `['{...}']` is `W1074 Unknown custom attribute` and dropped, and so
+  is a GUID written after an attribute group (the interface then has no
+  GUID). A parser cannot decide `[X]` from syntax alone.
 - Interfaces have **no fields, no visibility sections, no method bodies**. All
   members are implicitly public. Properties list only accessor method names.
 - Default ancestor is `IInterface` (≡ `IUnknown`).

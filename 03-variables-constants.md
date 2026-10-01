@@ -296,7 +296,8 @@ ThreadVarSection = "threadvar" VarDecl { VarDecl } ;
 **Semantics & parsing notes**
 
 - `threadvar` is a **reserved word** (B.4.1), used only at unit level (not inside
-  routines).
+  routines, and not inside a type body on its own - there only `class threadvar`
+  is a member, §15.1.2).
 - ⚠️ No initializer is allowed (thread-local storage is zero-initialized per
   thread). Reject `= ConstExpr` here.
 - *AST:* mark the `VarDecl` with `storage = threadlocal`.

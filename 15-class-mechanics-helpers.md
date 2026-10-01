@@ -80,6 +80,12 @@ type
   specifier on one line (`private class threadvar`, `protected class threadvar` —
   both used in the RTL: `System.Classes`, `System.Threading`). No initializers
   (same rule as unit-level `threadvar`, ch.03 §3.1.5).
+- ⚠️ `class` is what makes it a member: a BARE `threadvar` in a class, record or
+  helper body is `E2029 'END' expected but 'THREADVAR' found` (dcc64 37.0,
+  probed 2026-09-30), while a bare `var` opens an ordinary field section. The
+  pair `class threadvar` is accepted wherever `class var` is - in a class, a
+  record, a class helper and a record helper - and runs on the same way,
+  mixing with `class var` sections in one body.
 - *AST:* `FieldDecl { isClassVar: true, threadLocal?: true }`.
 
 ### 15.1.3 Class properties

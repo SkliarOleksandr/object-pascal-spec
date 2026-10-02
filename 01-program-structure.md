@@ -744,6 +744,16 @@ IncludeDirective = "{$I" FileRef "}" | "{$INCLUDE" FileRef "}" ;
   alone. So `inc\outer.inc` doing `{$I inner.inc}` reads the `inner.inc` next
   to the unit, not `inc\inner.inc`, and with only the latter present the unit
   does not compile. (2026-09-30.)
+- ⚠️ *A conditional never crosses an include boundary.* dcc64 37.0 probed
+  (2026-10-02): an include that opens `{$IFDEF}`/`{$IF}` and leaves it open
+  is `E2280 Unterminated conditional directive` at the include (live or
+  dead branch alike), even when the includer's `{$ENDIF}` follows; an
+  include's `{$ENDIF}`/`{$IFEND}` does not close the includer's conditional
+  (E2280 at the includer), and with no conditional open anywhere it is
+  `E1030 Invalid compiler directive`; an include's `{$ELSE}`/`{$ELSEIF}`
+  under the includer's live conditional skips the rest of the include and
+  leaves the includer's text after it misread (E2029 further down). An
+  include that opens and closes its own conditional is ordinary.
 
 ### 1.3.4 `{$PUSHOPT}` / `{$POPOPT}`
 

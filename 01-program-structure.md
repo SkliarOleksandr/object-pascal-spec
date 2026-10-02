@@ -57,12 +57,20 @@ end.
 
 **Semantics & parsing notes**
 
-- The legacy `(Input, Output)` program parameter list is accepted and ignored.
+- The legacy `(Input, Output)` program parameter list is accepted and ignored
+  (dcc-verified, dcc64 37.0, probed 2026-10-02, x-f17 P01-P21): plain
+  identifiers, at least one, commas between - any names, a repeat
+  (`(A, A)`), the program's own name, an escaped keyword (`&begin`) compile;
+  `()`, a number, a dotted name, a reserved word, `Input: Text` and a
+  trailing comma are E2029. The names declare nothing and refer to nothing:
+  `program P(Foo); begin Foo := 1; end.` is E2003, and
+  `program P(Input); var Input: Integer;` compiles. A `library` takes none
+  (`library L(A);` is E2029 `';' expected but '(' found`).
 - ⚠️ The file ends with `end.` — the trailing **`.`** terminates the compilation
   unit; tokens after it are ignored.
 - ⚠️ The program's name is declared in its global scope: a global of the same
   name is `E2004 Identifier redeclared` (see §1.1.2 for the whole rule).
-- *AST:* `Program { name, uses, block }`.
+- *AST:* `Program { name, params, uses, block }`, `ProgramParams { names }`.
 
 ### 1.1.2 The unit file
 

@@ -160,7 +160,8 @@ annotate (types, fields, methods, properties, parameters).
 
 ```ebnf
 AttributeGroup = "[" Attribute { "," Attribute } "]" ;
-Attribute      = TypeRef [ "(" [ ActualParams ] ")" ] ;
+Attribute      = TypeRef [ "(" [ ActualParams ] ")" ]
+               | Expression [ ".." Expression ] ;   (* dropped: W1074 *)
 ```
 
 **Example**
@@ -227,7 +228,24 @@ type
   `E2289 Unresolved custom attribute`. The ancestry check still applies
   where the group lands: `var GX: Integer; [TNotAnAttr] procedure P;` is
   E2010.
-- *AST:* attach `attributes: [ { type, args[] } ]` to the annotated declaration node.
+- ⚠️ *Any expression is accepted as an attribute, and dropped* (dcc-verified,
+  dcc64 37.0, probed 2026-10-02, x-f32 B01-B60): `['abc']`, `[1 + 2]`, `[-X]`,
+  `[nil]`, `[(TA)]`, `[(TA)(1)]`, `[[1]]`, `[1..2]`, `[inherited]` compile with
+  `W1074 Unknown custom attribute` and annotate nothing, and the names in them
+  are not looked up: `[(Undeclared)]`, `[-Undeclared]`, `['a' + Undeclared]`
+  compile. A NAME is resolved first: an attribute class takes its arguments and
+  nothing more (`[TA + 1]`, `[TA(1) + 1]`, `[TA(1).ClassName]`, `[TA[1]]`,
+  `[TA<Integer>]`, `[TA = TA]` are E2029 `',' or ']' expected`), its arguments
+  checked (`[TA(Undeclared)]` is E2003); another type is E2010 (`[TObject]`,
+  `[Integer]`); any other name - a constant, a variable, a function, an
+  undeclared one - is W1074 `Unknown custom attribute: 'C'` (`[C]`, `[F(1)]`,
+  `[Undeclared]`), and the tokens after it are skipped up to the `,` or `]`
+  unchecked: `[C + 1]`, `[C.X]`, `[C(Undeclared)]`, `[Undeclared + 1]`, even
+  `[C + + ]` and `[C (]` compile, while `[C )]`, `[C begin]`, `[C;]` are E2029.
+  A group's attributes are judged one by one (`[TA, 'x', TA(2)]` keeps both
+  TAs), and so is a second GUID bracket after an interface's GUID (§14.1.1).
+- *AST:* attach `attributes: [ { type, args[] } ]` to the annotated declaration node;
+  an expression attribute is `Attribute { expr }`.
 
 ### 19.3.3 Compiler-recognized ("magic") attributes
 

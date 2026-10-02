@@ -365,6 +365,17 @@ disambiguate.
   dotted entry under its last segment captures every bare call of a routine
   spelled like it - a logging unit `X.Log` exporting `Log` left its 40 calls
   with no references.
+- ⚠️ *What a unit qualifier reaches* (dcc-verified, dcc64 37.0, probed
+  2026-10-02, x-f34 Q01-Q32): the unit's interface, and a missing member is
+  `E2003 Undeclared identifier` on the MEMBER - `System.Missing`,
+  `ThisUnit.Missing`, `System.SysUtils.Missing`, a type `System.TMissing`, an
+  ancestor `class(System.TMissing)`, a call `System.Missing(1)`. Beyond the
+  interface: every intrinsic qualifies by `System` (`System.Length(S)`,
+  `System.SizeOf(I)`, `System.Write(1)`, `System.Exit`, `System.Halt`,
+  `System.Integer(1)`, `System.Pointer(nil)` all compile), the keyword types do
+  (`System.string`, `System.file`), and a unit qualifying itself reaches its
+  implementation too (`ThisUnit.ImplVar` from a routine below the variable
+  compiles).
 
 ### 1.2.4 Implicit units (`System`, `SysInit`)
 

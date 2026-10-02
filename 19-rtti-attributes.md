@@ -242,6 +242,10 @@ type
   `[Undeclared]`), and the tokens after it are skipped up to the `,` or `]`
   unchecked: `[C + 1]`, `[C.X]`, `[C(Undeclared)]`, `[Undeclared + 1]`, even
   `[C + + ]` and `[C (]` compile, while `[C )]`, `[C begin]`, `[C;]` are E2029.
+  Only the FIRST segment of a dotted name decides it: `[Undeclared.X]` and
+  `[SysUtils.Undeclared]` under `uses System.SysUtils` are W1074, but a unit
+  qualifier is looked into - `[System.Undeclared]`, `[ThisUnit.Undeclared]` are
+  E2003 (x-f33 U01-U26).
   A group's attributes are judged one by one (`[TA, 'x', TA(2)]` keeps both
   TAs), and so is a second GUID bracket after an interface's GUID (§14.1.1).
 - *AST:* attach `attributes: [ { type, args[] } ]` to the annotated declaration node;

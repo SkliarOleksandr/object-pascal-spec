@@ -412,6 +412,24 @@ function Area(C: TCircle): Double; overload;
     the derived reference. A resolver that merges the ancestry unconditionally
     accepts code dcc rejects; one that never merges it rejects code dcc
     accepts.
+- ⚠️ *Across UNITS, `overload` makes the bare name search on.* A bare name
+  that finds a routine marked `overload` does not stop there: dcc goes on
+  through the rest of the search order (1.2.3) and the routines of that name
+  it meets join the set - with `procedure F(X: Integer); overload;` in the
+  unit and `procedure F(D: Double); overload;` in a used unit, a bare
+  `F(1.5)` in the unit calls the used unit's `F`; without `overload` on the
+  unit's own `F` the same call is `E2010`, and the search stops at the first
+  `F` found. Every declaration met on the way is RECORDED as used, whatever
+  its kind and whether or not it is chosen: the unit's `.dcu` imports the
+  used unit's unchosen overload, and a record type `F` of a used unit too,
+  for a call that binds to the unit's own `F(Integer)` - a spelling
+  qualified with the unit (`ThisUnit.F(1)`) looks in that unit alone and
+  imports neither. Two used units' overloads merge the same way (`F(1)` and
+  `F(1.5)` take one each). dcc64 37.0, probed 2026-10-02 and 2026-10-03.
+  A resolver that stops at the first unit's routine misses the other units'
+  overloads for overload resolution; a tool rewriting names must know that a
+  qualified call can change the unit's import table even when it calls the
+  same routine.
 - ⚠️ *Return type is never part of overload resolution.* Two routines with
   identical parameter lists that differ only in result type are not distinct
   overloads — the second declaration collides with the first rather than

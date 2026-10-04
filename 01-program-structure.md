@@ -365,6 +365,20 @@ disambiguate.
   dotted entry under its last segment captures every bare call of a routine
   spelled like it - a logging unit `X.Log` exporting `Log` left its 40 calls
   with no references.
+- ⚠️ *A unit qualifier's FIRST segment is looked up like any other name, so
+  every name that outranks a used unit hides it there* - not only a local
+  or a declaration of the unit itself: in a method, a member of the class or
+  of an ancestor declared in ANOTHER unit (`TDer = class(TBase)`, TBase with
+  a method `QLib2`: `QLib2.GV` in TDer's method is `E2018 Record, object or
+  class type required`, the same text compiles in a plain routine of the
+  unit); in a `with` body, a target's member (5.7: `with B do QLib2.GV` is
+  E2018); and the head of a DOTTED entry too - with `uses Winapi.Windows`, a
+  field named `Winapi` makes `Winapi.Windows.GetCurrentProcess` in the
+  class's method E2018. dcc64 37.0, probed 2026-10-03. The real shape: a
+  logging family class with a method named like the logging unit, read
+  through `with Log.Family do`. A tool writing qualified names (a
+  refactoring, a "qualify" option) must check the head against the members
+  in scope, inherited and with-opened ones included.
 - ⚠️ *What a unit qualifier reaches* (dcc-verified, dcc64 37.0, probed
   2026-10-02, x-f34 Q01-Q32): the unit's interface, and a missing member is
   `E2003 Undeclared identifier` on the MEMBER - `System.Missing`,

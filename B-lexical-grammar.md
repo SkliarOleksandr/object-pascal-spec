@@ -302,6 +302,22 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
 - ⚠️ *Shadowing is legal:* `var Exit: Integer;` compiles and hides the intrinsic
   in that scope — a correct parser keeps these as identifiers and lets scope
   resolution decide. This is the key difference from B.4.1 words.
+- ⚠️ *A USED unit's declaration hides the intrinsic too*, not only a local or
+  same-unit one: the intrinsics live in the implicit `System` scope, and every
+  unit in `uses` is searched before it. (dcc-verified, dcc64 37.0: a unit
+  declaring `procedure Low;` makes a bare `Low;` in its importer call that
+  procedure; the same for `High(4)`, `Inc(I)`, `SizeOf`, `Ord`, `Copy`,
+  `Assigned`, `Length` - also inside a method body when no member of that
+  name is inherited - and for a TYPE, `type Text = Integer;` making
+  `T: Text` an Integer. A member still outranks it: `R.Low`, and `Low` in
+  `with W do` where W's class has a method Low. Between two used units
+  declaring the name, the LAST `uses` entry wins.) The hiding is complete:
+  `function Length(A: TObject): Integer; overload;` in the used unit makes
+  `Length('abc')` an `E2250` (no overload matches) - the intrinsic is not
+  among the candidates - and a C-runtime-style `function write(h: Integer; p:
+  Pointer; c: Cardinal): Integer;` makes `Write('x')` an `E2010`. Real RTL
+  units do this: `System.TypInfo` declares `HasWeakRef`, `System.Win.Crtl`
+  declares `close`, `read`, `write` and `rename`.
 - ⚠️ *Boundary cases:* `string`, `file`, `set`, `nil` look like predefined names
   but are **reserved words** (B.4.1); `Boolean`/`Integer`/`True` look like
   keywords but are **identifiers**. Get these eight right and the rest follows.

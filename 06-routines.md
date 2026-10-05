@@ -513,6 +513,23 @@ SITE governs, and it can be toggled between calls in the same file):
   CALLER's unit.) This is the mechanism, not a guess: the failure mode is
   graceful (a plain call, never an error) and self-reports via `H2443` whenever
   `{$HINTS ON}` (the default) is active.
+- ⚠️ *What "every unit the inline body references" covers, and "transitively"
+  does not hold.* (dcc-verified, dcc64 37.0, an inline routine in UnitX per
+  case, a caller naming only UnitX.) The caller's OWN `uses` must name the
+  unit: a caller that `uses` a UnitZ which `uses` UnitY still gets H2443 for
+  UnitY. A unit is needed for: a routine the body calls; a variable or a
+  typed constant it reads; a STRING true constant; a local variable's type;
+  the routine's own parameter or result type (no other mention needed); a
+  member reached through a value (`GetY.V`, V a field of UnitY's class,
+  nothing of UnitY named); the declared type of what the body touches
+  (`O := GetY`, GetY UnitX's own function returning UnitY's class); a unit of
+  UnitX's IMPLEMENTATION `uses`; what an inline routine called by the body
+  needs (nested expansion); the body of a property's inline getter when the
+  caller reads the property. Not needed (constant-folded): an enum value
+  (`Ord(eyB)`), an ordinal true constant, `SizeOf(TRecY)`, a cast of a
+  constant (`NativeInt(TY(nil))`). Consequence for tooling: a `uses` entry no
+  name of which the unit spells can still be required - dropping it compiles,
+  with H2443 and different code.
 - The book additionally states inlining never crosses a CIRCULAR unit reference
   (ch.4 of the audited book, ~p.118); this was not independently probed here —
   no clean two-unit circular-`uses` repro was built — so treat it as

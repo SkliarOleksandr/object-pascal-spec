@@ -545,10 +545,110 @@ Where a name is visible and how long its storage lives.
   exception: scope AND lifetime both follow the narrowest enclosing block).
 - *Globals* (unit `var`) live for program duration; `interface`-section vars are
   visible to importing units, `implementation`-section vars are unit-private (ch.01).
-- *Resolution order* for an unqualified identifier: innermost block scope →
-  enclosing scopes → `with` targets (see [05](05-statements.md) §5.7) → unit scope
-  → used units (last-`uses`-wins). The parser builds scopes; resolution is a
-  separate pass, but it depends on **declaration position** for inline vars.
+- *Resolution order* for an unqualified identifier: see §3.3.2 - the whole
+  order in one place. The parser builds scopes; resolution is a separate
+  pass, but it depends on **declaration position** for inline vars.
+- *AST:* no dedicated node; scope tables are built from declaration nodes.
+
+### 3.3.2 Name resolution order
+
+| | |
+|---|---|
+| **Introduced** | Pascal; with, helpers, nested types and generics added their steps later |
+| **Deprecated** | — |
+| **Status** | ✅ Current |
+
+Which declaration an UNQUALIFIED identifier means. The rules for single
+constructs live in their chapters; this section is the order they fit into,
+and the general approach behind it - the one place to read before changing
+a resolver. Every step below is dcc-verified (dcc64 37.0) unless it says
+otherwise; the probes are cited in the bullets and the sections referenced.
+
+**The general approach**
+
+1. **A chain of scopes, innermost first; the FIRST scope that declares the
+   name decides.** The search does not go on to find a "better" candidate -
+   a wrong kind, a wrong type or a wrong argument list in the scope that
+   declares the name is an error there (`E2010`, `E2250`, `E2029`), not a
+   reason to look further. This is what makes most of the hazards below
+   hazards: a resolver that keeps searching after a hit, or that searches
+   in another order, binds something that compiles - and is not dcc's.
+2. **Three exceptions, each a filter on a candidate, not a reordering of the
+   chain** - the candidate is passed over and the search goes on:
+   - a TYPE of another generic arity than the reference is written with
+     (§16.1.2: a bare `TFoo` passes over `TFoo<T>`, `TFoo<Integer>` over a
+     plain `TFoo`, and a bare `Pointer` over a used unit's `Pointer<T>` to
+     the predefined type - B.4);
+   - a MEMBER the code cannot see (private of another unit, strict private
+     outside its type): the walk goes on up the ancestry, then on to the
+     unit (step 3 below);
+   - a routine marked `overload` in a UNIT scope: the search goes on through
+     the used units and merges their overloads of the name (§6.3.1) - but
+     not from a MEMBER's overload set to the unit's routines (step 3);
+   - nothing else. In particular an INSTANCE member reached where there is
+     no instance (an outer type's, step 5) is `E2124`, not passed over.
+3. **Position counts.** An inline `var` exists from its declaration on
+   (§3.1.3); a conditional's `Declared()` sees only what lies above it
+   (§1.3.2); and in a nested type's method dcc's answer can depend on what
+   the unit wrote BEFORE (step 5's lookup history).
+4. **A qualifier's head is an ordinary bare name** (§1.2.3): `A.B` looks up
+   `A` by this same order - a member, a local, a with target's member named
+   like a unit hides the unit there - and only then `B` in what `A` is.
+
+**The chain, for a name in a routine body** - from the innermost:
+
+1. **`with` targets**, the innermost `with` first and, in `with A, B do`,
+   `B` before `A` (§5.7). A target member outranks EVERYTHING below,
+   locals, parameters, an inline `var` declared in the body itself,
+   `Result` and `Self` included. A target after the first is itself looked
+   up inside the targets before it.
+2. **The routine's own block, then the enclosing routines' blocks
+   outward**: inline vars (from their declaration), locals, local
+   constants and types, parameters, `Result` in a function (a field named
+   `Result` in the method's class does not hide it - probed 2026-10-07,
+   `x-f49\order`: `Result := 5` in `function TK.R: Integer` compiles beside
+   a `Result: string` field), nested routines. A nested routine sees its
+   enclosing routine's locals ahead of Self's members (probed: an
+   enclosing method's local `V` over the field `Self.V`).
+3. **In a method - and in a routine nested in one - Self's type**: the
+   active class or record HELPER for the type first (§15.3.3: probed, a
+   helper's `Own` over the class's own `Own`), then the type's own
+   members, then its ancestors' up to TObject, each ancestor's helpers by
+   §15.3.3.
+4. **The unit's own declarations**: unit level of the implementation and
+   the interface, enum values of its enumerations (and of nested ones -
+   §2.2.4).
+5. **In a method of a NESTED type, the outer types' members**, the
+   innermost outer type first (probed: in `TA.TB.TC.M` a bare `N` is
+   `TB.N` over `TA.N`), each with its ancestry.
+6. **The used units**: the implementation section's `uses` before the
+   interface section's (probed 2026-10-07: `F` of a unit in the
+   implementation `uses` over `F` of one in the interface `uses`), and in
+   each clause the LAST entry first. An undotted entry's unit name is an
+   identifier of this step and hides a routine of that name in a used unit
+   (§1.2.3: `uses Log` makes `Log('a')` `E2029`); a dotted entry declares
+   no identifier.
+7. **`System`, then `SysInit`** (§1.2.4) - the predefined names and the
+   intrinsics are `System`'s, so EVERY step above hides them (B.4: a local
+   `Length`, a used unit's `procedure Low;`, a type `Text = Integer` of a
+   used unit).
+
+`E2003 Undeclared identifier` only when all of it misses. Outside a routine
+body - a declaration's type, a constant's value, a heritage clause - the
+chain is the same without steps 1-3 (and 5 in a nested type's declaration
+reads the outer type's members ahead of the unit's: its own scope is the
+type's - NOT dcc-verified here, see §11.4.1).
+
+**After a dot** (`A.B`), `B` is looked up in what `A` denotes, by the same
+first-hit rule: a unit's interface (plus the intrinsics for `System`, plus
+the implementation for the unit naming itself - §1.2.3); a type's or an
+instance's members - the type's active helper first (probed: `K.Own` is
+the helper's), then the type, then its ancestry - with the same visibility filter; an enum type's values.
+
+**The steps in detail**
+
+*Step 3: Self's ancestry before the unit.*
+
 - ⚠️ *In a method body the class's members - its ANCESTORS' included - come
   before the unit scope, whatever the unit declares.* dcc64 37.0, probed
   2026-10-06: an inherited routine, field or method outranks a routine, a
@@ -563,6 +663,9 @@ Where a name is visible and how long its storage lives.
   USED units). A resolver that joins only the class's own members into the
   body and falls to the unit scope binds the unit's declaration wherever the
   class itself lacks the name (System.Classes' `WriteError` for TStream's).
+
+*The visibility filter.*
+
 - ⚠️ *A member the code cannot see is passed over, not reported.* A
   descendant in another unit calling bare `Foo`, where the direct ancestor's
   `Foo` is `private`, runs the grandancestor's public `Foo`; with none, the
@@ -574,4 +677,34 @@ Where a name is visible and how long its storage lives.
   2026-10-06. The VCL relies on it: a bare `Insert` in TWinControl
   descendants of Vcl.ComCtrls and Vcl.NumberBox is not TWinControl's private
   `Insert`.
-- *AST:* no dedicated node; scope tables are built from declaration nodes.
+
+*Step 5: the outer types, and dcc's lookup history.*
+
+- ⚠️ *In a method of a NESTED type, the OUTER type's members come after the
+  unit's own declarations and before the used units.* dcc64 37.0, probed
+  2026-10-07: in `TOuter.TInner.M` (TInner's ancestry lacking the name) a
+  bare name is the unit's own routine, constant or implementation-section
+  constant over an instance method, class method or constant of TOuter
+  (`const KO = 3` in TOuter loses to the unit's `KO = 30`); with no unit
+  declaration of the name, TOuter's member - its own or an ancestor's, in
+  this unit or another - outranks a used unit's routine and a System
+  declaration (`MaxInt = 7` in TOuter is 7). An INSTANCE member of the outer
+  type reached so is `E2124 Instance member inaccessible here`, not passed
+  over - nothing to call it on.
+  - ⚠️ *Lookup HISTORY changes that answer, and the text before the method
+    decides it.* When the unit has already written the name BARE earlier,
+    outside the nested type's methods, and it resolved there to a used
+    unit's declaration or to an intrinsic, the nested method's bare name is
+    that declaration too, past the outer type's member. Probed: `SS(nil)`
+    (a routine of a used unit) in a routine above `TOuter.TInner.M` makes
+    M's bare `SS` that routine, where without it `SS` is TOuter's inherited
+    instance method and E2124; the same earlier use written `UO.SS`
+    qualified, or placed AFTER M, changes nothing. `Default(X)` is the same
+    with the intrinsic against an outer class property `Default`
+    (System.Threading's TThreadPool). The VCL depends on it:
+    `TScrollBarStyleHook.TScrollWindow.WMPaint`'s `StyleServices` is
+    Vcl.Themes' function only because Vcl.StdCtrls calls
+    `StyleServices(Self)` bare earlier - its outer type's ancestor TStyleHook
+    has an instance `StyleServices`. A resolver ranking by scope alone binds
+    the outer member there; one that rewrites the earlier calls qualified
+    turns a compiling unit into an E2124.

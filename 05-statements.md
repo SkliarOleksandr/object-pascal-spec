@@ -738,6 +738,22 @@ end;
     is `TControl.Name`, in a plain body, a `with R, C do` mixed with a same-unit
     record, and inside an anonymous method declared in the body. A record has no
     such tier: its member set is complete where it is declared.
+  - *A name NO target has resolves as it would outside the `with`* - and in a
+    method body that means Self's members, inherited ones included, before a
+    unit-level declaration of the method's unit, a predefined name or a used
+    unit's declaration (the chain of §3.3.2). dcc-verified, dcc64 37.0: in
+    `TEd = class(TCtl)`
+    (TCtl in another unit, with a property `Text`, a public field `Kind` and
+    a protected `Insert(const S: string)`), the body `with FCanvas do begin
+    S := Text; Insert('x'); Kind := 7 end` - FCanvas's class having none of
+    the three, declared in TCtl's unit or in TEd's own - reads TCtl.Text
+    (not the predefined file type `Text`), calls TCtl.Insert past a
+    unit-level `procedure Insert(A: Integer; B: string)` of TEd's unit, and
+    assigns TCtl.Kind past a unit-level `const Kind = '...'`. The trap is the
+    two-tier one again: a resolver that handles with bodies apart from
+    method bodies and only fills in names it could not bind keeps the outer
+    binding (`with Canvas do ... Text` in a control's `Paint` is the VCL's
+    own shape).
 - ⚠️ *A target after the first is resolved INSIDE the targets before it.* This
   is the point of the multi-target form and not merely a shorthand for several
   independent targets: target *k* is looked up in the scope opened by targets

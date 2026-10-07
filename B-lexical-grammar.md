@@ -318,6 +318,15 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
   Pointer; c: Cardinal): Integer;` makes `Write('x')` an `E2010`. Real RTL
   units do this: `System.TypInfo` declares `HasWeakRef`, `System.Win.Crtl`
   declares `close`, `read`, `write` and `rename`.
+  - A GENERIC type of the name hides nothing from a bare reference: arity is
+    part of a type's identity (16.1.2). dcc-verified, dcc64 37.0: with a
+    used unit declaring `Pointer<T> = record` (a collections library's
+    shape) and `Integer<T>`, `var P: Pointer;` is the predefined untyped
+    pointer and `Integer` the predefined integer type - the `Integer` inside
+    `Pointer<Integer>` too - while `Pointer<Integer>` itself is the unit's
+    generic. A plain `Pointer` declared in an EARLIER `uses` entry
+    still wins over the later unit's generic for the bare name: the search
+    goes on past a wrong-arity candidate, as 16.1.2 says for declarations.
 - ⚠️ *Boundary cases:* `string`, `file`, `set`, `nil` look like predefined names
   but are **reserved words** (B.4.1); `Boolean`/`Integer`/`True` look like
   keywords but are **identifiers**. Get these eight right and the rest follows.

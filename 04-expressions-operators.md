@@ -92,6 +92,10 @@ typed by its value instead (3.2.1).
 | `A + A`, `AC + A` (AnsiChar) | `AnsiString` | same |
 | `AC + AC` | anonymous | same |
 | `P + 1` (PChar) | `PWideChar` - the pointer's type | same |
+| `Arr + Arr`, `[S] + Arr`, `Arr + [S]` (`Arr: TArray<string>`), `Ints + [1]` | the array's type - `TArray<string>`, `TArray<Integer>` (dcc64, 2026-10-07) | same |
+| `Names + [S]` (`TNames = array of string`) | `TNames` - a named array keeps its name | same |
+| `[S] + [S]` | anonymous | same |
+| `Names + Arr`, `Names + Other` (two array types of one element) | E2010 | same |
 | `B > I`, `Bo and Bo` | `Boolean` | same |
 
 **Semantics & parsing notes**

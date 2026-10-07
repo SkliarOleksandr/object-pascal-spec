@@ -359,6 +359,15 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
   is either an intrinsic or a real `System`/`SysInit` declaration — separate
   those two by whether the unit actually declares it. This is how the ❌
   annotations above (`Pos`, `Flush`, `ChDir`/`MkDir`/`RmDir`) were settled.
+- ⚠️ *`Flush`, `ChDir`, `MkDir`, `RmDir` are declarations - and still I/O
+  checked like the file intrinsics.* A bare call binds System's routine, but
+  under `{$I+}` dcc follows it with the I/O-result check it gives `Reset` or
+  `Erase`; written `System.Flush(T)` the same routine is called with no
+  check. dcc64 37.0, probed 2026-10-06: a unit calling `Flush(T)`,
+  `ChDir(S)`, `ChDir(PC)`, `MkDir(S)` or `RmDir(S)` compiles to another
+  `.dcu` than the `System.`-qualified spelling under `{$I+}`, to the same one
+  under `{$I-}`; `IOResult` and `SetLineBreakStyle` compile alike both ways.
+  A tool that qualifies names must leave these four bare.
 - `MemoryBarrier` (procedure), `MulDivInt64` (function), and `SetTextBuf`
   (procedure) were added to the catalog by exactly that empty-uses probe:
   all three resolve in a unit with an EMPTY uses clause

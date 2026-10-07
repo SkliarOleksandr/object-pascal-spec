@@ -407,6 +407,20 @@ for var Item in MyList do Process(Item);
   The loop element type = the type of `Current`. The parser emits a `ForInStmt`;
   **semantic analysis** resolves `GetEnumerator` (including via class/record
   helpers) and the element type.
+- *Element type of an untyped `for var E in` over a collection with no named
+  type* (dcc64 37.0, 2026-10-07, read off `TypeInfo` of the element):
+  - `[a, b]` with no range is an **open array constructor**: `['.pas', '.inc']`
+    walks `string`, `['a', 'b']` `Char`, `['a', 'bc']` and `['bc', 'a']`
+    `string`, `[1, 2]` and `[1, 2, 300]` `Integer`, `[1, 3000000000]` `Int64`,
+    `[B]` over a Byte `Byte`, `[AList]` the list's class, `[True]` `Boolean`;
+    `[B, W]` over a Byte and a Word an anonymous subrange (`:2`); `[1.5, 2]`
+    is E2624 (no common element type);
+  - a range makes it a **set constructor**, and the loop walks its base type:
+    `['a'..'c']` `AnsiChar` (a set of Char is a set of AnsiChar), an enum
+    range the enum;
+  - `+` joins arrays: `[ADir] + APaths`, `APaths + [ADir]`, `APaths + APaths`
+    and `[ADir] + ['q']` over `APaths: TArray<string>` all walk `string`. A
+    static array does not join a dynamic one (`CArr + APaths` is E2008).
 - *Distinguish from 5.5.1* by the `in` keyword vs. `:=`.
 - ⚠️ *Scope of inline element:* same rule as the 5.5.1 counter — the `for var E`
   element is scoped to **the loop statement**, not the enclosing block; sibling

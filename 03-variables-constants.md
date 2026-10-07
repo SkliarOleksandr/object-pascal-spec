@@ -631,7 +631,9 @@ otherwise; the probes are cited in the bullets and the sections referenced.
    with the type's members in step 3: in a method body of `TGen<T>`, a
    unit-level type `T` declared above the body is what `T` means (UG,
    UG2 - see the declaration rules below). A generic METHOD's own type
-   parameters were not probed.
+   parameters do not: with a unit `U = Int64` above, `TK.Sz<U>`'s `var L:
+   U` and `Sz2<U>(A: U)`'s `A` are the parameter (2 bytes for `Sz<Word>`;
+   `x-f53probe` P4).
 6. **The used units**: the implementation section's `uses` before the
    interface section's (probed 2026-10-07: `F` of a unit in the
    implementation `uses` over `F` of one in the interface `uses`), and in
@@ -674,6 +676,37 @@ dcc64 37.0, probed 2026-10-07 (`x-f52\probe` UQ, UQ4, UR):
   the unit's `T = Int64` declared BELOW TGen, `F` is the parameter (2 bytes
   for `TGen<Word>`) and a method body written below that declaration still
   takes the unit's `T` (8 bytes) - UG2.
+- the type's own members still come BEFORE the used units and System
+  (`x-f53probe` P1: with a used unit's `TX = Int64` and `KX = 10`,
+  TOuter's own `TX = Byte`, `KX = 1` and even a nested `Integer = Word`
+  are what its field types and constants name) - only the unit's own
+  declarations made so far are put ahead of them;
+- the type's ancestors being out of reach, a USED unit's declaration is
+  what such a name means: `G: TY` and `const C = KB` in `TDer =
+  class(TBase)` take a used unit's `TY = Int64` and `KB = 70` over TBase's
+  `TY = Byte` and `KB = 7`, whichever order the `uses` lists them in (P8);
+  while a type NESTED in TDer takes TBase's - an outer type's ancestry
+  ranks before the used units (P11: `TDer.TSub`'s `S: TY` is TBase's
+  Byte with the used unit's `TY = Int64` beside it);
+- "the same heading repeated on the implementation" is literal too: a
+  unit-level `TX = Int64` declared between `TOuter = class type TX = Byte;
+  procedure P(A: TX); end` and `procedure TOuter.P(A: TX)` - after TOuter
+  in the interface, or in the implementation - makes the implementation's
+  `A` the unit's Int64 against the declaration's Byte: `E2037 Declaration
+  of 'P' differs from previous declaration` (P3);
+- records alike (`TR = record type TX = Byte; var F: TX; end` below a unit
+  `TX = Int64`: `F` is 8 bytes), and so are a parameter's DEFAULT value
+  (`function D(A: Integer = KX)` is 10), a property's TYPE (`property PP:
+  TX read FF` is an Int64; an ancestor's `TY` there is `E2003`) and the
+  values of its `index` and `default` specifiers (`index KX`, `default KX`
+  are 10) - P5, P9, P10;
+- but NOT the names of a property's ACCESSORS - `read`, `write`,
+  `stored`: those are member lookups, the type's own and its ancestors'
+  members first (`property P: Integer read F` is the field `F` with a
+  unit variable `F` declared above the type; `read FB` naming an
+  ancestor's field compiles) - P6, P7.
+  The same for the target of a method resolution clause (`function
+  IGet.Get = GetIt;` names an inherited `GetIt` - `x-f53ixture` PE).
 
 **After a dot** (`A.B`), `B` is looked up in what `A` denotes, by the same
 first-hit rule: a unit's interface (plus the intrinsics for `System`, plus

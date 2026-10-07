@@ -435,6 +435,12 @@ var C: TGrid.TCell;     // qualified access
   is then left with NO ancestry, so its property specifiers (`read GetDuration`)
   and its methods' inherited constants fail too — 6 false undeclared-identifiers
   per Skia unit from a single unresolved heritage reference.
+  The outer classes' members, their ancestors' included, rank there AFTER the
+  unit's own declarations made so far and BEFORE the used units: `S: TY` in
+  `TDer.TSub` is TBase's nested `TY` with a used unit's `TY` beside it (dcc64
+  37.0, probed 2026-10-07). The NESTING is what opens the ancestry: TDer's own
+  declaration does not see TBase's members at all (`E2003` - §3.3.2,
+  "Outside a routine body").
 - ⚠️ *The body of such a method sees the members of EVERY qualifier segment —
   and of each segment's ANCESTORS.* Not just the innermost class's own
   inheritance chain: `TParallel.TLoopState32.TLoopStateFlag32.ShouldExit`

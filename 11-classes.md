@@ -441,7 +441,10 @@ var C: TGrid.TCell;     // qualified access
   (`System.Threading.pas`) freely uses `TLoopStateFlagSet`, a private nested
   type of `TLoopState` — the ancestor of the MIDDLE segment (`TLoopState32 =
   class sealed(TLoopState)`). Precedence stays innermost-first: the inner
-  segment's own ancestry is searched before the outer segments'. A resolver
+  segment's own ancestry is searched before the outer segments', and the
+  outer segments come only after the unit's own declarations made so far
+  (§3.3.2, step 5: the unit's `KO = 30` over the outer type's `KO = 3`;
+  dcc64 37.0, probed 2026-10-07). A resolver
   that walks only the innermost segment's ancestors mis-reports these
   (16 false undeclared-identifiers in that one RTL unit).
   One refinement (dcc32 37.0-probed): the OUTER segments contribute name

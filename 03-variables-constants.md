@@ -620,7 +620,18 @@ otherwise; the probes are cited in the bullets and the sections referenced.
    §2.2.4).
 5. **In a method of a NESTED type, the outer types' members**, the
    innermost outer type first (probed: in `TA.TB.TC.M` a bare `N` is
-   `TB.N` over `TA.N`), each with its ancestry.
+   `TB.N` over `TA.N`), each with its ancestry. Step 4 counts only what the
+   unit has declared ABOVE the reference: a unit constant or routine
+   declared below the method does not hide the outer member (probed
+   2026-10-07, `x-f52\probe` UP: `KA` is TOuter's with the unit's `KA`
+   after the method), while one declared between the outer type and the
+   method does - in the method's `var` section too (UQ3: `L: TX` is the
+   unit's `TX = Integer` declared after TOuter, not `TOuter.TX = string`).
+   A GENERIC type's own type parameters rank at this step as well, not
+   with the type's members in step 3: in a method body of `TGen<T>`, a
+   unit-level type `T` declared above the body is what `T` means (UG,
+   UG2 - see the declaration rules below). A generic METHOD's own type
+   parameters were not probed.
 6. **The used units**: the implementation section's `uses` before the
    interface section's (probed 2026-10-07: `F` of a unit in the
    implementation `uses` over `F` of one in the interface `uses`), and in
@@ -633,11 +644,36 @@ otherwise; the probes are cited in the bullets and the sections referenced.
    `Length`, a used unit's `procedure Low;`, a type `Text = Integer` of a
    used unit).
 
-`E2003 Undeclared identifier` only when all of it misses. Outside a routine
-body - a declaration's type, a constant's value, a heritage clause - the
-chain is the same without steps 1-3 (and 5 in a nested type's declaration
-reads the outer type's members ahead of the unit's: its own scope is the
-type's - NOT dcc-verified here, see §11.4.1).
+`E2003 Undeclared identifier` only when all of it misses.
+
+**Outside a routine body - in a structured type's DECLARATION** (a field's
+type, a class constant's value, a method's parameter and result types, and
+the same heading repeated on the method's implementation) the chain is
+steps 4 to 7 with the TYPE's own members in step 5's place - after the
+unit's declarations made so far, not before them as in a method body.
+dcc64 37.0, probed 2026-10-07 (`x-f52\probe` UQ, UQ4, UR):
+
+- with a unit-level `TX = Int64` and `KX = 10` above `TOuter = class type
+  TX = Byte; const KX = 1; C = KX; var F: TX; procedure P(A: TX); end`,
+  `F` is an Int64, `C` is 10 and `P`'s `A` an Int64 (declaration and
+  implementation heading alike), while a local `L: TX` in a method BODY of
+  TOuter is the Byte; without the unit's declarations all are TOuter's;
+- a nested type's declaration the same: `TInner = class F: TX; end` inside
+  TOuter takes the unit's `TX` declared above TOuter, TOuter's `TX` when
+  the unit's is declared after TOuter;
+- the type's ANCESTORS' members are not visible from its own declaration at
+  all: in `TDer = class(TBase)`, a field `G: TX` or a constant `C = KB`
+  naming TBase's nested type or constant is `E2003` (the method body sees
+  them - step 3), while a type NESTED in TDer sees them (§11.4.1: `TSub =
+  class F: TX; end` inside TDer is TBase's `TX`);
+- a GENERIC type's parameters rank there too: a unit-level `T = Int64`
+  declared above `TGen<T> = class F: T; end` makes `F` an Int64 for
+  `TGen<Word>` - in the method bodies as well (`var L: T` is 8 bytes), so a
+  type parameter named like a unit type declared above the generic is that
+  unit type everywhere in it (`x-f52\probe` UG). "So far" is literal: with
+  the unit's `T = Int64` declared BELOW TGen, `F` is the parameter (2 bytes
+  for `TGen<Word>`) and a method body written below that declaration still
+  takes the unit's `T` (8 bytes) - UG2.
 
 **After a dot** (`A.B`), `B` is looked up in what `A` denotes, by the same
 first-hit rule: a unit's interface (plus the intrinsics for `System`, plus

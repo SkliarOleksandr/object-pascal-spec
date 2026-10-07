@@ -549,4 +549,29 @@ Where a name is visible and how long its storage lives.
   enclosing scopes → `with` targets (see [05](05-statements.md) §5.7) → unit scope
   → used units (last-`uses`-wins). The parser builds scopes; resolution is a
   separate pass, but it depends on **declaration position** for inline vars.
+- ⚠️ *In a method body the class's members - its ANCESTORS' included - come
+  before the unit scope, whatever the unit declares.* dcc64 37.0, probed
+  2026-10-06: an inherited routine, field or method outranks a routine, a
+  constant or a function of the method's own unit (`Kind = 0` with an
+  inherited `Kind: Integer` beside a unit constant `Kind = 'x'` compiles), and
+  `ToString` in a method reaches TObject's over a unit constant `toString`; a
+  nested class's ancestor's member outranks the OUTER type's own member of the
+  name. An `overload` on the inherited member does not take the search on to
+  the unit's routines: `Pick(5)` against an inherited `Pick(A: Boolean);
+  overload` beside a unit-level `Pick(A: Integer); overload` is E2250, the
+  ancestor in the same unit or another (contrast 6.3.1's search on through the
+  USED units). A resolver that joins only the class's own members into the
+  body and falls to the unit scope binds the unit's declaration wherever the
+  class itself lacks the name (System.Classes' `WriteError` for TStream's).
+- ⚠️ *A member the code cannot see is passed over, not reported.* A
+  descendant in another unit calling bare `Foo`, where the direct ancestor's
+  `Foo` is `private`, runs the grandancestor's public `Foo`; with none, the
+  unit's or a used unit's `Foo` - never E2361. A `strict private` member is
+  passed over in a descendant of the same unit too (plain `private` is seen
+  there - ch.11's friend rule). An overload set is passed over only when none
+  of it is visible: TThread's `Synchronize` leads with a private overload and
+  a descendant's `Synchronize(M)` calls the protected one. dcc64 37.0, probed
+  2026-10-06. The VCL relies on it: a bare `Insert` in TWinControl
+  descendants of Vcl.ComCtrls and Vcl.NumberBox is not TWinControl's private
+  `Insert`.
 - *AST:* no dedicated node; scope tables are built from declaration nodes.

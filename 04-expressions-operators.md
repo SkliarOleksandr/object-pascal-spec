@@ -284,6 +284,19 @@ Inc(P);         // pointer math when enabled
   qualifier when the expression sits under `@`.
 - `{$POINTERMATH ON}` enables `+`/`-`/`[]` on typed pointers (treating them
   array-like) — a directive-gated semantic; `PByte`/`PAnsiChar` enable it locally.
+  - ⚠️ *`P[I]` there is `(P + I)^`: its type is the POINTEE, whatever that is* -
+    a scalar (`PChByte(A)[1]` is a Byte), and a RECORD as well: spring4d's
+    `{$POINTERMATH ON} PSlice = ^TSlice` makes `p[n].len` a field of TSlice
+    (dcc64 37.0, 2026-10-08). A resolver must not stop at "not an array".
+  - ⚠️ *The character pointers have no declaration to chase.* `PChar`,
+    `PWideChar` and `PAnsiChar` are compiler-provided (System.pas declares
+    none of them), yet `P^` and `P[I]` are a `Char` / `WideChar` /
+    `AnsiChar`, and a helper for that type applies: System.SysUtils'
+    `FormatPtr^.IsNumber`, System.Classes' `Result^.IsLowSurrogate`,
+    System.StrUtils' `Result[I].IsLetterOrDigit` read TCharHelper (dcc64
+    37.0, 2026-10-08: `P^.IsDig`, `W^.IsDig`, `A^.Code` and `P[1].IsDig`
+    against `record helper for Char` / `for AnsiChar` compile). A resolver
+    seeding these names must seed their pointee with them.
 - ⚠️ *Do not confuse that with the OLD, unconditional rule:* for a pointer to an
   **array**, the `^` may simply be omitted before `[`, and equally before `.` for
   a pointer to a record. `P[I]` means `P^[I]` and `P.Field` means `P^.Field`,

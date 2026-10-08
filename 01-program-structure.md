@@ -159,7 +159,13 @@ end.
   (`unit NS.U;` compiles `var U`, `var NS` and `type U = class end`;
   `unit NS.Sub.U;` compiles `var Sub`). The name stays usable as a qualifier
   of the unit's own names (`U.P` in U's initialization). dcc-verified, dcc64
-  37.0, 2026-09-27. This is the other side of §1.2.1's hiding rule: a
+  37.0, 2026-09-27. Such a qualifier reaches the IMPLEMENTATION's declarations
+  made so far as well as the interface's, and never a member of the enclosing
+  type: `Xq.Own.QoHash(1, 2)` in a method of a class with its own `QoHash`
+  calls an implementation-only routine, `Xq.Own.QoVer` an implementation
+  constant past a same-named static method (Vcl.Graphics'
+  `Vcl.Graphics.GetHashCode(ResData, ResDataSize)`, System.Character's
+  `System.Character.UnicodeDataVersion` - dcc64 37.0, 2026-10-08). This is the other side of §1.2.1's hiding rule: a
   declaration may hide a USED unit's name, never its own module's. Where it
   bites in practice: the Form Designer names a form's or data module's global
   variable after its `Name`, so a data module named after its own unit

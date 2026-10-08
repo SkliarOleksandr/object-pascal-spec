@@ -138,6 +138,18 @@ ForwardOrExternal = "forward" ";" | ExternalDecl ;
 > or resolver may depend on; a future compiler version or optimization level is
 > free to evaluate in a different order.)
 
+> ⚠️ **A routine's heading does not see the routine's own names.** The type
+> slots of the heading - every parameter's type, a default value, the result
+> type - are looked up OUTSIDE the routine: neither a parameter nor a local
+> declaration hides a type there. `function F1(tfoo: Integer): TFoo`,
+> `procedure F2(tfoo: Integer; Y: TFoo)`, `function F3(const tfoo: TFoo):
+> TFoo`, a local `var tfoo: Integer` beside a result type `TFoo`, and
+> spring4d's `class operator Implicit(const specification:
+> ISpecification<T>): Specification<T>` and `class function
+> Mock.From<T>(...): Mock<T>` with a local `mock: TMock` all compile. Only the
+> routine's own generic parameters (`M<U>(...): U`) are in reach there.
+> (dcc64 37.0, probed 2026-10-08.)
+
 ### 6.2.1 Value parameters
 
 | | |

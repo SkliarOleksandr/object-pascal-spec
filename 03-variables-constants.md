@@ -770,7 +770,13 @@ the helper's), then the type, then its ancestry - with the same visibility filte
     instance method and E2124; the same earlier use written `UO.SS`
     qualified, or placed AFTER M, changes nothing. `Default(X)` is the same
     with the intrinsic against an outer class property `Default`
-    (System.Threading's TThreadPool). The VCL depends on it:
+    (System.Threading's TThreadPool), and so is a CLASS method of the outer
+    type's ancestor - which compiles either way, so the difference shows at
+    run time: `LaCS` is the ancestor's class function (7) in a nested method
+    with no earlier bare use, a used unit's `function LaCS: Word` (1000)
+    after `LaCS;` in a routine above; `Length('abc')` the ancestor's `class
+    function Length` before a bare `Length('ab')` in a routine, the
+    intrinsic (3) after it (dcc64 37.0, 2026-10-08). The VCL depends on it:
     `TScrollBarStyleHook.TScrollWindow.WMPaint`'s `StyleServices` is
     Vcl.Themes' function only because Vcl.StdCtrls calls
     `StyleServices(Self)` bare earlier - its outer type's ancestor TStyleHook

@@ -397,6 +397,13 @@ type
 
 - ⚠️ Helpers **cannot add instance fields** (no per-instance storage); only methods,
   class vars, properties (backed by existing state). Enforce in the type-checker.
+- ⚠️ *`Self` in a helper's method is a value of the EXTENDED type*, not of the
+  helper (which is no value type at all): `var S := Self` in a `class helper
+  for TList` method is a TList, `Self.Names[I]` reads the class's property and
+  `Self.Tag` in a `record helper for TRec` the record's field; the helper's own
+  members are still reached through it (`Self.Own`), as through any value of
+  that type while the helper is active (dcc64 37.0, 2026-10-08; spring4d's
+  TStringsHelper, TValueHelper).
 - ⚠️ *A class helper may INHERIT from another helper* (dcc-verified, dcc32
   37.0: a helper `for T` declared `(Ancestor)` for another helper of the same
   `T` resolves the ancestor's members through the descendant helper) — that is

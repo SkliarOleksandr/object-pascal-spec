@@ -426,6 +426,22 @@ type
   *Implementation note:* a resolver that files operators in the member name
   table must not let one clash with, chain onto, or shadow a same-named
   member - the member owns the name.
+- *At the use site* the candidates for `A op B` are the operators of the
+  matching name declared by EITHER operand's type: `A + B2` over a `TA` and a
+  `TB2` calls `TB2.Add(const A: TA; const B: TB2): TB2` when only TB2 declares
+  one, and `F * V` (a Single and a record) finds the record's
+  `Multiply(const F: Single; const V: TVec)`. Among overloads the operands
+  choose as in a call - a Byte operand takes `Add(TC, Integer)` over `Add(TC,
+  Double)`, a Single the Double one - and overloads may differ in result type
+  (`Multiply(TVec, TVec): Single` beside `Multiply(TVec, Single): TVec`). The
+  expression's type is the chosen operator's result type, so `(B - A).Len` is a
+  member access on that result. `and`/`or`/`xor` map to `LogicalAnd`/
+  `BitwiseAnd` (etc.), unary `-`/`+`/`not` to `Negative`/`Positive`/
+  `LogicalNot`. (dcc64 37.0, probed 2026-10-08.)
+  *Implementation note (PasTree):* the result is typed only when the
+  best-fitting candidates agree on it; an unknown operand or a tie between
+  results (the Byte case above, scored like the Single one) leaves the
+  expression untyped rather than guessed.
 - `Implicit`/`Explicit` define conversions to/from other types — they drive
   implicit/explicit cast resolution.
 - ⚠️ *`Implicit`/`Explicit` may overload by RESULT TYPE ALONE* — a deliberate

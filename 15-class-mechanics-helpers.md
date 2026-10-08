@@ -478,6 +478,15 @@ type
   `TEditMask = type string` (System.MaskUtils) has its own helper, and treating
   that as a string helper made ordinary `SomeString.Substring` unresolvable
   throughout FMX.MaskEdit.
+- ⚠️ *...and the converse: `Base`'s helper is not `T`'s.* With
+  `System.SysUtils` used, `M.Length` on `M: TMy = type string` with no helper
+  of its own is `E2018` (TStringHelper does not apply), and in a method of a
+  helper for such a `T` a bare `Length(Self)` is `System.Length`, not
+  TStringHelper's - FMX.MaskEdit.Types' TEditMaskHelper relies on it. A
+  class helper's method, by contrast, does reach the members of a helper for
+  an ANCESTOR of its extended class (bare `Z` in a helper for `TD` runs a
+  helper for `TB`'s `Z` ahead of a unit-level `Z`). dcc64 37.0, probed
+  2026-10-08.
 - Same no-instance-fields restriction as class helpers.
 - Same private-access restriction as class helpers (§15.3.1): `strict private`
   members of the extended record are unreachable from a record helper's

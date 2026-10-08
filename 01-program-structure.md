@@ -430,6 +430,14 @@ Every unit's interface scope is seeded with **two** units it never names in a
   this order for BOTH plain references and inherited-member lookups inside
   method bodies (both are ordinary last-resort scopes, not just an
   expression-level special case).
+- Both names also QUALIFY with no `uses` entry: `SysInit.HInstance` is
+  written exactly like `System.TObject` - Vcl.Dialogs and FMX.Dialogs.Win
+  pass `SysInit.HInstance` where a with target's field `hInstance` hides the
+  bare name, and Vcl.Controls' `TDragObject.Instance` returns it (both ship
+  and compile with dcc64 37.0). The qualifier is no symbol of the unit: a
+  tool that lists "names bound to nothing" must take `SysInit` for a unit
+  name, like `System` and the unit's own name (PasTree's resolver rung,
+  2026-10-08).
 - ⚠️ *`System.` qualifies COMPILER INTRINSICS too, though nothing declares
   them* (dcc32 37.0-probed): `System.Delete(S, 1, 1)`, `System.Length(S)`
   and `System.Inc(N)` all compile, exactly like their bare spellings —

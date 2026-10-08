@@ -64,6 +64,13 @@ type
   the array through a NAMED pointer type answers nothing for the inline
   spelling, and every member reached through such an indexed `with` reads as
   undeclared.
+- ⚠️ *Selecting a member through a pointer works WITHOUT the `^` too* -
+  `P: ^TRec; ... P.Id` means `P^.Id` for a pointer to a record or an
+  `object`, whether the pointer type is named or written inline on the
+  variable (System.Zip's `pField: ^TExtraField`, then `pField.FieldId`), and
+  under `{$X-}` as well: it is not part of the extended syntax (dcc64 37.0,
+  probed 2026-10-08). A resolver must look the member up in the POINTEE; for
+  the inline spelling the pointee exists only as the declaration's type node.
 - *AST:* `PointerType { targetType }`.
 
 ### 10.1.2 Untyped `Pointer`

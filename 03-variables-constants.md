@@ -594,6 +594,12 @@ otherwise; the probes are cited in the bullets and the sections referenced.
 4. **A qualifier's head is an ordinary bare name** (§1.2.3): `A.B` looks up
    `A` by this same order - a member, a local, a with target's member named
    like a unit hides the unit there - and only then `B` in what `A` is.
+   A head spelling the unit's OWN name makes `B` a unit-level declaration
+   of either section made so far, never a member of the enclosing type
+   (§1.1, the module-name bullet).
+5. **A routine's heading is looked up outside the routine** (§6.2): the
+   parameter types, defaults and result type see neither the routine's
+   parameters nor its locals - only its own generic parameters.
 
 **The chain, for a name in a routine body** - from the innermost:
 

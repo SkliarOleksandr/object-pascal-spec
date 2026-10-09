@@ -659,6 +659,18 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   swallowed at the top of the directive but a hard **E2015 Operator not
   applicable** the moment it has to feed `and`/`or`: `{$IF X >= '1.0'}`
   compiles and is False, `{$IF (X >= '1.0') and True}` does not compile.
+- *`Length` of a static array* is a constant in `{$IF}` even though the array
+  is not: `Length(V)` of a `var V: array[0..7] of Byte` and of a typed
+  constant array both evaluate exactly, although `V` alone, like any `var` or
+  typed constant, does not resolve (above). The bounds are constant
+  expressions of their own, evaluated in full - another constant, `SizeOf`,
+  `Length`: `var VS: array[0..SizeOf(TR) - 1] of Byte` with `TR = record A, B:
+  Integer; end` makes `{$IF Length(VS) = 8}` True, and `var VL: array[0..
+  Length(VS) - 1] of Byte` makes `Length(VL)` 8 too. A name in a bound
+  resolves by position like any other: `uses U2; var A: array[0..N] of Byte;
+  const N = Length(A);`, with U2 declaring `N = 3`, binds the bound to U2's
+  `N` (the own one is below it), so the own `N` is 4 and `{$IF N > 3}` is
+  True (probed, dcc64 37.0, 2026-10-08).
 - ⚠️ *`SizeOf` of an unresolvable type is `4`* — a real value, not an abort, so
   `{$IF SizeOf(TNoSuchType) <> 32}` is True while `{$IF SizeOf(TNoSuchType) = 32}`
   is False. `Declared(X)`/`Defined(X)` likewise answer a plain False and never

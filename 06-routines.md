@@ -606,7 +606,11 @@ CallDirective = CallConv | "far" | "near" | "varargs" | "overload"
   do `procedure P; platform deprecated` + `procedure`/`begin`, and
   `function F; external shell32 name 'X'` + newline + the next `function`.
   A parser must treat any following declaration keyword (or body `begin`) as a
-  valid terminator for a directive run and for the `external` clause.
+  valid terminator for a directive run and for the `external` clause -
+  `resourcestring` included: `function GetTick: Cardinal; external
+  'kernel32.dll' name 'GetTickCount'` + newline + `resourcestring` compiles in
+  both sections (dcc64 37.0, probed 2026-10-10). A `[` is not one: dcc reads a
+  following `[..]` as an index of the clause's last expression.
 - `safecall` additionally wraps the routine in HRESULT/exception marshalling (COM).
 - Mostly codegen, but the parser must accept them in the directive list after a
   heading.

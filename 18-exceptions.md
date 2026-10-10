@@ -13,7 +13,8 @@ B](B-lexical-grammar.md). These are the `TryStmt`/`RaiseStmt` deferred from
 TryStmt     = "try" StatementList ( ExceptPart | FinallyPart ) "end" ;
 FinallyPart = "finally" StatementList ;
 ExceptPart  = "except" ( StatementList
-                       | ExceptionHandler { ExceptionHandler } [ "else" StatementList ] ) ;
+                       | ExceptionHandler { ExceptionHandler } [ "else" StatementList ]
+                       | "else" StatementList ) ;
 ExceptionHandler = "on" [ Ident ":" ] TypeRef "do" Statement ";" ;
 RaiseStmt   = "raise" [ Expression [ "at" Expression ] ] ;
 ```
@@ -48,6 +49,13 @@ end;
 - ⚠️ *Two `except` shapes:* either a bare `StatementList` (catch-all) **or** a list
   of `on … do` handlers (optionally with `else`). The parser must decide by
   looking for the `on` keyword as the first token of the `except` body.
+- ⚠️ *The handler list may be empty before its `else`:* `except else S end`
+  compiles and runs S for any exception - the catch-all again, written as an
+  `else` with no handler before it (`except else end` too). A catch-all
+  statement list cannot take an `else`: `except S; else T end` is `E2153 ';'
+  not allowed before 'ELSE'`, also when S is an `if` without `else`, and
+  `except S else T end` is `E2029 'END' expected but 'ELSE' found` (dcc64
+  37.0, probed 2026-10-10).
 - ⚠️ `try` blocks **cannot** have both `except` and `finally` directly — nest them
   (`try try … finally … end except … end`). Reject a single `try` with both parts.
 - *AST:* `TryExceptStmt { body, handlers[], elseBody?, catchAll? }`.

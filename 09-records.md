@@ -80,6 +80,12 @@ type
   expression?" answers with a symbol, and without one the array's element type
   simply does not exist. The synthetic symbol must stay unnamed and unbound, so
   nothing can resolve to it or be shadowed by it.
+- ⚠️ *A field missing its `;` before the next one is an error, not a run-on.*
+  The `;` may only be left out before the `end` (`A: Integer end`); in
+  `A: Integer` NEWLINE `B: Integer;` dcc reads `B` where a hint directive may
+  stand after the type and reports `E1030 Invalid compiler directive: 'B'` - in
+  a record, a class and a `var` section alike (dcc64 37.0, probed 2026-10-10).
+  A parser recovering from it keeps `B` as the next field.
 - *AST:* `RecordType { fields[], members[], variantPart? }`.
 
 ### 9.1.2 `packed` records & alignment

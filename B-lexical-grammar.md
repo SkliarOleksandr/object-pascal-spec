@@ -421,6 +421,15 @@ const
   the prefix — treat such cases as lex errors.
 - *Value type:* the literal's type is the smallest predefined integer type that
   holds it (up to `Int64`/`UInt64`); see ch.02 for the integer type ladder.
+- *Hex above `High(Int64)`:* as a constant `$FFFFFFFFFFFFFFFF` is a `UInt64`
+  (`Writeln` prints 18446744073709551615, `SizeOf` is 8), but as a **subrange
+  bound** the same literal is the `Int64` of the same bits:
+  `$FFFFFFFFFFFFFFFF..0` is `-1..0` and compiles, `0..$8000000000000000` is
+  `E2011 Low bound exceeds high bound`. A unary minus over such a literal:
+  `-$8000000000000000` is `Low(Int64)`, as a constant and as a bound;
+  anything larger, `-$FFFFFFFFFFFFFFFF`, is `E2099 Overflow in conversion or
+  arithmetic operation`. (dcc32/dcc64 37.0, probe: those bounds in `type`
+  declarations, and the constants printed.)
 - *AST:* `IntLit { value, radix, rawText }` (keep `rawText` for fidelity).
 
 ### B.5.2 Real (floating-point) literals

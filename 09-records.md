@@ -131,6 +131,14 @@ type
   own** alignment, not its size, and that alignment was fixed at ITS
   declaration site — a 9-byte `$A1` record inside an `$A8` record sits at
   offset 1, giving 10.
+
+  No type reaches 2 GB: a size of `High(Integer)` bytes is the largest, on
+  dcc64 as on dcc32. `array[0..$7FFFFFFE] of Byte` compiles,
+  `array[0..$7FFFFFFF] of Byte` and a record of two `array[0..$3FFFFFFF] of
+  Byte` fields (exactly 2^31) are `E2100 Data type too large: exceeds 2 GB`.
+  So a layout walk can keep its running offset in an `Integer` once it
+  refuses any step that would pass `High(Integer)` - such a type does not
+  exist to be measured.
 - ⚠️ *The alignment CAP is a ceiling, not a forced alignment, and it is
   positional.* `{$A1|2|4|8|16}`, the long `{$ALIGN 1|2|4|8|16}`, and
   `{$A-}`/`{$A+}` (= 1 and 8) all set it, and a unit routinely brackets one

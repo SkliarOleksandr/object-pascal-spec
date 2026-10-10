@@ -217,6 +217,12 @@ type
   `array[(spA = 0, spB = 10, spC = 99)] of Integer` and `set of` that type. What
   can still fail is the `set of` *cardinality* rule — an explicit value above 255
   is `E2028`, §2.4.1 — not sparseness.)
+- ⚠️ *An explicit value is cut to its low 32 bits, silently.* dcc64 37.0
+  compiles `(h0 = $100000005)`, `(e0 = -$8000000000000000)` and
+  `(j0 = $80000000)` with no diagnostic, and `Ord` of them prints 5, 0 and
+  -2147483648; `set of` the first two is legal, since their values ARE 5 and
+  0. So a checker reads the value as the signed 32-bit integer of its low
+  bits before applying the cardinality rule.
 - ⚠️ *Scope of element names:* by default enum element identifiers are injected
   into the **enclosing scope** (so `Clubs` is directly visible). With
   `{$SCOPEDENUMS ON}` they must be qualified (`TSuit.Clubs`). This changes
@@ -454,6 +460,14 @@ end;
     where the target makes them 64-bit**: the same `set of NativeInt` is `E2028`
     under `dcc32` and `E2001` under `dcc64`. So the code follows the WIDTH, not
     the spelling, and a checker needs the target to answer.
+    A **subrange** with literal bounds follows the same width rule: its host
+    type is 64-bit, and the base `E2001`, when the bounds fit neither
+    `Integer` nor `Cardinal` together - `set of 0..$FFFFFFFF` and
+    `set of -2147483648..0` are `E2028`; `set of 0..$100000000`,
+    `set of -1..$FFFFFFFF` and `set of -2147483649..0` are `E2001`, and so is
+    `set of -$8000000000000000..0` (a hex bound above `High(Int64)` reads as
+    its `Int64` bits, B.5.1). Probed on dcc32 and dcc64 37.0, the same
+    answers.
   - the `*Bool` interop types are `E2028` — including `ByteBool`, which is a
     single byte. `set of Boolean` is fine, so this is about the type and not
     about its size.

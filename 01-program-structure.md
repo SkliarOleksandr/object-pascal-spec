@@ -307,6 +307,20 @@ Unit names may be dotted (`System.SysUtils`); the leading segments form a
 5. (Tolerated by some toolchains, not by dcc) the trailing segment alone —
    pre-namespace file layouts where `System.SysUtils` lived in `SysUtils.pas`.
 
+⚠️ **The program's `in` path locates the unit for every importer, through
+every spelling that reaches it.** A unit the program file names with
+`X in 'path'` (or the project's file list names) IS that file for the whole
+project, and each candidate spelling of steps 2-4 is checked against those
+units before the file lookup for that candidate: with
+`Acme.Forms in 'patched\Acme.Forms.pas'` in the program and another
+`Acme.Forms.pas` on the search path, a unit writing `uses Forms` under
+`-NSAcme` compiles against the patched copy, `uses Foo.Bar` under `-NSAcme`
+reaches a pinned `Acme.Foo.Bar` with no `Foo.Bar` anywhere, and `uses Foo`
+under `-AFoo=Acme.Forms` reaches the pinned copy too. The order still holds:
+an EARLIER candidate with a file of its own wins over a later one that is
+pinned - with `Forms.pas` on the search path, `uses Forms` is that unit and
+the pinned `Acme.Forms` is not reached (dcc64 37.0, probed 2026-10-10).
+
 An unresolvable name is fatal: `F1027 Unit not found`. A project that builds
 therefore has zero of them, which makes the count a usable health metric for
 any tool that reads a project.

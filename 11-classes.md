@@ -540,6 +540,8 @@ ObjectType = "object" [ "(" Ancestor ")" ] { ClassSection } "end" ;
   identifier` (dcc64 37.0, probed 2026-10-10, `probe-b18` P1). A resolver
   that climbs an object's ancestry must stop at the last written ancestor
   instead of hopping to TObject.
+- *Except overriding:* a descendant object overrides with `virtual`, and
+  `override` is not a directive in an object (12.2.1, `probe-b19` Q3, Q4).
 - *Everything else about the ancestry is a class's* (12.1.1, 12.1.2, 13.x),
   and a resolver that handles `class` and `interface` heritage but not
   `object` stops at the first object (probe-b18 P4, dcc64 37.0 compiles all

@@ -48,7 +48,13 @@ type
 - ⚠️ *Single inheritance only* for classes (multiple inheritance is achieved via
   interfaces, ch.14). The ancestor list `( Ancestor, IFoo, IBar )` has **at most
   one class** (first position) followed by interfaces.
-- Omitted ancestor ⇒ `TObject`.
+- Omitted ancestor ⇒ `TObject`. Only the WHOLE list can be omitted: a list
+  that starts with an interface is `E2021 Class type required`
+  (`TFoo = class(IInterface)`, dcc64 37.0, `probe-b19` Q5; the same body
+  under `class(TObject, IInterface)` compiles) - the first entry of a
+  class's heritage list is always its ancestor. A tool indexing descendants
+  must still give a class with NO list its implicit TObject edge: that is
+  the most common class there is.
 - ⚠️ *An INHERITED member outranks a unit-level routine of the same name inside a
   method body* — including one in the method's OWN unit, and including one
   declared in the `implementation` section right next to it. dcc-verified on
@@ -151,6 +157,29 @@ virtual method while remaining polymorphic.
   `dynamic` signature exactly; otherwise it is an error (use `reintroduce`/
   `overload` to deliberately diverge). Resolver checks against the ancestor VMT.
 - A call through a base-typed reference dispatches to the most-derived `override`.
+- ⚠️ *Which slot an `override` joins - the chain a "find overrides" tool
+  walks* (dcc64 37.0, probed 2026-10-10, `probe-b19` Q1, Q2):
+  - a descendant that redeclares the name `virtual` (or `dynamic`) without
+    `override` starts a NEW slot (W1010 `hides virtual method of base
+    type`), and so does `reintroduce; virtual`: with `TA.Draw; virtual`,
+    `TB = class(TA) Draw; virtual` and `TC = class(TB) Draw; override`, a
+    `TA`-typed TC runs TA.Draw and a `TB`-typed one TC.Draw - TC overrides
+    TB's slot, not TA's;
+  - a redeclaration with no directive hides the slot for good below it:
+    an `override` in its descendant is `E2170 Cannot override a non-virtual
+    method`;
+  - `reintroduce; overload` with ANOTHER parameter list does not end the
+    original slot: with `TF = class(TA) Draw(X: Integer); reintroduce;
+    overload` and `TG = class(TF) Draw; override`, a `TA`-typed TG runs
+    TG.Draw;
+  - which of these a class does is decided per overload, by that
+    declaration's own directives, never by its siblings'.
+- ⚠️ *In an `object` type (11.5) a descendant's `virtual` IS the override*
+  (`probe-b19` Q3, Q4): `TO2 = object(TO1) procedure M; virtual; end` over
+  `TO1.M; virtual` is late-bound through a `^TO1` (prints TO2's), and
+  `procedure M; override;` there is not a directive - `override` reads as
+  a field after a method: `E2037 Declaration of 'M' differs from previous
+  declaration`, `E2169`.
 - *AST:* method `binding ∈ { static, virtual, dynamic }`, `isOverride`.
 
 ### 12.2.2 `dynamic`

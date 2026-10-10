@@ -445,6 +445,13 @@ type
     in type parameter declaration`.
 - *Type constraints:* a class type (T must descend from it) or interface (T must
   implement it). `T: TBase, IFoo` combines.
+  - ⚠️ *A constraint named through an alias is the aliased type* (dcc64 37.0,
+    probed 2026-10-10, `probe-b18` P2): with `TBaseAlias = TBase`,
+    `TG<T: TBaseAlias>` accepts `TG<TDerived>` and `TG<TBase>`, and
+    `TG<TObject>` is `E2515 Type parameter 'T' is not compatible with type
+    'TBase'` - the message names the real class, not the alias. A checker
+    that compares the ancestry walk against the alias symbol rejects even the
+    exact class.
   - ⚠️ *Combining means the UNION of what each unlocks, and a member lookup has
     to try them ALL.* `TKey: IComparable<TKey>, IEquatable<TKey>, IHashable`
     makes `AKey.Compare`, `AKey.Equals` and `AKey.Hash` equally legal, and a

@@ -120,6 +120,15 @@ type
   `end align {$IFDEF CPU64BITS} 16 {$ELSE} 8 {$ENDIF};`
   (System.SysUtils.pas). The operand is a constant expression; a parser must
   accept `align` (contextual word) after the closing `end`.
+  It SETS the record's own alignment to N (dcc64 37.0, probed 2026-10-10,
+  `probe-b18` P3): with `const CAl = 16`, `record A: Byte; end align CAl` is
+  16 bytes; it lowers as well as raises - `record A: Int64; end align 4`
+  placed after a `Byte` in an outer record starts at offset 4 (the outer
+  record is 12); and it is ignored under `packed` (`packed record A: Byte;
+  end align 16` is 1). The operand comes AFTER the member list: a tool that
+  reads a record's children must not take a trailing name there for a
+  heritage entry (only an `object`'s or `class`'s `( ... )` before the
+  members is one).
 - ⚠️ *The layout rule itself,* needed by anything that answers
   `{$IF SizeOf(TRec) = N}` (1.3.2) without compiling. Three steps:
 

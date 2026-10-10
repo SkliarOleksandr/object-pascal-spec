@@ -619,7 +619,8 @@ otherwise; the probes are cited in the bullets and the sections referenced.
 3. **In a method - and in a routine nested in one - Self's type**: the
    active class or record HELPER for the type first (§15.3.3: probed, a
    helper's `Own` over the class's own `Own`), then the type's own
-   members, then its ancestors' up to TObject, each ancestor's helpers by
+   members, then its ancestors' up to TObject (an `object`'s up to its last
+   written ancestor - it has no implicit root, §11.5), each ancestor's helpers by
    §15.3.3.
 4. **The unit's own declarations**: unit level of the implementation and
    the interface, enum values of its enumerations (and of nested ones -

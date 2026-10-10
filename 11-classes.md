@@ -534,4 +534,18 @@ ObjectType = "object" [ "(" Ancestor ")" ] { ClassSection } "end" ;
   precede methods (`E2169 Field definition not allowed after methods or
   properties`), and a **variant part is not allowed at all** — `case … of`
   inside an `object` is a syntax error.
+- ⚠️ *No implicit root.* An `object` with no `( Ancestor )` has no ancestor
+  at all - not `TObject`, which a `class` gets (12.1.1): with `TO1 = object
+  A: Integer; end`, `O.ClassName` and `O.Free` are `E2003 Undeclared
+  identifier` (dcc64 37.0, probed 2026-10-10, `probe-b18` P1). A resolver
+  that climbs an object's ancestry must stop at the last written ancestor
+  instead of hopping to TObject.
+- *Everything else about the ancestry is a class's* (12.1.1, 12.1.2, 13.x),
+  and a resolver that handles `class` and `interface` heritage but not
+  `object` stops at the first object (probe-b18 P4, dcc64 37.0 compiles all
+  of it): `inherited Val.A` in `TO2 = object(TO1)` types the ancestor's
+  `Val`; `with Get do` in a TO2 method, where TO2's own `Get(A: Integer)`
+  is an `overload` of TO1's parameterless `Get: TR1`, opens TR1; and a bare
+  `property X;` redeclaration in `TDerObj = object(TBaseObj)` is the
+  ancestor's property with its type (`D.X.Foo`, `with D.X do`).
 - *AST:* `ObjectType { … }` (value-type OOP node).

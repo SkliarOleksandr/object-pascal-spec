@@ -141,7 +141,11 @@ end.
   dcc32 37.0: a file `Foo.pas` containing `unit Bar;` fails with
   `E1038 Unit identifier 'Bar' does not match file name`, and any program that
   `uses` it fails to build at all (`F1027`/`F2063 Could not compile used
-  unit`). The same rule applies to a program's own name vs. its `.dpr` file.
+  unit`). It does NOT apply to a program, a library or a package: `program
+  Zed;` in `Q.dpr` builds `Q.exe`, `library Zed;` in `Q.dpr` builds `Q.dll`,
+  and `package Zed;` in `Q.dpk` builds `Q.bpl` beside `Zed.dcp` (the `.dcp`
+  takes the package's name, which a `requires` clause names) - dcc64 37.0,
+  probed 2026-10-11. A rename of such a header obliges no file rename.
   A checker that resolves `uses` entries by file path (§1.2.2) can rely on
   this identity holding for every unit that actually compiles.
 - ⚠️ *The module's own name is declared in its global scope - when that name

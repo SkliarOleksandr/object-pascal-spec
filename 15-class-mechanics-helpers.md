@@ -49,6 +49,15 @@ type
 - ⚠️ *`Self` is a class reference here*, not an instance — class methods may be
   `virtual` and dispatched via the metaclass (15.2). Distinguish from `static`
   class methods (15.1.4) which have no `Self`.
+- ⚠️ *The implementation repeats `class`, both ways.* `class procedure P;`
+  implemented as `procedure TX.P;`, or `procedure Q;` as `class procedure
+  TX.Q;`, is `E2037 Declaration of 'P' differs from previous declaration`
+  plus `E2065` for the declaration left unsatisfied (dcc64 37.0, probed
+  2026-10-11). So `class` is part of what pairs a declaration with its
+  implementation - and it has to be: a class constructor and an instance
+  constructor may share the name and the parameter list (the RTL's TThread
+  declares `class constructor Create;` beside `constructor Create;`, 15.1.5),
+  and only `class` tells their implementations apart.
 - *AST:* `MethodDecl { isClassMethod: true, … }`.
 
 ### 15.1.2 `class var`

@@ -116,6 +116,21 @@ ForwardOrExternal = "forward" ";" | ExternalDecl ;
   from previous declaration` (dcc64 37.0, probed 2026-09-27). A resolver that
   takes the overload chain's head instead gives the body another overload's
   parameters.
+- ⚠️ *A bare header carrying `overload` is a NEW parameterless overload* beside
+  a declaration that has parameters: with `function P(A: Integer): Integer;
+  overload;` in the interface, `function P: string; overload; begin ... end;`
+  in the implementation compiles, and `P` / `P()` call it while `P(1)` calls
+  the interface one. Without the directive the same header is `E2254
+  Overloaded procedure 'P' must be marked with the 'overload' directive`
+  (dcc64 37.0, probed 2026-10-11). Only a declaration that is not overloaded
+  may be completed by a bare header that drops its parameters.
+- *A `forward` in the same scope is completed the same way* - in a program, a
+  unit's implementation section and a routine's own declarations alike: the
+  completion may drop the parameter list (the body sees the forward's
+  parameters and `Result`), and the two headers are one routine. Overloaded
+  forwards (`procedure F(A: Integer); overload; forward;` beside `procedure
+  F(A: string); overload; forward;`) are each completed by the header with
+  their parameter types, in any order (dcc64 37.0, probed 2026-10-11).
 - *AST:* link the forward header to its later body; one logical routine.
 
 ---
@@ -411,6 +426,21 @@ function Area(C: TCircle): Double; overload;
     name": a call inside the implementation resolves to the nearer head, and
     measuring it against that chain alone reports a perfectly good call to the
     interface overload as having the wrong number of arguments.
+  - *Which header is a completion and which a new overload is decided by
+    parameter TYPE IDENTITY and modes, not by count.* With `P(A: Integer);
+    overload;` in the interface, `P(A: string); overload;` in the
+    implementation is a new overload of the same arity. The types are
+    compared as types: with `TMyCard = Cardinal`, `P(A: TMyCard); overload;`
+    completes `P(A: Cardinal)` (System.SysUtils completes `StrLen(const Str:
+    PAnsiChar)` with `StrLen(const Str: MarshaledAString)`), while with
+    `TMyCard = type Cardinal` it is a new overload. A header matching no
+    declaration needs `overload` - without it, `E2254 Overloaded procedure
+    'P' must be marked with the 'overload' directive` - so a header without
+    the directive is always a completion. The implementation repeats each
+    parameter's mode (`P(const A: string)` completed as `P(A: string)` is
+    E2037), and overloads cannot differ in the modes alone: `P(var A:
+    Integer); overload;` beside `P(A: Integer); overload;` is E2037 at the
+    second declaration (dcc64 37.0, all probed 2026-10-11).
 - ⚠️ *Across an ANCESTOR — including an ancestor INTERFACE — the set spans the
   hierarchy only when the declarations carry `overload`.* dcc-verified both
   ways: with `IBase` declaring `Take(const A: TSpot)` and `IMore =

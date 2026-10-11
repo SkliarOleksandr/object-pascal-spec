@@ -793,6 +793,12 @@ function MessageBox(hWnd: HWND; lpText, lpCaption: PChar; uType: UINT): Integer;
   `external delayed` read `index` / `delayed` as the library's EXPRESSION - an undeclared identifier, E2003. `dependency` is accepted
   by the non-Windows compilers only (Win64: E2070 unknown directive) and `delayed` by the Windows ones only (the Android and
   macOS compilers: E2070); a list of values follows `dependency`, comma-separated, before or after `name`.
+- ⚠️ *`external` may COMPLETE a declaration.* An interface-section routine is completed in the implementation by a
+  header carrying `external` - the shape of every DLL import unit - and so is a class's method: `function TFoo.Bar(A:
+  Integer): Cardinal; stdcall; external 'kernel32.dll' name 'GetTickCount';`. The completing header may omit the
+  parameter list as a forward's completion may (6.1.2): `function Tick3; external ...` and `function TQ.Baz; external
+  ...` both compile (dcc64 37.0, probed 2026-10-11). Such an implementation has no body, so "the header with a body" is
+  not the test for "the implementation half of a pair": a qualified header, or one carrying `external`, is one too.
 - *AST:* `Routine { …, external: { lib?, symbol?, index?, dependency[]?, delayed } }`.
 
 ---

@@ -184,6 +184,17 @@ The same identifier may name types of different generic arity (`TFoo`,
   far from the declaration that caused them. Note the non-generic sibling is
   what makes the shape appear at all; a plain forward + completion pair hides
   the defect completely.
+- ⚠️ *A method IMPLEMENTATION is completed by arity as well, at every
+  segment of its header.* `TFoo` and `TFoo<T>` may both declare `Clear` in
+  one unit; `procedure TFoo<T>.Clear;` completes the generic type's and
+  `procedure TFoo.Clear;` the plain one's, in either order. The method name
+  carries its own arity the same way: beside `procedure Gen(A: Integer);
+  overload;` a class may declare `procedure Gen<T>(A: Integer); overload;`
+  - one parameter list - and `procedure TFoo.Gen<T>(A: Integer);` completes
+  the generic one (dcc64 37.0, probed 2026-10-11: both pairs compile and
+  run, each body reached by its own call). A tool pairing a declaration with
+  its implementation by names and parameter types alone pairs both
+  `Clear`s, and both `Gen`s, with one body.
 
 ---
 

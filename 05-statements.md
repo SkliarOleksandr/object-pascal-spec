@@ -305,7 +305,24 @@ Caption := if Connected then 'Online' else 'Offline';
 - *Mandatory `else`:* unlike the statement form, `else` is **required** (an
   expression must always produce a value) → no dangling-`else` problem here.
 - *Type rule:* both branch expressions must be assignment-compatible to a common
-  result type; that common type is the type of the whole expression.
+  result type; that common type is the type of the whole expression. What
+  the common type is (dcc32 / dcc64 37.0, probed 2026-10-12 through `var X
+  := if ...`): one type stays itself, a distinct one too (`if C then MI else
+  MI` is `TMyI`); integers meet in the narrowest type covering both, a
+  constant adapting as in 4.2.1 - `if C then B else W` Word, `B else Sh`
+  SmallInt, `C else I` and `C else Sh` Int64, `1 else C` Cardinal, `1 else
+  I64` Int64, `I64 else U64` UInt64, `MW else W` Word; two reals Extended
+  (`Sg else D`), Currency on dcc64 with a Currency value (`Cu else D`);
+  text string when a side is string, Char or a literal (`'a' else 'bc'`, `A
+  else 'x'`, `'x' else A` - the literal does NOT take the AnsiString's type
+  here, unlike `+`), except that a Char value with a one-character literal
+  stays Char (`Ch else 'x'`; `Ch else 'xy'` is string), and WideString
+  beside WideString (`A else WS`); `nil` takes the other branch (`nil else
+  Ob2` TO2, `Ob1 else nil` TO1, `nil else nil` Pointer); two classes the
+  ancestor, in either order (`Ob2 else Ob1` and `Ob1 else Ob2` are TO1); a
+  set constructor the other branch's set type (`St else [e1]` TES). An
+  integer THEN branch with a real ELSE branch is `E2010` (`if C then 1 else
+  2.5`), and so is a Currency branch with an integer one.
 - *Evaluation:* short-circuit — only the selected branch is evaluated (contrast
   with the `IfThen` RTL functions, which evaluate both arguments).
 - ⚠️ *Extent and precedence* (dcc64 37.0, probed 2026-09-26 - the grammar

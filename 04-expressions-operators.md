@@ -90,7 +90,12 @@ typed by its value instead (3.2.1).
 | `1.5 + 1` | `Extended` | `Extended` |
 | `Ch + Ch`, `Ch + S`, `S + A` (string, AnsiString) | `string` | same |
 | `A + A`, `AC + A` (AnsiChar) | `AnsiString` | same |
-| `AC + AC` | anonymous | same |
+| `AC + AC` | anonymous - a short string (E2010 names it `ShortString`, 2026-10-12) | same |
+| `A + 'x'`, `'x' + A`, `A + #0`, `SS + 'x'`, `SS + A`, `SS + SS`, `SS + AC` | `AnsiString` - a literal takes the other operand's string type, ShortString joins as AnsiString | same |
+| `WS + 'x'`, `WS + A`, `A + WS`, `WS + SS`, `WS + U8` | `WideString` | same |
+| `U8 + 'x'`, `U8 + RB` (`UTF8String`, `RawByteString`) | `UTF8String`; `RB + 'x'`, `RB + A` `RawByteString` - RawByteString takes the other Ansi kind on its left | same |
+| `U8 + A`, `A + U8`, `SS + U8`, `U8 + AC`, `AC + 'x'`, `WS + S`, `SS + S`, `A + Ch` | `string` - two code pages, or a Unicode / Char side | same |
+| `St + [e1]`, `St - [e1]`, `St * [e1]` | `TES` - the set operand's type; `[e1] + St` is an anonymous set | same |
 | `P + 1` (PChar) | `PWideChar` - the pointer's type | same |
 | `Arr + Arr`, `[S] + Arr`, `Arr + [S]` (`Arr: TArray<string>`), `Ints + [1]` | the array's type - `TArray<string>`, `TArray<Integer>` (dcc64, 2026-10-07) | same |
 | `Names + [S]` (`TNames = array of string`) | `TNames` - a named array keeps its name | same |
@@ -767,7 +772,7 @@ of an integer):
 | `Sqr(X)` | integer: `Integer` for anything up to 32-bit SIGNED, but a 32-bit **unsigned stays `Cardinal`**, and the 64-bit ones keep their signedness (`Int64`, `UInt64`, `NativeInt`, `NativeUInt`). Real: `Extended` for every real, **`Currency` and `Comp` included** (unlike `Abs`) |
 | `Swap(X)` | a 16- or 32-bit integer keeps its type (`Word`, `SmallInt`, `Integer`, `Cardinal`); `Byte`, `Int64` and a literal give `Integer` |
 | `Copy(S, I, N)` / `Copy(A, I, N)` | the FIRST argument's type: `AnsiString` stays `AnsiString`, `ShortString` stays `ShortString`, a string literal is `string`, a dynamic array (incl. `TArray<T>`) stays that array type; `Copy(A)` with no range works for a dynamic array and is `E2035` for a string; a static array is `E2008` |
-| `Concat(A, B, ...)` | all arguments of ONE type: that type (`AnsiString`, `WideString`, `UTF8String`, `RawByteString`, a dynamic array type) - with two exceptions: **`ShortString`+`ShortString` is `AnsiString`** and **`AnsiChar`+`AnsiChar` is `ShortString`**. Mixed string kinds, `Char` operands and literals: `string` |
+| `Concat(A, B, ...)` | the `+` of 4.2.1 folded left to right: all arguments of ONE type give that type (`AnsiString`, `WideString`, `UTF8String`, `RawByteString`, a dynamic array type), **`ShortString`+`ShortString` is `AnsiString`** and **`AnsiChar`+`AnsiChar` is `ShortString`**, and a literal takes the other arguments' string type - `Concat(A, 'x')`, `Concat('x', A)`, `Concat(A, A, 'x')`, `Concat(SS, 'x')`, `Concat(SS, A)` are `AnsiString`, `Concat(U8, 'x')` `UTF8String`, `Concat(WS, 'x')` and `Concat(WS, A)` `WideString` (dcc32 / dcc64, 2026-10-12; this row said "literals: string"). Two code pages (`Concat(A, U8)`), `Char` operands and literals alone: `string` |
 | `Default(T)` | `T` for a record, an ordinal, a real, a string, a STATIC array. **`Pointer` for every reference type** - class, interface, dynamic array, procedural/method/reference type, class reference, pointer: `var X := Default(TObj); X.Free` is `E2018 Record, object or class type required` and `var A := Default(TDynI); A[0]` is `E2016` |
 | `AtomicIncrement`/`AtomicDecrement`/`AtomicExchange`/`AtomicCmpExchange` | the first argument's type (`Integer`, `Cardinal`, `Int64`, `UInt64`, `NativeInt`, `Pointer`); an object reference is `E2008` |
 

@@ -232,6 +232,10 @@ The RTL leans on it: `TBytes.Create($EF, $BB, $BF)` (System.SysUtils),
 - There is no member to resolve, so a name resolver must special-case the form
   rather than look `Create` up: the result type is the array type itself,
   exactly as a real constructor yields its class.
+- The parentheses are part of the form: a paren-less `A := TBytes.Create;` is
+  `E2029 '(' expected but ';' found` (dcc64 37.0, probed 2026-10-12), so the
+  type belongs to the CALL - `var B := TBytes.Create($EF, $BB)` is a TBytes,
+  `TMyArr.Create(R)[0].Fld` reaches the element.
 - Aliases hide it — `TBytes` is `TArray<Byte>` is `array of T` — so "is this a
   dynamic array" has to follow the alias chain, not read one node.
 

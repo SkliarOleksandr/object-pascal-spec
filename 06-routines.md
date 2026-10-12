@@ -521,6 +521,23 @@ function Area(C: TCircle): Double; overload;
     the derived reference. A resolver that merges the ancestry unconditionally
     accepts code dcc rejects; one that never merges it rejects code dcc
     accepts.
+  - *How far the search climbs:* the nearest ancestor's set joins when the
+    derived set says `overload`, and the walk goes on while each joined set
+    says it too; a joined set WITHOUT `overload` still joins, but ends the
+    walk. With `TA0.Take(D: Double); overload;`, `TB0 = class(TA0)
+    Take(A: Integer);` and `TC0 = class(TB0) Take(const S: string);
+    overload;`, `C0.Take(1)` calls TB0's and `C0.Take(1.5)` is `E2250`; mark
+    TB0's `overload` and `C1.Take(1.5)` calls TA0's. (Across units the plain
+    set does not even join - see the next bullet; the two rules differ.)
+  - *An `override` hides nothing:* `TDer.Foo(X: Integer); override;` (no
+    `overload`) beside TBase's `Foo(X: Integer); overload; virtual;` and
+    `Foo(const S: string); overload; virtual;` leaves `D.Foo('s')` calling
+    TBase's string overload; TMemoryStream's two `Write(const Buffer; ...);
+    override;` leave TStream's TBytes `Write` overloads callable through a
+    TMemoryStream. An override is the ancestor's method, so the search goes
+    on as if the set said `overload`.
+  - *Evidence:* dcc64 37.0, 2026-10-12, runtime output of local/probe-b33
+    C1.dpr, the E2250 of C2.dpr, and O1.dpr.
 - ⚠️ *Across UNITS, `overload` makes the bare name search on.* A bare name
   that finds a routine marked `overload` does not stop there: dcc goes on
   through the rest of the search order (1.2.3) and the routines of that name
@@ -554,6 +571,25 @@ function Area(C: TCircle): Double; overload;
     ...4 parameters)` makes `Pos('ab', 'xabc')` `E2010`, System's `Pos`
     never considered. dcc64 37.0, probed 2026-10-12 (PasTree audit B25,
     `probe-b25` P3-P7).
+  - *A set met further on without `overload` ENDS the search,* it is not
+    merely skipped: with units QA (`F(I: Integer); overload;`), QB (plain
+    `F(D: Double)`) and QC (`F(const S: string); overload;`), a program
+    using QA, QB, QC - searched QC, QB, QA - finds `F(1)` `E2250`: QB's F
+    does not join, and QA's beyond it is never reached; the same three
+    with every F marked `overload` (G in the probe) give `G(1)` QA's and
+    `G(1.5)` QB's. dcc64 37.0, 2026-10-12 (local/probe-b33 Q1).
+  - An implementation-section overload is one set with the interface
+    section's (the IMPLEMENTATION bullet above): a call written in the implementation, bound
+    to the nearer implementation-only `Pick(const S: string; B: Integer =
+    0)`, still calls the interface's `Pick(A: Integer)` for `Pick(1)`.
+- ⚠️ *An ordinal, float, Char or Boolean value never converts to an array,
+  and a static array never to a dynamic one,* so such a candidate is OUT:
+  `Q2(B[0], 1)` for a `B: TBytes` calls `Q2(const A; N: Integer)` beside
+  `Q2(const A: TBytes; N: Integer)`; `P(1)` calls `P(X: Double)` beside `P(const A: array of Integer)`; a static
+  array or a record argument for `Wr(const A: TBytes; ...)` beside an
+  untyped `Wr(const A; ...)` calls the untyped one, while `Wr(B, 1)` for a
+  TBytes calls the TBytes one. dcc64 37.0, 2026-10-12 (local/probe-b33 O1,
+  W2).
 - ⚠️ *Return type is never part of overload resolution.* Two routines with
   identical parameter lists that differ only in result type are not distinct
   overloads — the second declaration collides with the first rather than

@@ -290,7 +290,7 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
 | Sets (by-ref) | `Include` `Exclude` |
 | Pointers & addresses (plain) | `Addr` `Assigned` `Ptr` `ReturnAddress` (~XE2) `AddressOfReturnAddress` (~XE2) |
 | Atomics (plain; XE3) | `AtomicIncrement` `AtomicDecrement` `AtomicExchange` `AtomicCmpExchange` `MemoryBarrier` — plus `AtomicCmpExchange128`, **64-bit targets only** (see the platform note) |
-| Varargs (by-ref arg list; **64-bit targets only**) | `VarArgStart` `VarArgEnd` `VarArgCopy` `VarArgGetValue` (type-arg) — declared NOWHERE, see the grep warning |
+| Varargs (by-ref arg list; **every target but Win32**) | `VarArgStart` `VarArgEnd` `VarArgCopy` `VarArgGetValue` (type-arg) — declared NOWHERE, see the grep warning |
 | Special grammar | `Write` `WriteLn` `Read` `ReadLn` `Str` (colon-formatted args, §4.11.2; optional leading file var) `Val` (by-ref out params) `Slice` (open-array args only, §4.11) `Assert` `NameOf` (13.0, identifier arg §4.11.1) |
 | Classic file I/O (by-ref file var) | `Append` `Assign`/`AssignFile` `BlockRead` `BlockWrite` `Close`/`CloseFile` `Eof` `Eoln` `Erase` `FilePos` `FileSize` `Rename` `Reset` `Rewrite` `Seek` `SeekEof` `SeekEoln` `SetTextBuf` `Truncate` — `Flush`❌(RTL, not intrinsic) |
 | Directories | `GetDir` only — `ChDir` `MkDir` `RmDir`❌(RTL, not intrinsic) |
@@ -349,7 +349,12 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
   `System.SysUtils` and `System.Rtti` all call them inside `CPUX64` branches).
   So "seed exactly this catalog" above is per-TARGET: a seeder that ignores the
   platform either false-E2003s the RTL on Win64 or accepts Win32 code that does
-  not compile. Whether a 32-bit ARM target agrees with Win32 here is untested.
+  not compile. The 32-bit ARM target does NOT agree with Win32: dccaarm
+  (Android32) knows the four `VarArg*` names (`E2029 '(' expected` on a bare
+  use, as dcc64 answers) and rejects only `AtomicCmpExchange128` (E2003), and
+  System.pas calls them on that target (`$IF not defined(X86ASMRTL)`) -
+  dccaarm 37.0, probed 2026-10-12. So the VarArg gate is "not Win32", the
+  128-bit compare-and-swap's "64-bit".
 - ⚠️ *Do not decide membership by grepping `System.pas`* — that misreads the
   source FOUR separate ways, each of which makes a real intrinsic look
   declared: `GetMem`/`FreeMem`/`ReallocMem` appear only as **fields** of the

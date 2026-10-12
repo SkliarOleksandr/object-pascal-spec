@@ -176,7 +176,9 @@ type
   | field type | size | alignment |
   |---|---|---|
   | a scalar | its own | `Min(size, 8)` |
-  | `Extended` | 10 (Win32) / 8 (Win64) | 8 |
+  | `Extended` | 10 (Win32) / 8 (Win64 and the ARM targets) / **16 (OSX64)** | 8; **16 on OSX64** (`record A: Byte; E: Extended end` is 32 there - dccosx64 37.0, 2026-10-12) |
+  | `LongInt`, `LongWord` | 4; **8 on the 64-bit POSIX targets** (OSX64, OSXARM64, iOS, Android64) | its size |
+  | `Text`, `TextFile` (`TTextRec`) | 730 (32-bit) / 754 (64-bit) | pointer (`record A: Byte; T: TextFile end` is 736 / 768) |
   | `string`, `AnsiString`, `WideString`, a dynamic array, an interface, a **class reference**, `PChar` | 1 pointer | pointer |
   | `ShortString` | 256 | **1** |
   | `string[N]` | N+1 | 1 |

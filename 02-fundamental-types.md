@@ -106,8 +106,18 @@ var
   `System` and can in principle be shadowed (B.4). The lexer emits them as
   identifiers; resolution is semantic.
 - ⚠️ *Platform-dependent widths:* `NativeInt`/`NativeUInt` are 32-bit on 32-bit
-  targets and 64-bit on 64-bit targets. `LongInt`/`LongWord` are 32-bit on all
-  current targets; `FixedInt`/`FixedUInt` are guaranteed 32-bit. A parser doesn't
+  targets and 64-bit on 64-bit targets. `LongInt`/`LongWord` are 32-bit on
+  Windows and Android32 and **64-bit on every 64-bit POSIX target** (LP64:
+  OSX64, OSXARM64, iOSDevice64, iOSSimARM64, Android64 - dccosx64,
+  dccosxarm64, dcciosarm64, dcciossimarm64, dccaarm64 37.0, probed
+  2026-10-12; Linux64 by Embarcadero's table). There they are types of their
+  own - not Integer / Cardinal, and not Int64 / UInt64 either: `F(X: LongInt)`
+  beside `F(X: Int64)` is two overloads, `G(Lg)` takes the LongInt one and
+  `G(I64)` the Int64 one, a helper for Int64 is no LongInt's - and they
+  compute as 64-bit operands (`Lg + I` is Int64, `Lw + I` UInt64, 4.2.1). The
+  RTL keys declarations on it (`$IF SizeOf(LongInt) = 8` in System,
+  System.Types, System.Classes, System.SysUtils). `FixedInt`/`FixedUInt` are
+  guaranteed 32-bit. A parser doesn't
   need the width, but a *semantic/type* layer does — record the nominal name and
   resolve width per target.
 - ⚠️ *`Int8`/`Int16`/`Int32`/`UInt8`/`UInt16`/`UInt32` are real `System`-seeded
@@ -408,8 +418,13 @@ RealType = "Real" | "Single" | "Double" | "Extended" | "Comp" | "Currency" | "Re
 
 **Semantics & parsing notes**
 
-- ⚠️ *`Extended` is platform-dependent:* 10 bytes on Win32, but **8 bytes (= `Double`)
-  on Win64, macOS, and mobile**. Code relying on 80-bit precision is not portable —
+- ⚠️ *`Extended` is platform-dependent:* 10 bytes on Win32, **16 bytes aligned to
+  16 on OSX64** (macOS Intel; Linux64 the same by Embarcadero's table, not
+  probed), and **8 bytes (= `Double`) on Win64 and every ARM target** (OSXARM64,
+  iOS, Android) - dcc32 / dcc64 / dccosx64 / dccosxarm64 / dcciosarm64 /
+  dccaarm / dccaarm64 37.0, probed 2026-10-12 (`SizeOf(Extended)` and
+  `record A: Byte; E: Extended end`: 10 / 24, 8 / 16, 16 / 32). System.pas
+  and System.Math key on it (EXTENDEDIS16BYTES). Code relying on 80-bit precision is not portable —
   a semantic layer must resolve `Extended` per target.
 - `Currency` is a 64-bit integer scaled by 10 000 (4 decimal places) — exact
   decimal arithmetic for money; not a binary float.

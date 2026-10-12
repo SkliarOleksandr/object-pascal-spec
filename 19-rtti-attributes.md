@@ -188,6 +188,22 @@ type
 - The attribute's `TypeRef` is resolved to a `TCustomAttribute` descendant; the
   `( … )` arguments must match one of its constructors (evaluated to build the
   attribute instance in RTTI). The trailing `Attribute` suffix is optional.
+- ⚠️ *The suffixed name is looked up FIRST, through the whole search order.*
+  `[X]` means `XAttribute` wherever that name is found - the local scopes,
+  the unit, the used units, `System` - and the bare `X` only when
+  `XAttribute` is found nowhere. A nearer bare `X` does not win: with a used
+  unit declaring `SetupAttribute`, DUnitX's `[Setup] procedure Setup;`
+  compiles (the method is not the attribute); a program's own `Bar =
+  class(TCustomAttribute)` with `constructor Create(A, B: Integer)` loses to
+  a used unit's `BarAttribute.Create(const S: string)` - `[Bar(1, 2)]` is
+  `E2010 Incompatible types: 'string' and 'Integer'` and `[Foo('x')]` beside
+  a local `Foo(A, B: Integer)` compiles. Both names in one unit: `[Baz('x')]`
+  takes `BazAttribute(const S: string)` over `Baz(A, B: Integer)`. Whatever
+  the suffixed name finds decides, a non-type too: a `const QAttribute = 1`
+  makes `[Q]` `W1074 Unknown custom attribute: 'QAttribute'` beside a `Q =
+  class(TCustomAttribute)`. A unit-qualified name takes the suffix the same
+  way in that unit: `[UAt.Test(2)]` is `UAt.TestAttribute`. dcc64 37.0,
+  probed 2026-10-12 (PasTree audit B27, `probe-b27` A1-A4).
 - Attributes are only retained in binaries where extended RTTI is enabled
   (`{$RTTI}`); otherwise they parse but emit nothing.
 - ⚠️ *Constructor arguments must be compile-time constant expressions*

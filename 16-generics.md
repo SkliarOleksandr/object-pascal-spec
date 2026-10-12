@@ -333,6 +333,12 @@ P := TPair<string, Integer>.Create('a', 1);
   segments of a qualified name, not just the last — nested types of generic types
   (`TDictionary<string, Integer>.TPairEnumerator`) and generic-method calls on
   them. See §B.11 `TypeSegment`.
+- *A nested alias inside a generic type belongs to the instance:* with
+  `TBox<T> = class type TItems = array of T; TGetA = TFunc<T>; TL =
+  TList<T>; ... end`, a `TBox<TRec>`'s `Items` walks `TRec`, `GetA()` is a
+  `TRec`, `for R in BX.L` walks `TRec` - the alias is resolved and then
+  closed over the instance it was reached through (dcc32 / dcc64 37.0,
+  2026-10-12).
 - ⚠️ *Implementation headers:* method bodies of a generic type repeat the type
   parameters in the qualified name — `function TDelegatedComparer<T>.Compare(...)`,
   `procedure TDict<K,V>.TEnum.MoveNext;`. Here `<T>` is a **parameter re-declaration**

@@ -84,6 +84,18 @@ type
 - `array[A, B] of T` is **sugar** for `array[A] of array[B] of T`; the parser may
   normalise to nested single-dimension nodes or keep the index list.
 - Element access `M[i, j]` likewise normalises to `M[i][j]`.
+- ⚠️ *So a chain is indexed from its ROOT.* Over `TJag = array of array of
+  TRec` or `TM = array[0..1, 0..1] of TRec`, `J[1][2]` and `M[1][1]` are
+  `TRec` like `J[1, 2]`, and the value between, `J[1]` or `M[1]`, is an
+  anonymous row: `J[1].X` is `E2018 Record, object or class type required`,
+  and `FStdDash[A] := FStdDash[B]` over a two-dimensional array copies a row.
+  Low / High / Length of an indexed value read the INNER array: `High(M[0])`
+  over `M: array of array[TE] of Integer` is `TE`, `Low(G[1])` over `G:
+  array[0..3] of array[TE] of Integer` `TE`, `Length(M[0])` `Integer` (the
+  inner array is static). A pointer to an array at an inner level is
+  dereferenced before `[` as at the root (4.8): `AO[1][0]` and `AO[1, 0]`
+  over `AO: array[0..3] of PObjs`, `PObjs = ^TObjs`, are `TObjs`' element
+  (dcc32 / dcc64 37.0, 2026-10-12).
 
 ---
 

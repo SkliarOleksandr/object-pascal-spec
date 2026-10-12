@@ -531,6 +531,15 @@ recently in scope (latest `uses` / nearest declaration) wins; others are hidden.
   source position (`uses`-order dependent, ch.01 §1.2.1).
 - This single-helper rule is a frequent source of "method not found" confusion —
   worth a diagnostic.
+- ⚠️ *A hidden helper answers no name at all, not even one the active helper
+  lacks* - that name is the type's own. With `TQH0 = record helper for TQ`
+  declaring `Baz` and a later `TQH1` declaring only `Bar`, `Q.Baz` is
+  `TQ.Baz`; with a used unit declaring `TRH0` (a `Baz`) beside the type, a
+  program's own `TRH` (no `Baz`) leaves `R.Baz` the record's; and with two
+  helpers in one unit, `R.One` of the earlier one is `E2003` below the later.
+  An implementation-section helper of the type's own unit is no helper for an
+  importer: `F.Info` there is the class's own `Info`. dcc64 37.0, probed
+  2026-10-12 (PasTree audit B28, `probe-b28` H1-H3).
 
 ### 15.3.4 Where a helper is active (activation scope)
 
@@ -601,6 +610,15 @@ end.
 - Consequently the "active helper" set at a source position is: every helper
   for that type declared in this unit, plus every interface-section helper of
   every used unit — resolved down to ONE by §15.3.3's last-in-scope rule.
+- ⚠️ *When that set is empty, the type's OWN unit's interface helper applies*,
+  used unit or not: with unit UT declaring `TE` and `TEH = record helper for
+  TE` (`IsA`), a program using only UM2 (which uses UT and declares `var GE:
+  TE` and a record field of type TE) compiles `GE.IsA` and `GM.E.IsA`;
+  UT's implementation-section helper still does not apply (`GE.IsB` is
+  E2003), and a used unit's helper for TE hides UT's (`GetE.IsA` is E2003
+  beside UK's `TEHK`). The RTL relies on it: FMX.FontGlyphs.Win reads
+  `Style.Slant.IsRegular` (FMX.Graphics' TFontSlantHelper) without using
+  FMX.Graphics. dcc64 37.0, probed 2026-10-12 (`probe-b28` H6, H7).
 - dcc-verified (dcc32 37.0 / Delphi 13.1), each point separately: a nested
   interface-section helper resolves both bare inside the extended type's own
   methods and qualified as `T.Member` at unit level; the same nested helper

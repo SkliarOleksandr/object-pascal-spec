@@ -58,6 +58,11 @@ type
   `['{...-' + '...}']`, `[SID + '']` and a parenthesized `[(SID)]` all compile;
   `['{...}', 'x']` is E2029; a string not in GUID format is `E2204 Improper
   GUID syntax`.
+- ⚠️ *Its names are looked up AROUND the type, not in it* (dcc64 37.0,
+  probed 2026-10-12): with a unit `const S = '{...}'` and `IFoo = interface
+  [S] function S: Integer; end`, the GUID is the constant's - the
+  interface's own member `S` does not hide it - and an unknown name is
+  `E2003` (`[NoSuchX]`). A rename of the constant must rewrite the clause.
 - ⚠️ *GUID or attribute is decided by TYPE, in the first bracket only:* `[X]`
   right after the head (and ancestor) is the GUID when X is a string or TGUID
   constant, and the first member's attribute group when X is an attribute

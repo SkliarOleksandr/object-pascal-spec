@@ -432,6 +432,10 @@ for var Item in MyList do Process(Item);
   The loop element type = the type of `Current`. The parser emits a `ForInStmt`;
   **semantic analysis** resolves `GetEnumerator` (including via class/record
   helpers) and the element type.
+- A string walks its character type (7.2.1): `Char` over `string`,
+  `UnicodeString` and `WideString`, `AnsiChar` over `AnsiString`,
+  `ShortString`, `string[N]` (named or inline), `RawByteString`, `UTF8String`
+  and any `type AnsiString(cp)` (dcc32 / dcc64 37.0, 2026-10-12).
 - *Element type of an untyped `for var E in` over a collection with no named
   type* (dcc64 37.0, 2026-10-07, read off `TypeInfo` of the element):
   - `[a, b]` with no range is an **open array constructor**: `['.pas', '.inc']`

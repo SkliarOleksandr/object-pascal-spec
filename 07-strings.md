@@ -89,6 +89,10 @@ type TName = string[20];   // ShortString of capacity 20
   indexing. Only allowed in a type position. Not managed (value type, fixed size).
 - `string` *without* `[N]` is the managed type (7.1.1). The presence of `[N]`
   changes the type entirely — the parser must branch on it.
+- Written inline - `Name: string[30]` in a packed record, a local `L:
+  string[10]`, a parameter - it is a `ShortString` like a named `TS =
+  string[N]`: `F(L)` takes `F(const S: ShortString)` beside `F(I: Integer)`,
+  and `L[1]` is an `AnsiChar` (dcc32 / dcc64 37.0, 2026-10-12).
 
 ### 7.1.4 `WideString`
 
@@ -128,6 +132,12 @@ Null-terminated string pointers for C/OS interop: `PChar` (= `PWideChar` since
 - A `string` ↔ `PChar` conversion is allowed via cast and is a frequent interop
   pattern; `PAnsiChar`/`PWideChar` also enable pointer math (`{$POINTERMATH}`,
   ch.04).
+- The three are compiler-provided (no declaration in `System.pas`) and point at
+  their character: `P^`, `P[I]` and `(P + 1)^` of a `PChar` or `PWideChar` are
+  `Char`, of a `PAnsiChar` `AnsiChar` - indexing needs no `{$POINTERMATH}`.
+  `P + 1` and `1 + P` keep the pointer type (`F(P + 1)` takes `F(X: PChar)`
+  beside `F(X: Pointer)`), and an element of an `array of PChar` indexes on:
+  `AP[0][1]` is a `Char` (dcc32 / dcc64 37.0, 2026-10-12).
 
 ### 7.1.7 `UCS4Char` / `UCS4String`
 
@@ -209,6 +219,14 @@ C := S[0];      // first char when zero-based
   AnsiString calls the AnsiChar one, `F(U[1])` of a string the WideChar one
   (dcc64 37.0, 2026-10-12, PasTree's local/probe-b31 S1.dpr); a PAnsiChar's
   `P[0]` and `P^` are AnsiChar too.
+  ⚠️ dcc's overload choice has one oddity here: beside an `AnsiString`
+  overload, `F(PA[0])` of a PAnsiChar, `F(S20[1])` of a `string[N]`, `F(Cy[1])`
+  of a `type AnsiString(cp)` and `F(X)` of an inline `var X := PA[0]` take
+  `F(X: AnsiString)` over `F(X: AnsiChar)`, while `F(PA^)`, `F(A[1])` of an
+  AnsiString and `F(AC)` of an AnsiChar variable take the AnsiChar one; with
+  no AnsiString overload all of them take AnsiChar, and every one of them
+  infers `AnsiChar` (dcc64 37.0, 2026-10-12). A `for ... in` over a string
+  walks the same character type: `AnsiChar` over the 1-byte kinds.
 - ⚠️ *`S.Chars[i]` (the record-helper property, §7.4.1) is a separate, ALWAYS
   0-based, read-only path — unaffected by `{$ZEROBASEDSTRINGS}`.* `S[1]` under
   the default directive and `S.Chars[0]` name the same character; flip

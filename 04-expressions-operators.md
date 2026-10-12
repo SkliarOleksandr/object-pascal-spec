@@ -719,46 +719,84 @@ Excel.ActiveWorkbook.Charts[1].SeriesCollection.Add(
 
 The documentation gives most intrinsics a loose signature ("returns an
 integer"); the compiler's answer is exact and, in a few places, surprising.
-Everything below was probed on dcc32 and dcc64 37.0 (2026-09-07) by assigning
-each call to a record variable and reading the type dcc names in
-`E2010 Incompatible types: 'TProbe' and '<type>'`; the `var X := Intrinsic(...)`
-inference (3.1.3) agrees with every row. Where the two compilers differ, both
+Everything below was probed on dcc32 and dcc64 37.0 through the type dcc
+USES: the overload a call of the result picks among one overload per builtin
+type (`F(Ord(AC)).R_Byte` compiles only when `F(X: Byte)` was chosen), and
+the type `var X := Intrinsic(...)` infers (3.1.3) - the two agree on every
+row (2026-10-12; first probed 2026-09-07). ⚠️ The E2010 text of a DIRECT
+assignment is no witness: `R := Ord(AC)` names `Integer` and `R := Succ(C)`
+`Integer` while dcc types both calls `Byte` and `Cardinal` - the message
+widens every narrow integer, and this table was once read from it (the rows
+for `Ord`, `Hi` / `Lo`, `Succ` / `Pred` / `High` / `Low` of a 32- or 64-bit
+unsigned and `Swap(Byte)` were wrong). Where the two compilers differ, both
 answers are given.
+
+⚠️ *A constant argument folds.* `Ord`, `Hi`, `Lo` and `Swap` of a literal, a
+true constant or an enumeration value are `Integer`: `Ord('A')`, `Ord(5)`,
+`Ord(e1)`, `Ord(True)`, `Ord(KC)` (`const KC = 'A'`), `Hi(KI)`, `Swap(KW)`
+(`const KW = Word(7)`) - a typed constant is a variable here (`Ord(KW)` of
+`const KW: Word = 5` is `Word`). `Succ` / `Pred` of one keep the argument's
+type (`Succ(KE)` the enumeration, `Succ('a')` `Char`). As an overload
+argument a constant result is a constant VALUE: `F(Ord(5))` and
+`F(High(Byte))` take the narrowest overload holding the value (3.1.3), as
+any constant does.
 
 **Fixed result, whatever the argument**
 
 | Intrinsic | Result | Notes |
 |---|---|---|
-| `Ord(X)` | `Integer` | even of an `Int64`/`UInt64`/`NativeInt` argument |
 | `Chr(X)` | `Char` | |
-| `SizeOf(T\|X)`, `Hi(X)`, `Lo(X)` | `Integer` | `Hi`/`Lo` of any width, literals included |
+| `SizeOf(T\|X)`, `FilePos(F)`, `FileSize(F)` | `Integer` | |
+| `Hi(X)`, `Lo(X)` | `Word` | of any width (`Hi(B)`, `Hi(I64)`); of a constant `Integer` |
+| `NameOf(X)` | `string` | |
 | `Trunc(X)`, `Round(X)` | `Int64` | of a `Single` too; `Trunc(I64)` of an integer is `E2008`, `Round(I)` is accepted |
 | `MulDivInt64` | `Int64` | |
-| `Assigned`, `Odd`, `IsManagedType`, `IsConstValue`, `HasWeakRef`, `Eof`, `Eoln`, `SeekEof`, `SeekEoln` | `Boolean` | |
+| `Assigned`, `Odd`, `IsManagedType`, `IsConstValue`, `HasWeakRef`, `Eof`, `Eoln`, `SeekEof`, `SeekEoln`, `AtomicCmpExchange128` | `Boolean` | |
 | `Pi` | `Extended` | dcc64 prints it as `Double`, which is what `Extended` IS on a 64-bit target; `var X := Pi` reads `Extended` on both |
 | `Addr(X)`, `Ptr(N)`, `ReturnAddress`, `AddressOfReturnAddress`, `TypeInfo(T)`, `TypeHandle(T)` | `Pointer` | the untyped pointer, not `^T` or `PTypeInfo` |
 | `GetTypeKind(T\|X)` | `System.TTypeKind` | |
 | `Length(X)` | `Integer`; `NativeInt` for a **dynamic array** | so `Length(DynArr)` is `Int64` on dcc64 and `Integer` on dcc32; a string, static array, `ShortString` or `Variant` is `Integer` on both |
 
-**The ordinal widening rule** (shared by `Pred`, `Succ`, `Low`, `High`, `Abs`
-of an integer):
+**`Ord(X)`**
 
-- `Byte`, `ShortInt`, `Word`, `SmallInt`, `Cardinal`, a subrange, a literal:
-  **`Integer`** - `Pred(B)` of a `Byte` is an `Integer`, `High(Cardinal)` is
-  an `Integer`.
-- `Int64` **and `UInt64`**: **`Int64`** - `Succ(U64)` is an `Int64`,
-  `High(UInt64)` is an `Int64`.
-- `NativeInt`, `NativeUInt`: `NativeInt` (i.e. `Integer` on dcc32, `Int64` on
-  dcc64) - the only rows the two compilers disagree on.
+- A builtin integer up to 32 bits keeps its type: `Ord(B)` `Byte`, `Ord(Sh)`
+  `ShortInt`, `Ord(W)` `Word`, `Ord(SI)` `SmallInt`, `Ord(I)` `Integer`,
+  `Ord(C)` `Cardinal`; a 64-bit one is `Integer` (`Ord(I64)`, `Ord(U64)`,
+  and `Ord(NI)` / `Ord(NU)` on dcc64 - `Ord(NU)` is `Cardinal` on dcc32,
+  where NativeUInt is Cardinal).
+- `Char` / `WideChar` `Word`, `AnsiChar` `Byte`; `Boolean` `ShortInt`,
+  `ByteBool` `Byte`, `WordBool` `Word`, `LongBool` `Integer`.
+- An enumeration, or a subrange of any ordinal, is the NARROWEST of
+  `ShortInt`, `Byte`, `SmallInt`, `Word`, `Integer`, `Cardinal` holding its
+  ordinal range, signed first: a four-value enumeration, `False..True`,
+  `1..10`, `-5..5` and `'a'..'z'` `ShortInt`; `0..200` `Byte`; `0..1000`
+  and `#0..#$3000` `SmallInt`; `0..60000` `Word`; `0..70000` `Integer`.
+- A constant: `Integer` (above).
+
+**The ordinal step rule** (shared by `Pred`, `Succ`, `Low`, `High`):
+
+- `Byte`, `ShortInt`, `Word`, `SmallInt`, an integer subrange: **`Integer`**
+  - `Pred(B)` of a `Byte` is an `Integer`, `Succ` of a `0..200` too.
+- A 32- or 64-bit builtin keeps its type: `Succ(C)` and `High(Cardinal)` are
+  `Cardinal`, `Succ(U64)` and `High(UInt64)` `UInt64`, `Succ(NI)`
+  `NativeInt`, `High(NativeUInt)` `NativeUInt` (so `Int64` / `UInt64` on
+  dcc64, `Integer` / `Cardinal` on dcc32).
 - An enum, `Char`, `AnsiChar`, `WideChar`, `Boolean`: **the argument's own
-  type** - `Pred(E)` is the enum, `Succ(AC)` an `AnsiChar`.
+  type** - `Pred(E)` is the enum, `Succ(AC)` an `AnsiChar`; a subrange of
+  one is its BASE type: `Pred(CS)` of a `'a'..'z'` is `Char`, `Succ(ES)` and
+  `High(TES)` of an `e1..e2` the enumeration (E2010 prints `Enumeration`;
+  `F(High(TES))` takes `F(X: TE)`).
 - A subrange OVER an `Int64` range (`1..5000000000`): `Int64`.
+
+`Abs` of an integer widens instead: `Byte` .. `Cardinal` `Integer` (`Abs(C)`
+is `Integer`), `Int64` and `UInt64` `Int64`, `NativeInt` / `NativeUInt`
+`NativeInt`.
 
 **`Low`/`High` of a non-ordinal**
 
 | Argument | `Low` | `High` |
 |---|---|---|
-| static array | index type, widened as above: `array[2..5]` and `array[Word]` give `Integer`, `array[TEnum]` gives `TEnum`, and so does an enumeration-value range `array[eA..eC]` (dcc64, 2026-10-12: `P(High(A))` takes `P(X: TEnum)` beside `P(X: Integer)`), `array['a'..'z']` gives `Char`, `array[Boolean]` gives `Boolean` | same |
+| static array | index type, by the step rule above: `array[2..5]` and `array[Word]` give `Integer`, `array[TEnum]` gives `TEnum`, and so does an enumeration-value range `array[eA..eC]` or a named enumeration subrange `array[TES]` (dcc64, 2026-10-12: `P(High(A))` takes `P(X: TEnum)` beside `P(X: Integer)`), `array['a'..'z']` and `array[TCS]` of a `TCS = 'a'..'z'` give `Char` (2026-10-12), `array[Boolean]` gives `Boolean` | same |
 | dynamic array (value or type) | `Integer` | `NativeInt` (`Int64` on dcc64) |
 | `string`, `AnsiString`, `WideString`, `ShortString` values | `Integer` | `Integer` |
 | the long-string TYPE itself (`High(string)`) | `Integer` | `E2198 High cannot be applied to a long string` |
@@ -768,9 +806,9 @@ of an integer):
 
 | Intrinsic | Rule (dcc32 / dcc64 where they differ) |
 |---|---|
-| `Abs(X)` | integer: the widening rule (`Abs(Byte)` = `Integer`, `Abs(UInt64)` = `Int64`, `Abs(NativeUInt)` = `NativeInt`). Real: **`Extended` on dcc32 for every real type**; on dcc64 `Currency` stays `Currency` and `Comp` stays `Comp` (their arithmetic is integral there), every other real is `Extended` (printed `Double`). `Abs(2.5)` is a real. `Abs(Variant)` is a real |
-| `Sqr(X)` | integer: `Integer` for anything up to 32-bit SIGNED, but a 32-bit **unsigned stays `Cardinal`**, and the 64-bit ones keep their signedness (`Int64`, `UInt64`, `NativeInt`, `NativeUInt`). Real: `Extended` for every real, **`Currency` and `Comp` included** (unlike `Abs`) |
-| `Swap(X)` | a 16- or 32-bit integer keeps its type (`Word`, `SmallInt`, `Integer`, `Cardinal`); `Byte`, `Int64` and a literal give `Integer` |
+| `Abs(X)` | integer: the widening note under the step rule (`Abs(Byte)` = `Integer`, `Abs(UInt64)` = `Int64`, `Abs(NativeUInt)` = `NativeInt`). Real: **`Extended` on dcc32 for every real type**; on dcc64 `Currency` stays `Currency` and `Comp` stays `Comp` (their arithmetic is integral there), every other real is `Extended` (printed `Double`). `Abs(2.5)` is a real. `Abs(Variant)` is a real |
+| `Sqr(X)` | integer: `Integer` for anything up to 32-bit SIGNED, but a 32-bit **unsigned stays `Cardinal`**, and the 64-bit ones keep their signedness (`Int64`, `UInt64`, `NativeInt`, `NativeUInt`). Real: `Extended` for every real, **`Currency` and `Comp` included** (unlike `Abs`), and so is `Sqr(Variant)` (dcc32 / dcc64, 2026-10-12) |
+| `Swap(X)` | a 16- or 32-bit integer keeps its type (`Word`, `SmallInt`, `Integer`, `Cardinal`); `Byte` and `ShortInt` give `SmallInt` (2026-10-12; the row said `Integer`), `Int64` and a constant `Integer` |
 | `Copy(S, I, N)` / `Copy(A, I, N)` | the FIRST argument's type: `AnsiString` stays `AnsiString`, `ShortString` stays `ShortString`, a string literal is `string`, a dynamic array (incl. `TArray<T>`) stays that array type; `Copy(A)` with no range works for a dynamic array and is `E2035` for a string; a static array is `E2008` |
 | `Concat(A, B, ...)` | the `+` of 4.2.1 folded left to right: all arguments of ONE type give that type (`AnsiString`, `WideString`, `UTF8String`, `RawByteString`, a dynamic array type), **`ShortString`+`ShortString` is `AnsiString`** and **`AnsiChar`+`AnsiChar` is `ShortString`**, and a literal takes the other arguments' string type - `Concat(A, 'x')`, `Concat('x', A)`, `Concat(A, A, 'x')`, `Concat(SS, 'x')`, `Concat(SS, A)` are `AnsiString`, `Concat(U8, 'x')` `UTF8String`, `Concat(WS, 'x')` and `Concat(WS, A)` `WideString` (dcc32 / dcc64, 2026-10-12; this row said "literals: string"). Two code pages (`Concat(A, U8)`), `Char` operands and literals alone: `string` |
 | `Default(T)` | `T` for a record, an ordinal, a real, a string, a STATIC array. **`Pointer` for every reference type** - class, interface, dynamic array, procedural/method/reference type, class reference, pointer: `var X := Default(TObj); X.Free` is `E2018 Record, object or class type required` and `var A := Default(TDynI); A[0]` is `E2016` |
@@ -778,9 +816,11 @@ of an integer):
 
 **Semantics & parsing notes**
 
-- ⚠️ *A typer that gives `Ord` "the argument's type" or `Trunc` "Integer" will
-  produce false `E2010`s at the next assignment* - `I64 := Trunc(D)` is fine,
-  `var N := Ord(I64)` is an `Integer`. The rows above are the contract.
+- ⚠️ *A typer that gives `Ord` a 64-bit argument's type or `Trunc` "Integer"
+  will produce false `E2010`s at the next assignment* - `I64 := Trunc(D)` is
+  fine, `var N := Ord(I64)` is an `Integer`. And one that widens `Ord(Ch)` to
+  `Integer` binds the wrong overload: `IntToHex(Ord(Ch))` is the `UInt16`
+  one, `Ord(Ch).ToHexString` TWordHelper's. The rows above are the contract.
 - ⚠️ *`Length(DynArr)` is the one platform-dependent `Length`.* It shows in
   `var L := Length(A)` on dcc64: `L` is an `Int64`, and comparing it to an
   `Integer` counter is a widening, not an error.

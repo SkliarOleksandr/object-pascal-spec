@@ -269,7 +269,7 @@ layer gives them special treatment only *after* name resolution.
 | Ordinary intrinsics | `Ord`, `Chr`, `Pred`, `Succ`, `Length`, `Assigned`, `Addr`, `Abs`, `Odd`, `Copy`, `Concat` — full catalog below | normal calls, compiler-folded |
 | Predefined types | `Integer`, `Boolean`, `Char`, `Byte`, `Double`, `TObject`, `TClass`, `IInterface`, `Pointer`, `Variant`, … | type identifiers from `System` (ch.02); note `string`/`file`/`set` are *reserved words* instead |
 | Compiler-only type | `OpenString` | legal **only** as a `var` parameter's type (classic open-string param); anywhere else dcc gives `E2005 'OpenString' is not a type identifier`. Not declared in `System.pas` at all |
-| Predefined constants | `True`, `False`, `MaxInt`, `CompilerVersion`, … | constant folding; `nil` is a *reserved word* instead |
+| Predefined constants | `True`, `False`, `MaxInt`, `MaxLongint`, `CompilerVersion`, … | constant folding; `nil` is a *reserved word* instead. `MaxInt` and `MaxLongint` are `Integer`, `CompilerVersion` `Extended` (dcc64 prints `Double`): `S := MaxInt` is E2010, `var X := MaxInt; X.Bogus` E2018 (dcc32 / dcc64 37.0) |
 
 #### The complete intrinsic catalog
 

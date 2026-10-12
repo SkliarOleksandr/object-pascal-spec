@@ -437,6 +437,14 @@ RealType = "Real" | "Single" | "Double" | "Extended" | "Comp" | "Currency" | "Re
   uses them. Same family of trap as the
   intrinsic ROUTINES in B.4.3, several of which appear in the source only as
   record FIELDS.
+- ⚠️ *`Extended80` is compiler-provided too* - the 10-byte x87 storage type,
+  `NODEFINE Extended80` its only mention in `System.pas`, known to every
+  target (dcc32, dcc64, dccaarm, dccaarm64, dcciosarm64, dccosx64,
+  dccosxarm64 37.0, 2026-10-12). `SizeOf(Extended80)` is 10 aligned to 8
+  (`record A: Byte; E: Extended80 end` is 24), except where `Extended` is the
+  16-byte type (OSX64: 16 aligned to 16, it IS `Extended`) and on OSXARM64,
+  where its 10 bytes align to 16 (the record is 32). It is a real type of its
+  own on Win64 - `E := D` of an `Extended` (`Double`) compiles.
 - Real literals (B.5.2) default to `Extended`/`Double`.
 
 ---

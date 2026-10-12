@@ -373,6 +373,17 @@ type
   variable's `=` is taken for the initializer and refused as such (`E2195
   Cannot initialize local variables`), as is a thread variable's (E2194).
 - Bounds must be compile-time constants of the same ordinal base type.
+- *The base type is the bounds' type, whatever spells them* (dcc64 37.0,
+  probed 2026-10-12): an enumeration value (`TWork = dMon..dTue`) makes an
+  enumeration subrange and a constant (`const N = 5; TNeg = -N..N`) an
+  integer one, exactly as literals do. Overload resolution sees it -
+  `P(W)` with `W: TWork` takes `P(X: TDay)` beside `P(X: Integer)`,
+  `Q(V)` with `V: TNeg` takes `Q(X: Int64)` beside `Q(X: string)` -
+  and so does a condition: `if W then` is `E2012`. `Pred` / `Succ` of a
+  subrange value give its base type (`Succ(W)` is `TDay`, `Succ` of a
+  `'a'..'z'` value `Char`); `Low` / `High` of an enumeration subrange are
+  an anonymous enumeration (dcc's E2010 names it `Enumeration`), of a Char
+  subrange `Char`.
 - *AST:* `Subrange { lo, hi, baseType }`.
 
 ---
@@ -475,6 +486,13 @@ end;
   - the `*Bool` interop types are `E2028` — including `ByteBool`, which is a
     single byte. `set of Boolean` is fine, so this is about the type and not
     about its size.
+  - a **Char subrange** base is reduced to a byte char like `set of Char`
+    and is never `E2028`, however far its bounds reach: `set of 'a'..#$100`,
+    `set of #0..#300` and `set of #$410..#$42F` (directly or through a
+    named `TCyr = #$410..#$42F`) are `W1050`; so is `set of 'a'..'z'`.
+    The integer rule holds for every integer spelling: `set of
+    0..%111111111` (binary, 511) is `E2028` like `set of 0..511`. Probed
+    on dcc32 and dcc64 37.0, 2026-10-12, the same answers.
 - Set *values* are written with the set-constructor `[ … ]` (B.9), which collides
   syntactically with array indexing — disambiguated by position.
 - Operators: `+` (union), `-` (difference), `*` (intersection), `in`,

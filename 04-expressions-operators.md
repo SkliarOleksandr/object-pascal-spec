@@ -111,6 +111,14 @@ typed by its value instead (3.2.1).
   Double-sized Extended - except that on dcc64 an operation with a Currency
   operand stays Currency (Currency arithmetic is integral on that target,
   as `Abs` shows in 4.11.4).
+- A weak alias operand is its target's row (2.5.1): `B + 1` with
+  `B: TBig`, `TBig = Int64` is `Int64`, as are `Abs(B)`, `Succ(B)` and
+  `Sqr(B)` (4.11.4); `Swap` of a `TW = Word` is `Word`. A distinct
+  `type` loses its name, as the `MyI + MyI` row says. Overload resolution
+  reads these types: `PB(B1 + B2)` takes `PB(X: Integer)` beside
+  `PB(X: Byte)`, `R(Sg * Sg)` takes `R(X: Extended)` beside `R(X:
+  Single)`, `PC(C + I)` takes `PC(X: Int64)` beside the Cardinal and
+  Integer overloads (dcc64 37.0, 2026-10-12).
 - An operand whose type is a record with overloaded operators takes the
   operator's declared result type (4.12).
 
@@ -696,7 +704,7 @@ of an integer):
 
 | Argument | `Low` | `High` |
 |---|---|---|
-| static array | index type, widened as above: `array[2..5]` and `array[Word]` give `Integer`, `array[TEnum]` gives `TEnum`, `array['a'..'z']` gives `Char`, `array[Boolean]` gives `Boolean` | same |
+| static array | index type, widened as above: `array[2..5]` and `array[Word]` give `Integer`, `array[TEnum]` gives `TEnum`, and so does an enumeration-value range `array[eA..eC]` (dcc64, 2026-10-12: `P(High(A))` takes `P(X: TEnum)` beside `P(X: Integer)`), `array['a'..'z']` gives `Char`, `array[Boolean]` gives `Boolean` | same |
 | dynamic array (value or type) | `Integer` | `NativeInt` (`Int64` on dcc64) |
 | `string`, `AnsiString`, `WideString`, `ShortString` values | `Integer` | `Integer` |
 | the long-string TYPE itself (`High(string)`) | `Integer` | `E2198 High cannot be applied to a long string` |

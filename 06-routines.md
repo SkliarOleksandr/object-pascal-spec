@@ -827,6 +827,17 @@ type
   is itself callable by name and is the one chosen over an ancestor's
   parameterless `GetOffset: TPoint`.
 
+  The rule holds for a UNIT-LEVEL routine as for a method, wherever the
+  bare name is a value - a member qualifier, a `with` target, an inline
+  initializer: with `function GetRec(I: Integer): TR1; overload;` declared
+  before `function GetRec: TR2; overload;`, `K := GetRec.R2` and `with
+  GetRec do K := R2` take the parameterless one. An all-defaulted overload
+  is chosen whatever its place in the set: `Get(A, B: Integer): TR2;
+  overload;` declared before `Get(A: Integer = 1): TR1; overload;` leaves
+  `O.Get.R1` meaning the second. (A parameterless and an all-defaulted
+  overload of one name make the bare name `E2251 Ambiguous overloaded
+  call`, P2.) dcc64 37.0, 2026-10-12 (local/probe-b34 P1, P2).
+
   Two shapes are NOT called this way, and a resolver needs both to stop it: a
   procedural type with a parameter the CALLER must supply, and a `procedure`
   type, which has no result to take a member from. The same

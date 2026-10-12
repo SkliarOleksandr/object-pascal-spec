@@ -240,6 +240,12 @@ end;
     because `Create` itself never dispatches. Declaring `Create` `virtual` (and
     overriding it) is what makes the DERIVED class's *initialization code* run
     instead — the correct-class allocation was never in question either way.
+- ⚠️ *A class TYPE NAME in a value position is a class reference, not an
+  instance - overload resolution included:* `Reg(TFoo)` calls `Reg(C:
+  TFooClass)` beside `Reg(O: TFoo)` in either declaration order, while
+  `Reg(TFoo.Create)` - a constructor call, parentheses or not - calls the
+  instance one; `Put(TFoo.Create)` beside `Put(A: Integer)` calls `Put(A:
+  TFoo)`. dcc64 37.0, 2026-10-12 (local/probe-b34 P1).
 - ⚠️ *The metaclass value may be any EXPRESSION, not just a variable or a type
   name* — most often a function result, which is how the factory is usually
   written:

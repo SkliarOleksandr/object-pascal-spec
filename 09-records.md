@@ -445,7 +445,13 @@ type
   identifier: 'Negative'` - operators are reached only through their operator
   token or conversion. Between themselves operators still overload as
   routines do: a second `class operator Negative(const V: R): R` with
-  identical parameters is E2252. (dcc64 37.0, probed 2026-09-24.)
+  identical parameters is E2252. (dcc64 37.0, probed 2026-09-24.) Nor does
+  a BARE name in the record's own methods reach an operator: with `class
+  operator Round` and `class operator Inc` declared, `Result := Round(V)`
+  and `Inc(I)`, `Inc(I, 2)` in a method of the record call System's
+  (`Round(3.7)` gives 4, the integer is incremented), although the method
+  body's scope chain passes the record's members before System (dcc64
+  37.0, 2026-10-12, local/probe-b34 P1).
   *Implementation note:* a resolver that files operators in the member name
   table must not let one clash with, chain onto, or shadow a same-named
   member - the member owns the name.

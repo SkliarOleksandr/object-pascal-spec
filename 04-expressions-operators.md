@@ -111,6 +111,55 @@ typed by its value instead (3.2.1).
   Double-sized Extended - except that on dcc64 an operation with a Currency
   operand stays Currency (Currency arithmetic is integral on that target,
   as `Abs` shows in 4.11.4).
+- ⚠️ *A constant operand adapts to the other operand.* An integer literal,
+  or a true constant naming one, takes the other operand's type when its
+  value fits it: `C + 1`, `1 - C`, `C * 2`, `C div 2`, `C and $FF`,
+  `C or 1`, `C + K` (`const K = 5`) over a Cardinal are Cardinal, `B and
+  $FF` and `B and K` over a Byte Byte. One that does not fit keeps the
+  type of its value - ShortInt for -128..127, Byte to 255, SmallInt down to
+  -32768, then Integer, Cardinal, Int64 - and mixes like a variable:
+  `C + (-1)`, `C + KN` (`KN = -1`), `C + 5000000000` are Int64.
+- ⚠️ *Signedness, not width, decides a 32-bit mix.* A Cardinal with a signed
+  operand of ANY width is Int64 (`C + Sh`, `C + SI`, `C + I`), with an
+  unsigned one Cardinal (`C + B`, `C + W`, `C - C`); `-C` is Int64,
+  `-W` and `-Sh` Integer, `-U64` UInt64. A 64-bit operand gives Int64,
+  UInt64 whenever an unsigned operand is 64-bit (`I64 + U64`, `U64 +
+  I64`).
+- *A shift is its LEFT operand's type,* at least Integer, whatever the
+  count: `C shl 2` and `C shl I` Cardinal, `I shl I64` Integer, `B shl
+  I64` Integer, `I64 shl 2` Int64.
+- *`and` / `or` / `xor` on integers cover rather than widen:* two narrow
+  operands give the narrowest of ShortInt, Byte, SmallInt, Word, Integer
+  holding both (`B and B` Byte, `B and W` Word, `Sh and B` SmallInt,
+  `W or Sh` Integer, `B and -1` SmallInt, `Sh and 200` SmallInt); beside
+  a 32-bit operand the result is Cardinal when an unsigned 32-bit operand is
+  there and Integer otherwise (`C and I`, `C and Sh`, `C and -1`, `I and
+  $FFFFFFFF` Cardinal; `B and I` Integer); beside a 64-bit one UInt64 or
+  Int64 by the same rule (`I64 and C` Int64, `U64 and Sh` UInt64).
+  `B and 300` and `B and $1FF` are an anonymous subrange (E2010 names it
+  Integer).
+- *A distinct integer type computes in its base* (2.5.1): `MI64 + MI64`
+  and `MI64 + 1` (`TMyI64 = type Int64`) Int64, `MC + MC` (`type
+  Cardinal`) Cardinal, `MC + I` Int64, `MW + MW` Integer, `MI and MI`,
+  `MI shl 2`, `-MI` Integer - while `not MI` keeps `TMyI` (as `not`
+  keeps every operand's type).
+- *dcc64: Currency and Comp stay integral; a real CONSTANT is Currency only
+  in additions.* With a Currency VALUE operand `+ - *` are Currency
+  whatever the other operand (`Cu + D`, `D + Cu`, `Cu * Cu`, `Cu + 1`,
+  `Cu * 1.5`, `Cu + Cm`); a Comp value with integers or Comp is Comp
+  (`Cm + Cm`, `Cm * 2`, `Cm + I`, `-Cm`), with a real Extended (`Cm +
+  D`, `Cm + 1.5`). Two Currency-shaped real constants (3.1.3) added or
+  subtracted are Currency (`1.5 + 1.5`, `1.5 - 1.5`, `KCur + KH`), and so
+  is a NAMED one with an integer (`KCur + 1`, `KCur - KI`, `KI + KCur`,
+  `KCur + I`) - but a literal with an integer is Extended (`1.5 + 1`,
+  `1.5 + I`, `I - 1.5`, `K + 1.5`), and so is any constant multiplied
+  (`1.5 * 1.5`, `KCur * 2`) or combined with a real variable (`D + 1.5`,
+  `D * Half`, `KCur + D`); `-1.5` and `-KCur` are Currency. `/`:
+  Currency over an integer or a real variable, or an integer over Currency
+  (`Cu / 2`, `Cu / I`, `Cu / D`, `Cu / Sg`, `I / Cu`, `2 / Cu`);
+  Extended for `Cu / Cu`, `D / Cu`, `Cu / 1.5`, `Cm / 2`, `Cm / Cm`;
+  Comp for an integer over Comp (`I / Cm`). dcc32 answers Extended for all
+  of these.
 - A weak alias operand is its target's row (2.5.1): `B + 1` with
   `B: TBig`, `TBig = Int64` is `Int64`, as are `Abs(B)`, `Succ(B)` and
   `Sqr(B)` (4.11.4); `Swap` of a `TW = Word` is `Word`. A distinct

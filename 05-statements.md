@@ -362,8 +362,16 @@ for var J := High(A) downto Low(A) do   // inline counter, 10.3+
 **Semantics & parsing notes**
 
 - *Counter type:* must be an **ordinal** type. With inline `var` (10.3+) the type
-  is usually **inferred** from the start expression; an explicit `: TypeRef` is
-  allowed.
+  is **inferred** from BOTH bounds; an explicit `: TypeRef` is allowed.
+  Integer bounds meet as the operands of `+` do (4.2.1): at least Integer,
+  a constant bound taking the other bound's type when it fits, a 32-bit
+  signed / unsigned mix Int64 - `B to B`, `B to W`, `Sh to B`, `2 to 9`,
+  `B to 10` are Integer; `C to C` and `0 to C` Cardinal; `C to I`, `I to C`,
+  `-1 to C`, `0 to I64`, `0 to 5000000000` Int64; `U64 to 0` UInt64; `0 to
+  High(DynArr)` and `NI to 0` Int64 on dcc64 and Integer on dcc32; a distinct
+  `MI to MI` (`type Integer`) Integer. A Char, enumeration or Boolean counter
+  is its bounds' type (`Ch to 'z'` Char, `e0 to e2` the enumeration) - dcc32
+  and dcc64 37.0, probed 2026-10-12.
 - *Bounds evaluated once:* both bounds are computed **before** the first
   iteration and not re-evaluated — model this in lowering (don't re-emit the
   limit expression per iteration).

@@ -132,6 +132,41 @@ end;
   method's signature. `inherited Foo(x)` names an explicit ancestor method.
 - ⚠️ *Bare `inherited` takes selectors directly:* `inherited.AsExtended`
   (FMX.Grid.Style.pas) — allow a selector chain on the bare form.
+- ⚠️ *A bare `inherited` is a value:* the call of the method it names, typed
+  by that method's result - `Result := inherited + 1` over an ancestor `V:
+  Integer` returning 7 gives 8, and `I := inherited.X` reads the X of the
+  record the ancestor's `G: TR` returns (I1 below).
+- ⚠️ *Inside a nested routine* (or an anonymous method) of a method, a bare
+  `inherited` still means the enclosing **method** - its name and its
+  arguments, not the nested routine's. In `procedure TN.Fin; procedure Inner;
+  begin inherited; end;` it calls TBase.Fin, though TBase declares an `Inner`
+  too; in `function TN.W(A: Integer): Integer; function Sub(B: Integer):
+  Integer; begin Result := inherited + B; end;` it passes W's `A` (I2: W(4)
+  is `40 + 1`).
+- ⚠️ *The arguments a bare `inherited` passes are the method's DECLARED
+  parameters*, which the implementation of a non-overloaded method may leave
+  unwritten: `procedure TDer.Foo; begin inherited; end;` for a declared
+  `procedure Foo(A: Integer);` calls TBase's `Foo(A: Integer)`, not the
+  parameterless `Foo` overload beside it (I1). Among the ancestor's
+  overloads, those arguments pick the one called.
+- ⚠️ *In a helper's method* (15.3.1) no helper is ever what `inherited`
+  means - neither the helper itself nor its ancestor helpers. A named
+  `inherited X` is the **extended type's own** X, declared there or
+  inherited; a bare `inherited` is the method of the method's name in the
+  extended type's **ancestor**. With `TH0 = class helper for TMid` declaring
+  `St`, `TH = class helper(TH0) for TMid` declaring `St` and `Fin`, and TMid
+  overriding TBase's virtual `St`: in TH.St, `inherited St` runs TMid.St and a
+  bare `inherited` TBase.St; in TH.Fin a bare `inherited` runs TBase.Fin (I1
+  prints `TH.St/TMid.St/TBase.St`). Since a helper's method hides the
+  extended type's method of the same name for every caller (15.3.3), this is
+  how a helper "patches" a method and still calls the original.
+- ⚠️ *In a `message` method* (12.3.1) a bare `inherited` calls the ancestor's
+  handler for the **same message id**, whatever its name, and DefaultHandler
+  when there is none - the name rule above does not apply there.
+- *Evidence:* dcc64 37.0, 2026-10-12, runtime output of PasTree's
+  local/probe-b30 I1.dpr (the value, declared-arity and helper rules) and
+  I2.dpr (the nested-routine rule); the message-id rule from the PasTree
+  audit's runtime probe (E1-22, 2026-09-30).
 - `inherited` is a **reserved word** (§B.4.1) and may appear as the head of a
   `Designator` (§B.8).
 - *AST:* `Inherited { methodName?, args? }`.

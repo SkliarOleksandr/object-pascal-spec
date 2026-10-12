@@ -411,7 +411,9 @@ type
   for TList` method is a TList, `Self.Names[I]` reads the class's property and
   `Self.Tag` in a `record helper for TRec` the record's field; the helper's own
   members are still reached through it (`Self.Own`), as through any value of
-  that type while the helper is active (dcc64 37.0, 2026-10-08; spring4d's
+  that type while the helper is active. `inherited` in a helper's method skips
+  every helper: a named one is the extended type's member, a bare one its
+  ancestor's method (12.1.2) (dcc64 37.0, 2026-10-08; spring4d's
   TStringsHelper, TValueHelper).
 - ⚠️ *A class helper may INHERIT from another helper* (dcc-verified, dcc32
   37.0: a helper `for T` declared `(Ancestor)` for another helper of the same

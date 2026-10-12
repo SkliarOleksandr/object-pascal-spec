@@ -472,6 +472,21 @@ function Area(C: TCircle): Double; overload;
   overloads for overload resolution; a tool rewriting names must know that a
   qualified call can change the unit's import table even when it calls the
   same routine.
+  - The search runs on into `System` and `SysInit` (§3.3.2 step 7) like any
+    used unit: with `function Pos(C: Char; const S: string; X, Y: Integer):
+    Integer; overload;` in a used unit - or in the program itself, which
+    uses nothing - `Pos('ab', 'xabc')` and `Pos('ab', 'xabc', 2)` call
+    System's `Pos(const SubStr, Str: string; Offset: Integer = 1)`.
+  - A routine met further on joins only when it is overloaded ITSELF: a
+    program's `ParamStr(A, B: Integer): string; overload;` leaves System's
+    plain `ParamStr(Index: Integer)` out, so `ParamStr(1)` is `E2250 There
+    is no overloaded version of 'ParamStr' that can be called with these
+    arguments`; a program's `F(X: Integer); overload;` beside a used unit's
+    plain `F(D: Double)` makes `F(1.5)` the same `E2250`. And a set found
+    first without `overload` stops there: a used unit's plain `Pos(C: Char;
+    ...4 parameters)` makes `Pos('ab', 'xabc')` `E2010`, System's `Pos`
+    never considered. dcc64 37.0, probed 2026-10-12 (PasTree audit B25,
+    `probe-b25` P3-P7).
 - ⚠️ *Return type is never part of overload resolution.* Two routines with
   identical parameter lists that differ only in result type are not distinct
   overloads — the second declaration collides with the first rather than

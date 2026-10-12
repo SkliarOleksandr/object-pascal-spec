@@ -256,15 +256,32 @@ uses
 - *Interface vs. implementation uses:* interface-section imports are transitively
   visible considerations for circular-reference rules; `implementation` uses break
   interface circular dependencies.
+- ⚠️ *The interface section sees its own `uses` only.* A name in the
+  interface resolves through the interface clause even when an
+  implementation-used unit, listed later, declares it too: with
+  `interface uses UA; var G: TFoo; H: TGen<Integer>; type TD =
+  class(TFoo)` and `implementation uses UB`, both units declaring `TFoo`
+  and `TGen<T>`, `G`, `H` and `TD`'s ancestor are UA's. In the
+  implementation both clauses are visible, the implementation's first
+  (§3.3.2 step 6). The real shape: `interface uses Vcl.Graphics` (the class
+  `TBitmap`) beside `implementation uses Winapi.Windows` (the record
+  `TBitmap = tagBITMAP`).
+- A unit named twice - in both clauses, or twice in one - is `E2004
+  Identifier redeclared` at the second entry. dcc64 37.0, probed 2026-10-12
+  (PasTree audit B25, `probe-b25` P1, UD1, UD2).
 - The `in 'file'` form binds a unit name to a source path (program/`.dpr` only).
-- ⚠️ *A declaration may hide a used unit's name:* declaring a type/var/const with
-  the same name as a used unit's (leaf) name is legal and HIDES the bare unit
-  name from that point on — the unit stays reachable via its fully-qualified
-  name. dcc-verified in the RTL: Winapi.WinSock2 declares
-  `QOS = _QualityOfService` while using Winapi.Qos (leaf name `Qos`). A resolver
-  that treats this as a redeclaration produces false E2004. A plain (undotted)
-  used name hides the same way (dcc64 37.0: `uses B; var B: Integer;`
-  compiles). The module's OWN name is the exception - redeclaring it is E2004
+- ⚠️ *A declaration may be spelled like a used unit's name:* it is legal,
+  not E2004. An undotted entry is an identifier (§1.2.3), and a declaration
+  of its name HIDES the bare unit name from that point on (dcc64 37.0:
+  `uses B; var B: Integer;` compiles). A dotted entry's last segment is no
+  identifier at all, so a declaration spelled like it hides nothing: `uses
+  System.SysUtils; type SysUtils = Integer;` compiles and
+  `System.SysUtils.TBytes` still works, while `SysUtils.TBytes` without the
+  declaration is `E2003 Undeclared identifier: 'SysUtils'` even under
+  `-NSSystem` (probed 2026-10-12, `probe-b25` P10, P11). The RTL relies on
+  it: Winapi.WinSock2 declares `QOS = _QualityOfService` while using
+  Winapi.Qos. A resolver that treats either as a redeclaration produces
+  false E2004. The module's OWN name is the exception - redeclaring it is E2004
   (§1.1.2).
 - *AST:* ordered `uses[]` per section, each `{ qualifiedName, path? }`.
 

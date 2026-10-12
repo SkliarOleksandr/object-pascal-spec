@@ -485,6 +485,24 @@ type
   resolver that keys helpers by symbol identity: a plain alias
   (`UInt32 = Cardinal`) must be followed to the type it names, and the names
   that are seeded separately have to be grouped by hand.
+- ⚠️ *A helper may extend a CLOSED instantiation, and then only that one.*
+  `class helper for TList<Integer>` (or for an alias `TIntList =
+  TList<Integer>`) applies to a TList<Integer> value and not to a
+  TList<string> one (`LS.SumI` is `E2003`); helpers for TList<Integer> and
+  for TList<string> are both active, each for its own instantiation - they
+  are two types, not one type with two helpers. A resolver keying helpers by
+  the generic's symbol lets the later one take the earlier one's place for
+  every instantiation.
+- ⚠️ *A nested type is the target however it is named:* `record helper for
+  TOuter.TInner`, or for `TAl = TOuter.TInner`, written in another unit than
+  TOuter, applies to a value declared `TOuter.TInner` there (`GR.Ext`).
+- *A helper's `class constructor`* runs once, like any (§15.1.5), and is
+  never what a name means: `TFoo.Create(1)` beside a `class helper for TFoo`
+  declaring `class constructor Create` is TFoo's own constructor - the helper
+  does not hide it.
+- *Evidence:* dcc64 37.0, 2026-10-12, PasTree's local/probe-b29 G1/G2 (the
+  instantiations), N1/N2 (the nested type through an alias and directly), C1
+  (the class constructor).
 - ⚠️ *`NativeInt`/`NativeUInt` join the group of the integer of their size* -
   dcc 37.0 defines `WEAK_NATIVEINT` on every target (1 §1.3.2): a weak alias.
   On dcc32 a `record helper for Integer` is a `NativeInt` value's and one for

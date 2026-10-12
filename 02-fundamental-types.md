@@ -180,7 +180,11 @@ CharType = "Char" | "AnsiChar" | "WideChar" | "UCS2Char" | "UCS4Char" ;
 - ⚠️ *Version-sensitive aliasing:* before Delphi 2009 `Char = AnsiChar` (1 byte);
   from 2009 `Char = WideChar` (2 bytes). A spec-accurate parser targeting multiple
   versions must resolve `Char` per target version.
-- A single-quote 1-char literal is `Char`-compatible (B.6.1).
+- A single-quote 1-char literal is `Char`-compatible (B.6.1) - in
+  parentheses too, and an inline `if` whose branches are each such a
+  literal or a Char value: `Ch := ('x')`, `Ch := if B then 'a' else 'b'`,
+  `Ch := if B then 'a' else Ch` all compile (dcc64 37.0, 2026-10-12). Its
+  overload behaviour is in 6.3.1.
 
 ### 2.2.4 Enumerated types
 

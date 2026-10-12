@@ -437,7 +437,40 @@ function Area(C: TCircle): Double; overload;
 - ⚠️ *A one-character literal is a `Char` constant:* 'a' (`#$41`, `Chr(65)`)
   takes `F(C: WideChar)` over `F(C: AnsiChar)`, and `F(const S: string)`
   over `F(C: AnsiChar)`, in either order - the Char parameter fits it best,
-  a string parameter next, AnsiChar least.
+  a string parameter next, AnsiChar least. It stays one in parentheses and
+  as both branches of an inline `if`: with `P(C: Char)` and `P(const S:
+  string)`, `P(('x'))` and `P(if B then 'a' else 'b')` call the Char one.
+  Adjacent pieces are ONE literal of their joint length (B.6.1): `P(#13#10)`
+  and `P('a'#0)` call the string one.
+- *A weak alias is its target's own type (2.5.1) here too:* with `TId =
+  Integer`, `F(I)` for an Integer calls `F(A: TId)` beside `F(A: Int64)`;
+  with `TMyRc = TRc`, an argument of type TMyRc calls `R(const A: TRc)`
+  beside `R(const A: TPt)`. An argument spelled with the alias, or a
+  parameter spelled with it, is an exact match, not a merely assignable one.
+- ⚠️ *A procedural VALUE rejects a non-procedural parameter.* An
+  anonymous-method literal and a procedure designator - `Noop`, a method
+  `DoIt`, a generic method instantiated in place (`DoIt<Integer>`) - are
+  values of procedural type and nothing else, so `Make(1, procedure begin
+  end)` and `Make(1, Noop)` call `Make(A: Integer; P: TMyProc)` beside
+  `Make(A: Integer; B: Boolean = False)`, and `Take(DoIt<Integer>)` calls
+  `Take(P: TProcM)` (`procedure of object`) beside `Take(A: Integer; B:
+  Boolean = False)`. A FUNCTION designator is different: in a value position
+  it may be called (6.6.1), so it rejects nothing by itself.
+- *A type qualifier does not filter the candidates - it judges the winner.*
+  With a private `function Enter(Timeout: Integer)` and a public `class
+  function Enter(Timeout: Int64)`, `TGen<Integer>.Enter(I)` for an Integer
+  picks the instance overload (the exact match) and then fails, `E2076 This
+  form of method call only allowed for class methods or constructor`
+  (local/probe-b32 P3). So in code that compiles, a call through a type
+  name - an instantiation `TGen<Integer>` as much as `TMonitor` - always
+  lands on a class method or a constructor, and a resolver that cannot
+  tell the arguments' types apart may drop the instance overloads of such a
+  call: `TGen<Integer>.Enter(A)` with `A` of a generic parameter type calls
+  `class function Enter(const AObject: TObject)` beside the private
+  instance `Enter(Timeout: Cardinal)`.
+- *Evidence (the bullets above from "It stays one"):* dcc64 37.0,
+  2026-10-12, runtime output of PasTree's local/probe-b32 P1.dpr, the
+  E2076 of P3.dpr, and T2.dpr (the generic-parameter argument) compiling.
 - ⚠️ *An enumeration and another scalar never convert into each other, so
   such a candidate is OUT, not a weak fit.* `Seek(0, soCurrent)` against
   TStream's `Seek(Offset: Longint; Origin: Word)` and `Seek(const Offset:

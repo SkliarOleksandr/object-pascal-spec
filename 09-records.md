@@ -467,6 +467,12 @@ type
   expression untyped rather than guessed.
 - `Implicit`/`Explicit` define conversions to/from other types — they drive
   implicit/explicit cast resolution.
+- *`nil` reaches a record through `Implicit`:* with `class operator
+  Implicit(Value: Pointer): TPtrRec` (or a class parameter - the RTL's
+  TResourceValue has `Implicit(const Value: TStream)`), `Q := nil` compiles
+  and runs the operator; a record without one rejects it, `E2010
+  Incompatible types: 'TPlain' and 'Pointer'` - dcc names the literal's
+  type `Pointer` (dcc64 37.0, 2026-10-12).
 - ⚠️ *`Implicit`/`Explicit` may overload by RESULT TYPE ALONE* — a deliberate
   exception to the general routine-overloading rule (ch.06) that two overloads
   cannot differ only by return type. Two `class operator Implicit` declarations

@@ -199,8 +199,16 @@ C := S[0];      // first char when zero-based
   `{$ZEROBASEDSTRINGS}` state at that source position. A spec-accurate
   type/bounds layer must track this directive. Prefer `Low(S)`/`High(S)` to stay
   base-agnostic.
-- Indexing yields a `Char`; assignable for mutable string types (triggers
-  copy-on-write unique-ification).
+- Indexing yields the string type's **character type**; assignable for
+  mutable string types (triggers copy-on-write unique-ification). ⚠️ That is
+  `Char` (WideChar) only for `string` / `UnicodeString` and `WideString`: an
+  `AnsiString`, a `ShortString`, a `string[N]`, a code-page string
+  (`RawByteString`, `UTF8String` - `type AnsiString(cp)`) and a distinct
+  `type AnsiString` all index to **`AnsiChar`**. It decides overloads: with
+  `F(C: WideChar)` declared before `F(C: AnsiChar)`, `F(A[1])` of an
+  AnsiString calls the AnsiChar one, `F(U[1])` of a string the WideChar one
+  (dcc64 37.0, 2026-10-12, PasTree's local/probe-b31 S1.dpr); a PAnsiChar's
+  `P[0]` and `P^` are AnsiChar too.
 - ⚠️ *`S.Chars[i]` (the record-helper property, §7.4.1) is a separate, ALWAYS
   0-based, read-only path — unaffected by `{$ZEROBASEDSTRINGS}`.* `S[1]` under
   the default directive and `S.Chars[0]` name the same character; flip

@@ -477,7 +477,11 @@ type
   names. A `record helper for Cardinal` applies to values declared `Cardinal`,
   `LongWord` and `UInt32` alike, because those are one type; it is `E2671` on an
   `Integer`. Same for `Integer`/`LongInt`/`Int32`, `Char`/`WideChar` and
-  `string`/`UnicodeString` (all dcc32 37.0-probed). Two consequences for a
+  `string`/`UnicodeString` (all dcc32 37.0-probed), and `PChar`/`PWideChar`:
+  of a `record helper for PWideChar` and a later `record helper for PChar`,
+  the later is the active one for a value of either name (dcc64 37.0,
+  PasTree local/probe-b31 PW.dpr). Overload resolution takes the same
+  identity (6.3.1). Two consequences for a
   resolver that keys helpers by symbol identity: a plain alias
   (`UInt32 = Cardinal`) must be followed to the type it names, and the names
   that are seeded separately have to be grouped by hand.

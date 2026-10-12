@@ -415,6 +415,40 @@ function Area(C: TCircle): Double; overload;
   (with implicit-conversion ranking); ambiguity is a compile error.
 - ⚠️ Overload resolution interacts with **default parameters** and **distinct type
   aliases** (ch.02) — both can change which candidate wins.
+- ⚠️ *One type under two predefined names is an EXACT match, not a merely
+  compatible one.* `Integer` / `LongInt`, `Cardinal` / `LongWord`, `Char` /
+  `WideChar`, `string` / `UnicodeString`, `PChar` / `PWideChar`, and
+  `NativeInt` / `NativeUInt` with the integer of the target's pointer size
+  (`Integer` / `Cardinal` on 32-bit, `Int64` / `UInt64` on 64-bit) are each
+  one type. An argument spelled with one name picks the overload whose
+  parameter is spelled with the other over a merely assignable sibling, in
+  either declaration order: with `F(C: AnsiChar)` declared before
+  `F(C: WideChar)`, `F(C)` for `C: Char` calls the WideChar one; `G(S)` for
+  `S: string` the `UnicodeString` one beside `AnsiString`; `H(I)` for an
+  Integer the `LongInt` one beside `Int64`; `P(PC)` for a PChar the PWideChar
+  one; on Win64 `K(N)` for a NativeInt the `Int64` one beside `Integer` (on
+  Win32 the `Integer` one). The RTL declares the 1-byte overload first in
+  the common cases - `UpCase`, `Pos`, `CharInSet`, `StrLen`, `StrPas` - so a
+  resolver that compares the names binds nearly every such call of a Unicode
+  code base to the Ansi overload. A generic instantiated over the same
+  arguments is one type wherever it is written: `TPairR<Integer, Integer>`
+  in two units passes to a parameter of that type, beside an `Integer`
+  overload.
+- ⚠️ *A one-character literal is a `Char` constant:* 'a' (`#$41`, `Chr(65)`)
+  takes `F(C: WideChar)` over `F(C: AnsiChar)`, and `F(const S: string)`
+  over `F(C: AnsiChar)`, in either order - the Char parameter fits it best,
+  a string parameter next, AnsiChar least.
+- ⚠️ *An enumeration and another scalar never convert into each other, so
+  such a candidate is OUT, not a weak fit.* `Seek(0, soCurrent)` against
+  TStream's `Seek(Offset: Longint; Origin: Word)` and `Seek(const Offset:
+  Int64; Origin: TSeekOrigin)` calls the TSeekOrigin one although the 0 is
+  an exact Longint: the enum argument cannot reach the Word. The same holds
+  for an integer, Boolean, Char or float argument against an enumeration
+  parameter.
+- *Evidence:* dcc32 and dcc64 37.0, 2026-10-12, runtime output of PasTree's
+  local/probe-b31 O1.dpr (the names, the native pair on both targets, the
+  generic record across units), O2.dpr (the literal) and O3.dpr (the
+  enumeration).
 - ⚠️ *An overload declared only in the IMPLEMENTATION section joins the interface
   section's set for the same unit.* dcc-verified: a 3-parameter `Conv` in the
   interface and a 4-parameter `Conv` in the implementation, and both call shapes

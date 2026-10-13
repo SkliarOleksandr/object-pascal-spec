@@ -288,6 +288,12 @@ type
   - A LOCAL nested type inside a routine body is the one case that stays
     properly scoped: its enum's values are NOT visible outside that routine
     (real E2003) — a routine is not a struct, so the climb never starts.
+  - A GENERIC type is a struct like any other here: `TG<T> = class public
+    type TE = (geA, geB); public F: (gaX, gaY); end` puts `geA` and `gaX` at
+    the section too - bare in TG<T>'s own method bodies, in an unrelated
+    class's methods, in the main block and in another unit that uses this
+    one. The type's parameter list opens no namespace the values stay
+    behind. dcc32 / dcc64 37.0, 2026-10-13 (PasTree audit B41, A3-04).
 - ⚠️ *An injected value is a declaration of the scope it is injected into*,
   and it clashes there like any name - `E2004` (dcc64 37.0, probed 2026-09-27):
   with a `var`, `const`, `type`, routine or `label` of the same name declared

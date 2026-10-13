@@ -826,6 +826,13 @@ GenericArgs = "<" TypeRef { "," TypeRef } ">" ;
     declaration comes out with no type at all, and every member reached
     THROUGH it is then a false `E2003` — reported at the use sites, not at the
     declaration that caused it (11 such sites in one database layer).
+  - The TYPE is looked up along the slot's own scope chain, nearest first,
+    past the member that hides it: a type declared in the implementation
+    section, in a program file or locally in a routine is found exactly like
+    an interface one. `procedure Go; type LocParams = class Count: Integer;
+    end; TRec3 = record LocParams: LocParams; end; var R3: TRec3; begin
+    R3.LocParams.Nope3 := 1;` is `E2003 'Nope3'` - the field has the local
+    class's type. dcc32 / dcc64 37.0, 2026-10-13 (PasTree audit B41, A3-13).
 - Structural type bodies (`record … end`, `array[…] of …`, `set of …`) are
   defined in their chapters; `TypeRef` is the umbrella reference.
 

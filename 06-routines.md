@@ -837,6 +837,12 @@ type
   `O.Get.R1` meaning the second. (A parameterless and an all-defaulted
   overload of one name make the bare name `E2251 Ambiguous overloaded
   call`, P2.) dcc64 37.0, 2026-10-12 (local/probe-b34 P1, P2).
+  The member after such a qualifier is looked up in the RESULT's type, never
+  among the routine's own parameters or locals: with `function Make(Text:
+  Integer = 0): TL;` and `function Current: TL; var Count: Integer;`, `S :=
+  Make.Text` and `S := Current.Count` read TL's string fields (`Make.Bad2` is
+  `E2003`). dcc32 / dcc64 37.0, 2026-10-13 (PasTree audit B41, A4-03;
+  local/probe-b41 G16).
 
   Two shapes are NOT called this way, and a resolver needs both to stop it: a
   procedural type with a parameter the CALLER must supply, and a `procedure`

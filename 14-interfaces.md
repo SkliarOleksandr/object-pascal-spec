@@ -166,6 +166,17 @@ type
   declarations the way it does for a qualified method implementation header
   (`TList<T>.Add` in 16 §16.3); doing so declares bogus symbols (`string`, `T`)
   into the class scope and yields false E2004.
+  The interface name is matched WITH its argument count, arity being part of
+  the identity (16.1.2): beside `IGen = interface function GetA: Integer;
+  end` and `IGen<T> = interface(IGen) function GetT: T; end`, `function
+  IGen<Integer>.GetT = DoGetT;` names the generic one, `function IGen.GetA =
+  DoGetA;` the plain one.
+- *The interface method is a member of that interface, inherited ones
+  included*: `function IFoo.GetB = DoGetB;` with GetB declared in IFoo's
+  ancestor IBase, and `function IFoo._AddRef = MyAddRef;` (IInterface's), are
+  valid - and the interface may live in another unit than the class. dcc32 /
+  dcc64 37.0, 2026-10-13 (PasTree audit B41: A4-04, E3-11; local/probe-b41
+  mr).
 - ⚠️ *The class-method name is NOT always checked* (dcc-probed, dcc32 37.0,
   2026-09-16; UNDOCUMENTED): when an inherited member already satisfies the
   interface method AND that member is declared in an ancestor class which

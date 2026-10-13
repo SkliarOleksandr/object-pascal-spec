@@ -251,6 +251,17 @@ function Max<T>(const A, B: T): T;
   `TFinder.Pick<T>`), so the owner of a list is the segment immediately before
   it. System.Rtti's `GetNamedObject` is the real case: its body calls
   `Obj.HasName`, which only the constraint can answer for.
+  The rule reaches past the innermost type: in `function TDict<K,
+  V>.TEnum.MoveNext(A: V): Boolean` (TEnum nested in `TDict<K; V: TItem>`)
+  the list follows `TDict`, so `A.Site` and a local `Loc: V` see TItem's
+  members although the method belongs to TEnum. And among OVERLOADED generic
+  methods the body's parameter is the one of the overload its header
+  implements, matched by the parameter list like any overload (6.3.1): with
+  `Get<T: TItem>(A: Integer): T; overload;` and `Get<T: TOther>(const S:
+  string): T; overload;`, the body of `TFinder.Get<T>(const S: string)`
+  accepts `Result.OtherM` and rejects `Result.ItemM` (`E2003`). dcc32 /
+  dcc64 37.0, 2026-10-13 (PasTree audit B41: A2-13, B3-31; local/probe-b41
+  G16).
 - ⚠️ *A value parameter may reuse a type parameter's own name* — dcc-verified:
 
   ```pascal
@@ -481,6 +492,12 @@ type
   repeat them — `procedure TList<T>.Sort;` carries a bare `<T>` — so a tool that
   reads constraints off the parameter it finds must follow the body's parameter
   back to the declaring type's.
+- *A generic METHOD's constraints are checked at an explicit
+  instantiation like a type's* - `F.Pick<TObject>(O)` against `Pick<T:
+  TItem>` is `E2515 Type parameter 'T' is not compatible with type 'TItem'`,
+  `TCaster.Cast<Integer>(O)` against `Cast<T: class>` is `E2511`, and
+  `F.Pick<TSub>(O)` with TSub a TItem descendant compiles. dcc32 / dcc64
+  37.0, 2026-10-13 (PasTree audit B41, E2-34; local/probe-b41 GM).
 - ⚠️ `class`/`record`/`constructor` here are **constraint keywords**, not type
   declarations — parse within the `GenericParams` constraint list, not as a class
   body.

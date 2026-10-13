@@ -670,6 +670,11 @@ end;
   compiler with an internal error (F2084 `IRBB366`). Enforce what dcc enforces
   in semantic analysis; a label on a statement in an `if` branch that a `goto`
   outside it targets is code dcc cannot compile.
+- *A `goto` target is looked up as a label only:* inside `with R do goto Done`
+  over a record with a field `Done`, the jump goes to the routine's label
+  `Done` (dcc32 / dcc64 37.0, 2026-10-13; PasTree audit B44, B4-17). A
+  labeled STATEMENT `Done:` in such a body is different - dcc reads the name
+  through the with scope there and fails.
 - *AST:* `LabelDecl`, `LabeledStmt { label, stmt }`, `GotoStmt { label }`.
 
 ### 5.6.5 `Halt`
@@ -781,6 +786,19 @@ end;
     is `TControl.Name`, in a plain body, a `with R, C do` mixed with a same-unit
     record, and inside an anonymous method declared in the body. A record has no
     such tier: its member set is complete where it is declared.
+  - *The member outranks a declaration NESTED in the body as well*, not only
+    the body's own inline var: a nested block's inline var, an anonymous
+    method's parameter or local, an `on E: T do` variable, a `for var`
+    counter. `with P do begin var X: string := 'a'; X := 5; end` (P.X an
+    Integer) compiles and writes P.X; inside a `for Tag := ...` loop, `with C
+    do Tag := 7` writes C's inherited Tag, so it is no `E2081` - while `with
+    C do K := 7` over a target without K still is. dcc32 / dcc64 37.0,
+    2026-10-13 (PasTree audit B44: E3-06, B4-13).
+  - *Not every name in the body is looked up there:* the dispatch name of a
+    named argument (`Ov.Add(Source := X)`, 4.10.1) is the OLE call's, never a
+    member or an enclosing name - `with L do Ov.Add(Nonexistent := 1)`
+    compiles - and a `goto` target is a label (5.6.4). dcc32 / dcc64 37.0,
+    2026-10-13 (PasTree audit B44: A4-02, B4-17).
   - *A name NO target has resolves as it would outside the `with`* - and in a
     method body that means Self's members, inherited ones included, before a
     unit-level declaration of the method's unit, a predefined name or a used

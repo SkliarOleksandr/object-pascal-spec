@@ -242,6 +242,10 @@ type
   `{$SCOPEDENUMS ON}` they must be qualified (`TSuit.Clubs`). This changes
   name resolution — the parser/semantic layer must honour the directive state at
   the type's declaration site.
+  - An explicit ordinal may name an EARLIER value of the same enumeration
+    bare even when the values are scoped: `{$SCOPEDENUMS ON} TE = (seA = 3,
+    seB = seA + 2)` compiles (`TE.seA + 2` too). dcc32 / dcc64 37.0,
+    2026-10-13 (PasTree audit B43, B4-12).
   - The state is **positional**, not per-unit: one unit routinely toggles it
     around a group of declarations, so "honour at the declaration site" means
     tracking WHERE each `{$SCOPEDENUMS}` directive sits in the token stream,

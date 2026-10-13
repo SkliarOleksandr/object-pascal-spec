@@ -61,9 +61,14 @@ type
   merely absent. Records and legacy `object` types have no implicit ancestor;
   an interface's implicit `IInterface` contributes no implementation, so its
   members need no such walk.
-- A class declared `class;` or `class(TParent);` with no member block is a
-  **forward declaration** (completed later in the same type section) — used for
-  mutually referencing classes.
+- A class declared `class;` with no member block is a **forward declaration**
+  (completed later in the same type section) — used for mutually referencing
+  classes. `class(TParent);` is NOT one: it is a complete class with no members
+  of its own (`TE = class(TObject);` alone compiles and `TE.Create` works), and
+  a later `TE = class(TObject) X: Integer; end` is `E2004 Identifier
+  redeclared` - as is a second complete declaration of any type in one scope
+  (`TX = Integer; TX = string;`) and a forward completed twice. dcc32 / dcc64
+  37.0, 2026-10-13 (PasTree audit B43, B4-19; local/probe-b43 F1-F3).
 - ⚠️ *A heritage clause cannot name a type declared LATER in the same `type`
   section* — unlike an ordinary type/const reference (free forward reference
   within one `type` block, 3.1.1) and unlike a pointer target (10.1.1, its own
@@ -86,6 +91,12 @@ type
   every inherited member of every user of the shim reads as undeclared. The
   fix is not to repoint the binding but to DROP it and let the cross-unit
   `uses`-clause pass resolve the name — where the real ancestor actually is.
+  A NESTED type's heritage is the exception to "drop it": in `TOuter = class
+  type TA = class(TB) ... end; TB = class ... end; end` with a unit-level TB
+  declared before TOuter, the later sibling is passed over and TA derives from
+  that outer TB - a declaration of this same unit, which the lookup reaches by
+  going on outward past the struct. dcc32 / dcc64 37.0, 2026-10-13 (PasTree
+  audit B43, B4-11).
 - The optional `[ Abstract ]` in the `ClassType` grammar above is the
   class-level `abstract` directive (the same one in ch.12's `ClassHeader`
   grammar) — it does **not** block instantiation of the class. See

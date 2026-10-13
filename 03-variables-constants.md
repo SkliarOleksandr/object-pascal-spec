@@ -183,6 +183,19 @@ end;
   whose block has ended. Every statement list is such a block: a `repeat`
   body, the `try`, `except` and `finally` parts and a `case` statement's
   `else` part end their inline declarations' scope as `begin ... end` does.
+- *Visible past its WHOLE declaration:* the declaration's own type and
+  initializer still see the outer name it hides - `var G: Integer :=
+  G.Count;` reads a global `G: TStringList`, `var X: Integer := X.Length;` a
+  global string X, and `var Parent := Parent as TForm` the inherited
+  property. dcc32 / dcc64 37.0, 2026-10-13 (PasTree audit B43, A2-09).
+- *A sole statement is a block:* `if B then var A := 1;`, `case N of 1: var
+  C := 2; end;`, `while B do var D := 3;` (and an `else` or `with` body) scope
+  the variable to that statement - a later `var A` in the enclosing block is
+  no redeclaration. The initialization section (and a unit's legacy `begin`)
+  is a block as well: its inline var is visible from its declaration on, so
+  `var GHidden := 5` there, hiding a used unit's GHidden, leaves the routines
+  above the section reading the used unit's. dcc32 / dcc64 37.0, 2026-10-13
+  (PasTree audit B43: B4-10, A4-06).
 - *Type inference:* with `:=` and no `: TypeRef`, the type is the static type of the
   initializer expression. `var X := 1` ⇒ `Integer`.
 - ⚠️ *What a LITERAL initializer infers (dcc 37.0, dcc32 and dcc64, printing

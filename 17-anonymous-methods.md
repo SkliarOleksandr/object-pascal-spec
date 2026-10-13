@@ -229,6 +229,12 @@ end;
   `Result` is NOT capturable (dcc E2555 "Cannot capture symbol 'Result'") — a
   resolver that lets the enclosing `Result` leak into the literal's body
   produces false E2010.
+  Only the enclosing FUNCTION's implicit Result is hidden that way: inside a
+  procedure, `Result` in a literal is whatever the name means there - a field,
+  a property (`property Result: TList` of the method's class), a local - and
+  the literal captures it like any other name (`P := procedure begin
+  Result.Clear; end` compiles, `Result.Bogus` is `E2003`). dcc32 / dcc64
+  37.0, 2026-10-13 (PasTree audit B43, B4-16).
 - The resolver must compute the **capture set** (which enclosing locals/`Self` are
   referenced) to model lifetime; record it on the AST node.
 - *AST:* `captured[]` listing captured symbols on the `AnonMethod`.

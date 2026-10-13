@@ -561,4 +561,13 @@ ObjectType = "object" [ "(" Ancestor ")" ] { ClassSection } "end" ;
   is an `overload` of TO1's parameterless `Get: TR1`, opens TR1; and a bare
   `property X;` redeclaration in `TDerObj = object(TBaseObj)` is the
   ancestor's property with its type (`D.X.Foo`, `with D.X do`).
+- *The extended `New` / `Dispose`* (Turbo Pascal's): with `P` a pointer to an
+  object type, `New(P, Init)`, `New(P, InitN(5))`, the function form `B :=
+  New(PBaseObj, Init)` and `Dispose(P, Done)` run a constructor (or, for
+  Dispose, a destructor) of the POINTEE, and the second argument is looked up
+  in that object type's members - its ancestry included, in another unit too,
+  and never in the caller's scope. A name that is no constructor there is
+  `E2601 Procedure NEW needs constructor identifier of 'TDerived', but
+  undeclared identifier 'Nope1' found`. dcc32 / dcc64 37.0, 2026-10-13
+  (PasTree audit B45, E2-30; local/probe-b45).
 - *AST:* `ObjectType { … }` (value-type OOP node).

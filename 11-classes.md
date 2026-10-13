@@ -189,6 +189,14 @@ type
 
 **Semantics & parsing notes**
 
+- ⚠️ *The section words are DIRECTIVES, not reserved words* (dcc64 37.0,
+  probed 2026-10-13): only inside a class, record, object or interface body
+  do `private`, `protected`, `public`, `published`, `automated` and `strict`
+  open a section. At unit or routine level they are ordinary names - `type
+  Strict = Boolean; Automated = Byte; var Public: Integer; const Private =
+  2;` and a routine's `var Published, Protected: Integer;` compile, and
+  another unit's `Public := Get` uses them. A parser that ends a unit's
+  section at one loses the declaration and the rest of the section.
 - ⚠️ *Unit-level "friend" rule:* plain `private`/`protected` members are visible to
   **all code in the same unit** (Object Pascal has no separate `friend`). `strict
   private`/`strict protected` (2006+) restrict to the class / class+descendants.

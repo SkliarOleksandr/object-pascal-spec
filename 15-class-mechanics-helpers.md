@@ -410,6 +410,11 @@ type
 
 **Semantics & parsing notes**
 
+- ⚠️ *`helper` is a directive:* it makes a helper only before `for` or the
+  `(Ancestor)` - `class helper for T`, `record helper(TBase) for T`. A first
+  field named Helper is a field: `TR = record Helper: Integer; end`, `TC =
+  class Helper: TObject; end` and `TO = object helper: Integer; end` compile
+  (dcc64 37.0, probed 2026-10-13), and an `object` takes no helper at all.
 - ⚠️ Helpers **cannot add instance fields** (no per-instance storage); only methods,
   class vars, properties (backed by existing state). Enforce in the type-checker.
 - ⚠️ *`Self` in a helper's method is a value of the EXTENDED type*, not of the

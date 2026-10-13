@@ -709,7 +709,8 @@ Designator     = ( Ident [ GenericArgs ] | Literal | "inherited" [ Ident ] )
                  { Selector } ;
 (* Literal heads are legal: helper calls bind to literals —
    '.amazonaws.com'.Length, 42.ToString, and even nil^ (all shipped in
-   the D13 sources). `inherited` may be selected directly: inherited.Foo. *)
+   the D13 sources); a caret character too, `^A.IsLetter`, `^[.IsControl`
+   (dcc64 37.0). `inherited` may be selected directly: inherited.Foo. *)
 Selector       = "." MemberName [ GenericArgs ]         (* member access; args → 16.3 *)
                | "[" ExprList "]"                       (* index / array prop *)
                | "(" [ ExprList ] ")"                   (* call *)
@@ -717,7 +718,10 @@ Selector       = "." MemberName [ GenericArgs ]         (* member access; args �
 MemberName     = Ident | ?any reserved word? ;
 (* ⚠️ Member position is unambiguous, so dcc accepts RESERVED WORDS as
    member names: FMX declares `TAnimationType = (&In, ...)` but call sites
-   write `TAnimationType.In` — no &-escape needed after '.'. *)
+   write `TAnimationType.In` — no &-escape needed after '.'. The same holds
+   for a dotted name in a TYPE position (dcc64 37.0, probed 2026-10-13):
+   `TS = TE.In..TE.Mid`, `array[TE.Begin..TE.Case] of Integer`, `V:
+   TE.In..TE.Mid` and `TArray<TC.Type>` (a nested `&Type`) compile. *)
 ExprList       = Expression { "," Expression } ;
 ```
 

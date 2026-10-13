@@ -313,14 +313,38 @@ P := TPair<string, Integer>.Create('a', 1);
     after `>` is `(` , `.` , or another expected continuation, treat it as a generic
     instantiation; otherwise treat `<` as comparison.
   - The construct `TList<Integer>.Create` works because `>` is followed by `.`.
-  - *Refined follower rule (corpus-validated by PasTree):* accept generic args
-    whenever the token after `>` **cannot start an operand** (`;` `)` `]` `,`
-    `=` `then` `do` `and`…). Provably safe: the comparison reading
-    `(a < X) > ⟨follower⟩` would lack a right operand — a guaranteed syntax
-    error — so no valid comparison is ever stolen. Real cases:
-    `Value.AsType<TBytes>;`, `AsType<char> = #0`, `if X.AsType<Boolean> then`,
-    `@Proc<T>;`. `(` remains the genuinely ambiguous follower and reads as a
-    call, matching dcc.
+  - ⚠️ *dcc decides by what the head NAMES, not by syntax* (dcc64 37.0,
+    probed 2026-10-13): after a generic routine the list is type arguments
+    whatever follows - `N.GetData<PRec>^.X`, `V.AsType<Integer> + 1`,
+    `V.AsType<Integer> - 1`, `W.AsType<TBytes>[0]` all compile as generic
+    calls; after a value, `F(A < B, C >= D)`, `F(A < B, C > (D))` and
+    `F(0 < A, B >= 1)` are two comparisons each. Any follower rule based on
+    syntax alone is therefore an approximation that misses in both
+    directions; a parser that cannot see what the head names has to pick.
+  - *A syntactic approximation (PasTree's, corpus-checked):* scan only after
+    a NAME - a bare identifier or a member, whatever it is a member of
+    (`FValues[I].AsType<Integer>`); a literal, call, index or parenthesis
+    right before `<` is a value. Accept generic args when the token after
+    `>` **cannot start an operand** (`;` `)` `]` `,` `=` `then` `do`
+    `and`…): the comparison reading `(a < X) > ⟨follower⟩` would lack a
+    right operand. Real cases: `Value.AsType<TBytes>;`, `AsType<char> =
+    #0`, `if X.AsType<Boolean> then`, `@Proc<T>;`. After a DOTTED head
+    (`X.Id<…>`, every generic method call above) `^ [ + -` are generic too:
+    the comparison reading would compare a Boolean with a number, set or
+    pointer, never type-correct outside Variant or operator-overload
+    chains; after a bare head they stay operands, so `VA < VB > -VC` over
+    Variants (which dcc compiles as a comparison chain) is kept. A fused
+    `>=` closes the list only when the list has no top-level comma - with
+    one, `A < B, C >= D` is two complete comparisons. `(` reads as a call or
+    cast, a comma or not: inside an argument list that misreads `F(A < B, C
+    > (D))`, but the Delphi 13 sources, a large client project and a
+    third-party library set hold no comparison of that shape and seven
+    generic calls and casts of it (`source.Aggregate<Integer, string>(5,
+    ...)`, `IMap<TKey, TValue>(this)`).
+  - *A `>` glued to a dereference*, `GetData<PRec>^.X`: lexed context-free,
+    `^.` after an operator is a caret character (B.6.2); a `^.` character
+    right after a comparison's `>` is never written, so a lexer can take
+    `>^.` (no space) as `>` then `^`.
 - Practical implementations keep a speculative parse / backtracking path for this.
   **Document the heuristic in the parser** — this is where most hand-written
   Object Pascal parsers get it wrong.

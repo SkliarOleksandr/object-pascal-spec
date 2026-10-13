@@ -198,6 +198,13 @@ property Items[I: Integer]: TItem read GetItem; default;
   must treat a same-name property redeclaration as an overload, not an E2004.
   (An earlier revision of this section said "one array property per class may be
   marked default" — that was wrong.)
+- *A typeless redeclaration can make the inherited property the default
+  one:* `TDer = class(TBase) public property Items; default; end` over
+  TBase's `protected property Items[I: Integer]: TItem read GetI;` makes
+  `D[0]` a TItem (`D[0].Bogus` is `E2003`, `with D[0] do S := Name`
+  compiles) - from TDer down. The redeclaration writes no parameter list and
+  no type; its bare `default;` is the array-default specifier, not a value.
+  dcc32 / dcc64 37.0, 2026-10-13 (PasTree audit B42, E3-09).
 - ⚠️ *One bracket, all the parameters:* a default property of several index
   parameters takes them in ONE bracket list, exactly as many as it declares -
   `S[C, R]` over `property At[C, R: Integer]: TCells ... default` is one call,

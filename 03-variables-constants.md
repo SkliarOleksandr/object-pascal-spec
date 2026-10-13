@@ -345,6 +345,12 @@ const
   then `CI.ToString`, and `const CS = 'abc';` then `CS.Length`, both compile
   (dcc 37.0) — the helper is looked up on the constant's type, so a resolver
   must record it rather than treat the constant as untyped.
+  Hint directives after the value change nothing: `CDep = 'abc' deprecated;`,
+  `CPlat = 'xyz' platform;`, `CNum = 5 deprecated 'x';` are typed like the
+  unhinted constant (`CDep.Bogus` is `E2003`, `var L := CDep` is a string);
+  each hint is a node after the initializer, which is therefore not the
+  declaration's last child. dcc32 / dcc64 37.0, 2026-10-13 (PasTree audit
+  B42, A3-28; local/probe-b42).
 - ⚠️ *An initializer that is an OPERATOR over other constants has a type
   too,* by the operator rules of 4.2.1: `const KindA = 'S'; KindB = 'T';
   Kinds = KindA + KindB;` is a `string`, and `Kinds.CountChar(C)` binds to
@@ -501,6 +507,10 @@ resourcestring
   constant expression (string literals + constant concatenation only).
 - Behaves like a read-only `string` constant at use sites; differs only in storage
   and localizability.
+- *Always a `string`, whatever the literal:* `SComma = ','` is no Char as a
+  true constant of one character would be - `R1.Substring(0)` compiles, `var
+  V := R1` infers a string, and `F(R1)` takes F(string) over F(Char). dcc32 /
+  dcc64 37.0, 2026-10-13 (PasTree audit B42, A3-29).
 - *AST:* `ResourceStringDecl { name, value }`.
 
 ---

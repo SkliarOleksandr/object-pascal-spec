@@ -256,6 +256,13 @@ uses
 - *Interface vs. implementation uses:* interface-section imports are transitively
   visible considerations for circular-reference rules; `implementation` uses break
   interface circular dependencies.
+- *Only ANOTHER unit can be used.* A unit naming itself is `F2092 Program or
+  unit 'a1' recursively uses itself`; a program file found under the name is
+  compiled as a unit and fails (`E2029 'UNIT' expected but 'PROGRAM' found`,
+  then `F2063`) - and from a unit the program itself uses, dcc64 37.0 stops
+  at `F2084 Internal Error`; `System` and `SysInit` are `E2004` (§1.2.4's
+  implicit units). A uses-clause completion offers none of them (probed
+  2026-10-13, dcc64 37.0, PasTree audit B49).
 - ⚠️ *The interface section sees its own `uses` only.* A name in the
   interface resolves through the interface clause even when an
   implementation-used unit, listed later, declares it too: with

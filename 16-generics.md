@@ -420,6 +420,21 @@ P := TPair<string, Integer>.Create('a', 1);
   TClass(TList<Integer>)` evaluated at the two separate sites is `True`). A
   resolver should key instantiated-type identity by `(genericName, typeArgs)`,
   not by declaration or use site.
+  - *The arguments are compared as TYPES, weak aliases followed (2.5.1):*
+    with `PInfo = PiT.PInfo` in unit PiA, `TBox<string, PiA.PInfo>` and
+    `TBox<string, PiT.PInfo>` are one type - `TypeInfo` of the two is equal,
+    the records assign both ways and to an alias `TBoxA = TBox<string,
+    PInfo>`, and a literal `function(const X: TBox<string, PiT.PInfo>):
+    Boolean` passed where `Pick(const P: TPred<TBox<string, PInfo>>)` and
+    `Pick(const P: TPred<Integer>)` are overloads calls the TBox one. A
+    distinct `PDist = type PiT.PInfo` argument makes another instantiation:
+    `TBox<string, PDist> := TBox<string, PiT.PInfo>` is `E2010`. A resolver
+    that registers an instantiation under the symbol each argument was
+    WRITTEN through must compare two such entries argument by argument after
+    following the aliases (spring4d's `fServices.FirstOrDefault(function(const
+    item: TPair<string, PTypeInfo>) ...)` meets `Spring.PTypeInfo =
+    TypInfo.PTypeInfo` on one side and TypInfo's own name on the other).
+    dcc64 37.0, 2026-10-13 (PasTree local/probe-instalias Pi1, Pi2).
 - *Monomorphization: one method-body copy per distinct instantiation, even for
   a T-independent method.* Each closed instantiation gets its own compiled copy
   of every method, whether or not that method's body actually mentions `T` —

@@ -617,6 +617,14 @@ otherwise; the probes are cited in the bullets and the sections referenced.
 4. **A qualifier's head is an ordinary bare name** (§1.2.3): `A.B` looks up
    `A` by this same order - a member, a local, a with target's member named
    like a unit hides the unit there - and only then `B` in what `A` is.
+   A MEMBER of the method's class hides a unit only inside a routine's
+   BODY (its declarations and statements); in a type's declaration and in
+   a routine heading - a method's implementation heading included - the
+   head is still the unit. With an inherited property `uA` and a unit `uA`
+   declaring `TX`, a field `F: uA.TX` and `procedure TKid.M(A: uA.TX)`
+   compile, while `var L: uA.TX` in M's var section is `E2007` and
+   `uA.TX.XF` in its statements `E2018` (probed 2026-10-13, dcc64 37.0,
+   probe-b48 P1-P4).
    A head spelling the unit's OWN name makes `B` a unit-level declaration
    of either section made so far, never a member of the enclosing type
    (§1.1, the module-name bullet).

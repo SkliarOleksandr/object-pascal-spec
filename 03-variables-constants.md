@@ -751,6 +751,8 @@ first-hit rule: a unit's interface (plus the intrinsics for `System`, plus
 the implementation for the unit naming itself - §1.2.3); a type's or an
 instance's members - the type's active helper first (probed: `K.Own` is
 the helper's), then the type, then its ancestry - with the same visibility filter; an enum type's values.
+A `{$IF}` designator follows the same rule, the own unit's name by position
+(§1.3.2).
 
 **The steps in detail**
 

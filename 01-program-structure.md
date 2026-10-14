@@ -665,6 +665,18 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   normally (`{$IF UConst.QC > 1}`, `{$IF System.MaxInt > 1}`) — but a qualified
   name whose unit is known and whose member is not is a hard **E2003**, not a
   fallback.
+- ⚠️ *A qualifier in `{$IF}` is a unit's name exactly as in code (1.2.3)* -
+  the name the `uses` clause WROTE, whole, or `System`, `SysInit`, or the
+  unit's own - and the name may go on through a type: `{$IF Ns.QBase.QC =
+  5}` with `uses Ns.QBase` (three parts), `{$IF Ord(UC.TE.e3) = 2}`, `{$IF
+  System.SysUtils.MinDateTime < 0}`. The unit's OWN name reaches the
+  implementation's declarations too, and by position like a bare name: in
+  unit UQ, `{$IF UQ.IC > 1}` over an implementation `const IC = 5` above it
+  is True, and `{$IF P3.Late > 1}` above `const Late` is E2003.
+  `System.CompilerVersion` is the compiler's value like the bare name
+  (System.pas declares it `0.0`, dcc assigns it), `System.RTLVersion`
+  System's constant. Probed dcc64 37.0, 2026-10-14 (PasTree
+  local/probe-b58 P1, P3, UQ).
 - ⚠️ *An unresolvable name does not evaluate to False — the verdict depends on
   where it sits, and one case ABORTS the whole expression.* This is the single
   most surprising rule in the pre-pass, and any tool that models `$IF` has to
@@ -712,7 +724,14 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   resolves by position like any other: `uses U2; var A: array[0..N] of Byte;
   const N = Length(A);`, with U2 declaring `N = 3`, binds the bound to U2's
   `N` (the own one is below it), so the own `N` is 4 and `{$IF N > 3}` is
-  True (probed, dcc64 37.0, 2026-10-08).
+  True (probed, dcc64 37.0, 2026-10-08). The index may be any ordinal type
+  and the array type a named one: `array[TE]` of a three-value enum is 3,
+  `array['a'..'e']` 5, `array[Boolean]` 2, `array[Byte]` 256, a constant
+  `A3: TArr` with `TArr = array[1..4] of Byte` 4, and `array[TE, 0..9]` its
+  first dimension, 3. Length of an untyped string constant and of a string
+  literal fold too: `const S = 'abc'` gives `Length(S) = 3`, and
+  `Length('xy')` is 2. `Length(TArr)`, a type name, is E2029 (probed dcc64
+  37.0, 2026-10-14, local/probe-b58 P2).
 - ⚠️ *`SizeOf` of an unresolvable type is `4`* — a real value, not an abort, so
   `{$IF SizeOf(TNoSuchType) <> 32}` is True while `{$IF SizeOf(TNoSuchType) = 32}`
   is False. `Declared(X)`/`Defined(X)` likewise answer a plain False and never
@@ -744,7 +763,18 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   - the argument is a **designator, not an identifier**
     (`Declared(System.Embedded)`, in a platform header unit). Stopping at the
     dot asks about `System`, which is a unit name and answers True — the
-    opposite branch.
+    opposite branch. It resolves by the qualifier rule above and never
+    errs: `Declared(UC.QC)`, `Declared(System.TObject)`,
+    `Declared(SysInit.HInstance)`, `Declared(System.SysUtils.Exception)`,
+    `Declared(System.Length)` (an intrinsic, 1.2.4) and `Declared(UC.TE.e1)`
+    are True; `Declared(SysUtils.Exception)` with `uses System.SysUtils` (a
+    last segment does not qualify), `Declared(UC.Missing)` and
+    `Declared(Nope.X)` are False. A unit's name is declared
+    (`Declared(System.SysUtils)`, `Declared(UQ)` in UQ). The own unit's name
+    answers by position like a bare name, from the unit-level declarations
+    only: `Declared(UQ.Later)` above `const Later` is False, and in a routine
+    declaring `const Loc`, `Declared(P3.Loc)` is False where `Declared(Loc)`
+    is True (probed dcc64 37.0, 2026-10-14, local/probe-b58 P1, P3, UQ).
   - the second pass must **not** consult the unit's OWN declarations WHOLE.
     The guard idiom declares the name inside the text it guards, so
     answering from the previous pass's model makes the answer flip every

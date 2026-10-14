@@ -684,16 +684,24 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
 
   | shape | verdict |
   |---|---|
-  | arithmetic (`X+1=1`, `1 shl X = 2`, `-X = 0`, `X div 2 = 0`) | **True** |
+  | arithmetic (`X+1=1`, `1 shl X = 2`, `-X = 0`, `+X = 1`, `X div 2 = 0`) | **True** |
   | relational vs a numeric literal/const, either side (`X>1`, `1=X`, `X>KnownConst`, `X=$10`) | **True** |
-  | `X in [1,2]` | **True** |
+  | `X in [1,2]`, `1 in [X]` | **True** |
+  | a cast or an intrinsic over it (`Byte(X) = 1`, `Integer(X) <> 0`, `Ord(X) = 1`, `Odd(X)`, `Abs(X) = 1`, `High(X) > 1`) | **True** |
   | unresolvable vs unresolvable (`X > Y`) | **True** |
   | bare boolean (`X`, `(X)`) | **False** |
-  | `not X`, `not not X` | **False** |
+  | `not X`, `not not X`, `not (X >= '1.0')`, `(not X) = False` | **False** |
   | vs a string literal (`X >= '1.0'`, `'1.0' <= X`) | **False** |
   | vs a char literal (`X = 'a'`, `X = #65`) | **False** |
-  | vs a Boolean literal (`X = True`, `X = False`) | **False** |
-  | any **dotted** name whose prefix is unknown (`A.B`, `A.B > 1`, `A.B.C > 1`) | **False** |
+  | vs a Boolean literal (`X = True`, `X = False`, `not (X = True)`) | **False** |
+  | any **dotted** name whose prefix is unknown, in EVERY shape - arithmetic and `not` included (`A.B`, `A.B > 1`, `A.B < 5`, `A.B = 0`, `A.B + 1 = 1`, `not A.B`, `A.B in [1]`, `A.B.C > 1`) | **False** |
+
+  "Unresolvable" covers more than a name declared nowhere: a `var` and a
+  typed constant are the same to `{$IF}` - `V > 1`, `TC <> 7` and `TC = 7`
+  (with `const TC: Integer = 7`) all abort True, while the untyped `UC <> 7`
+  is False; `{$IF V}` bare is E2012. An error token stays one under `not`:
+  the inner False is not inverted (probed dcc64 37.0, 2026-10-14, PasTree
+  local/probe-b59 P1, P2).
 
   The True cases are an **abort**, not a value: the verdict propagates to the
   top of the directive and the rest of the expression is discarded. All four of
@@ -713,6 +721,31 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   swallowed at the top of the directive but a hard **E2015 Operator not
   applicable** the moment it has to feed `and`/`or`: `{$IF X >= '1.0'}`
   compiles and is False, `{$IF (X >= '1.0') and True}` does not compile.
+- *What `{$IF}` folds - a constant expression's full arithmetic* (probed
+  dcc64 37.0, 2026-10-14, PasTree local/probe-b59 P1, P2):
+  - strings concatenate and compare as strings: `'ab' + 'cd' = 'abcd'` is
+    True and `= 'zz'` False; a constant `cVer = '10.' + '5'` makes `cVer =
+    '10.5'` True and `cVer >= '10.6'` False. A string against a number is
+    E2008 (`SizeOf(Integer) + 'a' = 'x'`). A `#` character is part of the
+    string: `#66 = 'B'`, `'a' + #66 = 'aB'`, `'a'#66'c' = 'aBc'`.
+  - `and`, `or`, `xor` and `not` are BITWISE on integers: `(6 and 1) <> 0`
+    is False, `(5 xor 4) = 1`, `(1 or 2) = 3`, `not 0 = -1`, `not $FF =
+    -256` True, and a constant `M = $10 or $01` is `$11`.
+  - `in` over a set constructor of numbers, ranges, characters or enum
+    values: `3 in [1, 2, 3]`, `3 in [1..5]`, `'b' in ['a'..'c']`, `e2 in
+    [e1, e2]` True, `7 in [1, 2, 3]` False.
+  - the ordinal intrinsics: `Ord('A') = 65`, `Ord(e3) = 2`, `Ord(True) = 1`,
+    `Chr(65) = 'A'`, `Succ(1) = 2`, `Succ('a') = 'b'`, `Pred(e2) = e1`,
+    `Abs(-3) = 3`, `Abs(-3.5) = 3.5`, `Odd(3)`; `High` and `Low` of a builtin
+    ordinal type (`High(Integer)`, `Low(Integer) = -2147483648`, `High(Byte)
+    = 255`, `High(Cardinal) = 4294967295`, `High(Char) = #65535`,
+    `High(AnsiChar) = #255`, `High(Boolean)`, `High(NativeInt) >
+    2147483647` on Win64), of an enum (`High(TE) = e3`, `Low(TE) = e1`) and
+    of a subrange (`High(TSub) = 9`); `MaxInt` and `MaxLongint`.
+  - a hex or binary literal above `High(Int64)` is UInt64:
+    `$FFFFFFFFFFFFFFFF > 0` and `$8000000000000000 > $7FFFFFFFFFFFFFFF` are
+    True, `$FFFFFFFFFFFFFFFF = -1` False, and so for a 64-digit `%1000...`;
+    `&1 = 1` (the `&` before a number is ignored, B.3).
 - *`Length` of a static array* is a constant in `{$IF}` even though the array
   is not: `Length(V)` of a `var V: array[0..7] of Byte` and of a typed
   constant array both evaluate exactly, although `V` alone, like any `var` or

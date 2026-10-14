@@ -159,7 +159,13 @@ type
   `{$A-}`/`{$A+}` (= 1 and 8) all set it, and a unit routinely brackets one
   type with it, so the value that matters is the one in effect **at the
   record's declaration**, not at the end of the file. `packed` is a cap of 1
-  for that record only.
+  for that record only. Precisely, it is the cap in effect just AFTER
+  `record`: under `{$A8}`, `record {$A1} A: Byte; B: Integer; end` is 5, and
+  so is `{$A1} record ...`, while a directive further into the body changes
+  nothing - `record A: Byte; {$A1} B: Integer; end` is 8, and `record
+  {$A1} procedure M; {$A8} var A: Byte; B: Integer; end` is 5: such a
+  directive takes effect for the declarations after the record (dcc64 37.0,
+  2026-10-14, PasTree local/probe-b60 P1).
 
   Because no builtin's natural alignment exceeds 8, `{$ALIGN 16}` produces
   layouts identical to `{$ALIGN 8}` — it raises a ceiling nothing reaches.
@@ -187,7 +193,18 @@ type
   | `procedure … of object` | 2 pointers | `Min(size, 8)` — **8 on Win32** |
   | a static array | element size × ∏ dimensions | its **element's** |
   | a subrange | 1, 2 or 4 — smallest that fits the range | = its size |
+  | a **character** subrange (`'a'..'z'`, `#0..#127`) | **2** whatever the range | **1** when both bounds are character literals (`record B: Byte; L: 'a'..'z' end` is 3), 2 otherwise (`Low(Char)..High(Char)`) |
+  | a set of characters (`set of 'a'..'c'`, `set of Char`) | **32** whatever the range - the base is reduced to a byte char (W1050, 2.4.1) | 1 |
   | a nested record | its own | its own, fixed at ITS declaration |
+
+  A field's type is the one its name resolves to where the record is
+  declared (3.3.2): a record in the interface whose field names a used
+  unit's `TFoo = Byte` is laid out with it although the implementation
+  declares a `TFoo = Int64` below, and a declaration in scope hides a
+  builtin of the same name - with `Text = Byte` and `Single = Word` in the
+  unit, `record A: Byte; T: Text end` is 2 and `record A: Byte; S: Single
+  end` 4. (Character subranges, sets, the cap and these two: dcc64 37.0,
+  2026-10-14, PasTree local/probe-b60 P1-P3.)
 
   Two of those rows are traps. `ShortString` is 256 bytes but byte-aligned, so
   `record A: Byte; S: ShortString; end` is **257** — clipping the size to 8

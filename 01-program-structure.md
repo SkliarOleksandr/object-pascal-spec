@@ -746,6 +746,10 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
     `$FFFFFFFFFFFFFFFF > 0` and `$8000000000000000 > $7FFFFFFFFFFFFFFF` are
     True, `$FFFFFFFFFFFFFFFF = -1` False, and so for a 64-digit `%1000...`;
     `&1 = 1` (the `&` before a number is ignored, B.3).
+  - `SizeOf` of a generic instantiation: `SizeOf(TPair<Byte, Int64>) = 16`
+    with `TPair<K, V> = record Key: K; Value: V; end`, and a constant `C4 =
+    SizeOf(TPair<Byte, Byte>)` reads 2 (local/probe-b60 P1); the layout is
+    9.1.2's.
 - *`Length` of a static array* is a constant in `{$IF}` even though the array
   is not: `Length(V)` of a `var V: array[0..7] of Byte` and of a typed
   constant array both evaluate exactly, although `V` alone, like any `var` or

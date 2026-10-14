@@ -30,6 +30,9 @@ insignificant (**except inside multiline string literals**, B.6.3). For dcc
 every control character `#0`..`#31` is whitespace, not only space, tab and
 line breaks - a stray `#$12` after a semicolon or an embedded `#0` compiles
 silently (probed dcc64 35.0, 2026-09-16); `#$7F` is E2038 "Illegal character".
+Nothing above `#$7F` is whitespace: NBSP (U+00A0), NEL (U+0085), U+2028 and
+U+3000 are identifier characters (B.3) - `X:<NBSP>Integer` is `E2003
+Undeclared identifier: '<NBSP>Integer'` (dcc64 37.0, probed 2026-10-14).
 
 ### B.2.1 Comment forms
 
@@ -116,7 +119,8 @@ Directive = "{$" DirectiveBody "}" | "(*$" DirectiveBody "*)" ;
 ```ebnf
 Ident      = [ "&" ] Name ;                  (* the ONE leading "&" escapes *)
 Name       = { "&" } IdentStart { IdentChar } ;   (* further "&"s ARE the name *)
-IdentStart = "A".."Z" | "a".."z" | "_" | ?Unicode letter? ;
+IdentStart = "A".."Z" | "a".."z" | "_"
+           | ?any UTF-16 unit from $80 up that is no surrogate? ;
 IdentChar  = IdentStart | "0".."9" ;
 ```
 
@@ -153,7 +157,14 @@ IdentChar  = IdentStart | "0".."9" ;
   compiles (verified against dcc64 37.0) and the RTL ships it
   (`System.Beacon.pas`: `FMDataMask[…] := &1`). The `&` is ignored. A parser
   should accept `&` + integer literal, not just `&` + identifier.
-- Identifiers may contain Unicode letters; the leading char is a letter or `_`.
+- ⚠️ *Every character above ASCII is an identifier character, letter or not*
+  (dcc64 37.0, probed 2026-10-14, PasTree local/probe-b57 U1): an em dash, the
+  euro sign, U+00B2, U+3000, an Arabic-Indic digit, NBSP, NEL, U+2028 and
+  U+FEFF start or continue a name, and a combining mark (U+0301, what an
+  NFD-decomposed accented name holds) continues one - `var <U+2014>Q,
+  <U+20AC>R, A<U+0301>B: Integer` compiles. A supplementary-plane character (a surrogate pair) is
+  `E2038 Illegal character`. The leading character is still never an ASCII
+  digit.
 
 ## B.4 Reserved words, directives & predefined identifiers
 
@@ -402,9 +413,9 @@ identifier as an argument, *by-ref* = argument(s) must be lvalues,
 
 ```ebnf
 IntLiteral  = DecLiteral | HexLiteral | BinLiteral ;
-DecLiteral  = Digit { [ "_" ] Digit } ;
-HexLiteral  = "$" HexDigit { [ "_" ] HexDigit } ;
-BinLiteral  = "%" BinDigit { [ "_" ] BinDigit } ;
+DecLiteral  = Digit { "_" | Digit } ;
+HexLiteral  = "$" { "_" } HexDigit { "_" | HexDigit } ;
+BinLiteral  = "%" { "_" } BinDigit { "_" | BinDigit } ;
 Digit       = "0".."9" ;
 HexDigit    = Digit | "A".."F" | "a".."f" ;
 BinDigit    = "0" | "1" ;
@@ -421,9 +432,12 @@ const
 
 **Semantics & parsing notes**
 
-- *Digit separator `_`* may appear **between** digits only; it is ignored when
-  computing the value. It is not allowed leading/trailing or doubled adjacent to
-  the prefix — treat such cases as lex errors.
+- ⚠️ *Digit separator `_`* is ignored when computing the value, and dcc takes
+  it anywhere after a prefix or a first digit - leading, trailing and doubled
+  (dcc64 37.0, probed 2026-10-14, PasTree local/probe-b57 N1): `1__0` (10),
+  `1_` (1), `$_FF` and `$FF_` (255), `%_1` (1), `#_65` and `#$4_1` ('A'),
+  `1_.5` (1.5). A decimal literal still starts with a digit - `_1` is an
+  identifier. (A correction: this note used to call those forms lex errors.)
 - *Value type:* the literal's type is the smallest predefined integer type that
   holds it (up to `Int64`/`UInt64`); see ch.02 for the integer type ladder.
 - *Hex above `High(Int64)`:* as a constant `$FFFFFFFFFFFFFFFF` is a `UInt64`
@@ -448,9 +462,9 @@ const
 **Grammar**
 
 ```ebnf
-RealLiteral = Digit { [ "_" ] Digit }
-              [ "." [ Digit { [ "_" ] Digit } ] ]   (* the fraction may be EMPTY *)
-              [ ( "e" | "E" ) [ "+" | "-" ] Digit { Digit } ] ;
+RealLiteral = Digit { "_" | Digit }
+              [ "." [ Digit { "_" | Digit } ] ]     (* the fraction may be EMPTY *)
+              [ ( "e" | "E" ) [ "+" | "-" ] Digit { "_" | Digit } ] ;
 ```
 
 **Semantics & parsing notes**
@@ -464,7 +478,12 @@ RealLiteral = Digit { [ "_" ] Digit }
   Nor does the `.` stay with the number before a `)`: `.)` is the legacy
   alternate for `]` (B.7), so `(X * 100.)` lexes as `100` `.)` - E2029 "')'
   expected but ']' found" - where `(X * 100. )` compiles (dcc64 37.0; a tool
-  that inserts parentheses must leave a space there).
+  that inserts parentheses must leave a space there). The same reading makes
+  `A(.1.)`, `array(.0..3.)` and `(.1, 2.)` compile (probed 2026-10-14).
+- ⚠️ *Separators in the exponent:* after its first digit, as anywhere -
+  `1e1_0` and `1e+1_0` are 1E10, `2E-0_1` is 0.2, `1e1__0_` 1E10; right after
+  the `e` or its sign one is `E2053 Syntax error in real number` (`1e_1`,
+  `1e+_1`). dcc64 37.0, probed 2026-10-14 (PasTree local/probe-b57 N1-N3).
 - Default type is `Extended`/`Double` (platform-dependent); see ch.02.
 - `$`/`%` prefixes are integer-only — no hex/binary floats.
 
@@ -589,6 +608,15 @@ end;
     `X^M` with an integer `X` is the same error, not a concatenation;
   - in a **type** position (`PM = ^M`, ch.10) it is the pointer-type
     constructor even when `M` is a single letter that would otherwise be `^M`.
+
+  Three shapes a lexer looking at the previous token alone gets wrong (dcc64
+  37.0, probed 2026-10-14, PasTree local/probe-b57 C1): after a directive word
+  that takes a constant the caret is a character - `property Esc: Char read
+  FEsc default ^[;`, `default ^?`; after a reserved word used as a member
+  (B.8) it is a dereference - `TC.Array^[0]` with `class var &Array: PA`; and
+  after the `>` closing a generic call's type arguments it is a dereference
+  too - `TH.GetP<Integer>^.F`, `TH.GetA<Integer>^[1]` - where after a
+  comparison's `>` it is a character (`C > ^[`).
 - *AST:* a `CaretChar` literal node carrying the raw two-character text; its
   value is `Chr(Ord(UpCase(c)) xor 64)`, or it folds into the enclosing
   `StrLit`.
@@ -721,7 +749,10 @@ MemberName     = Ident | ?any reserved word? ;
    write `TAnimationType.In` — no &-escape needed after '.'. The same holds
    for a dotted name in a TYPE position (dcc64 37.0, probed 2026-10-13):
    `TS = TE.In..TE.Mid`, `array[TE.Begin..TE.Case] of Integer`, `V:
-   TE.In..TE.Mid` and `TArray<TC.Type>` (a nested `&Type`) compile. *)
+   TE.In..TE.Mid` and `TArray<TC.Type>` (a nested `&Type`) compile.
+   `asm` there is a name, not a block: `L := TLang.Asm;`, `TC.Asm()` with
+   `TLang = (&Pascal, &Asm, &End)` and `class function &Asm` compile and
+   run the statements after them (dcc64 37.0, probed 2026-10-14). *)
 ExprList       = Expression { "," Expression } ;
 ```
 

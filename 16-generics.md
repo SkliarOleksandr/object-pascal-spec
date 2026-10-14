@@ -10,7 +10,8 @@ Shared productions (`TypeRef`, `GenericArgs`) → [Appendix B
 
 ```ebnf
 GenericParams = "<" TypeParamDecl { ";" TypeParamDecl } ">" ;
-TypeParamDecl = IdentList [ ":" ConstraintList ] ;
+TypeParamDecl = TypeParamName { "," TypeParamName } [ ":" ConstraintList ] ;
+TypeParamName = { AttributeGroup } Ident ;               (* attributes: 19.3.2 *)
 ConstraintList = Constraint { "," Constraint } ;
 Constraint    = "class" | "record" | "constructor"      (* kind constraints *)
               | TypeRef ;                                 (* class/interface constraint *)

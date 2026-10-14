@@ -47,17 +47,22 @@ type
 **Semantics & parsing notes**
 
 - ⚠️ *GUID grammar:* `[ '{...}' ]` — a bracketed constant expression, immediately
-  after the (optional) ancestor. Don't confuse with an attribute (also `[...]`,
-  ch.19) — context (interface body, GUID format) disambiguates.
+  after the (optional) ancestor. An attribute group (also `[...]`, ch.19) may
+  stand in the same place; which one a bracket is, is decided by what it
+  names - see the lookup rule below, not by the syntax.
 - ⚠️ *The GUID need not be a literal* — a **named string constant** is accepted
   too: with `const SID_IFoo = '{...}';` in scope, `IFoo = interface [SID_IFoo]`
   compiles (dcc64-verified 2026-08). The production is `"[" ConstExpr "]"`,
   constrained semantically to a compile-time string in GUID format.
 - ⚠️ *Any constant expression, ONE of them* (dcc64 37.0, probed 2026-10-01): a
-  qualified constant `[U.SID]`, a typed `TGUID` constant, a concatenation
-  `['{...-' + '...}']`, `[SID + '']` and a parenthesized `[(SID)]` all compile;
+  qualified constant `[U.SID]`, a concatenation `['{...-' + '...}']`,
+  `[SID + '']`, a parenthesized `[(SID)]` and `[(TBox.K)]` (a record's
+  constant) all compile and are the GUID (RTTI, probed 2026-10-14);
   `['{...}', 'x']` is E2029; a string not in GUID format is `E2204 Improper
-  GUID syntax`.
+  GUID syntax`. A typed `TGUID` constant compiles but is NOT the GUID: `[GT]`
+  with `const GT: TGUID = '{...}'` is `W1074 Unknown custom attribute: 'GT'`
+  and the interface's GUID is null (a correction: the 2026-10-01 probe
+  checked only that it compiles).
 - ⚠️ *Its names are looked up AROUND the type, not in it* (dcc64 37.0,
   probed 2026-10-12): with a unit `const S = '{...}'` and `IFoo = interface
   [S] function S: Integer; end`, the GUID is the constant's - the
@@ -71,6 +76,28 @@ type
   second `['{...}']` is `W1074 Unknown custom attribute` and dropped, and so
   is a GUID written after an attribute group (the interface then has no
   GUID). A parser cannot decide `[X]` from syntax alone.
+- ⚠️ *A name there is looked up as an attribute's* (dcc64 37.0, RTTI-probed
+  2026-10-14, PasTree local/probe-b56 G1, G2): `[X]` and `[U.X]` take the
+  `XAttribute` suffix first, through the whole search order (§19.3.2), the
+  bare `X` only when that finds nothing, and what is found decides:
+  - an attribute class - the first member's attribute, no GUID: `[Mark]`,
+    `[MarkAttribute]`, `[U.Mk]` (U's MkAttribute). The suffix wins over a
+    nearer constant: with `const S = '{...}'` and `SAttribute` in one unit
+    `[S]` is the attribute, and so is `[Q]` with a local `const Q` and a used
+    unit's `QAttribute`;
+  - a true constant - the GUID (`[S]`, `[U.SID]`); a non-string one is
+    `E2010 Incompatible types: 'Integer' and 'AnsiString'`;
+  - another type - `E2010 Incompatible types: 'TBox' and
+    'TCustomAttribute'`, and only the first segment decides, as in an
+    attribute: `[TBox.K]` is that E2010 while `[(TBox.K)]` is the GUID;
+  - a typed constant or a variable - `W1074`, dropped, no GUID (`[GT]`,
+    `[System.SysUtils.EmptyStr]`);
+  - nothing - `E2003`, and so for a name in a longer expression:
+    `[Unknown1 + 1]` is E2003 and E2026, where an attribute group drops the
+    same text with W1074 (§19.3.2).
+
+  The items of a comma list are judged one by one, and a constant after a
+  dropped item is still the GUID: `[GT, S]` is W1074 for GT and S's GUID.
 - Interfaces have **no fields, no visibility sections, no method bodies**. All
   members are implicitly public. Properties list only accessor method names.
 - Default ancestor is `IInterface` (≡ `IUnknown`).

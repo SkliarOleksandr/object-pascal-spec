@@ -154,14 +154,16 @@ type
 | **Status** | ✅ Current |
 
 Attributes are written in `[ ]` immediately **before** the declaration they
-annotate (types, fields, methods, properties, parameters).
+annotate (types, fields, methods, properties, parameters, generic type
+parameters).
 
 **Grammar**
 
 ```ebnf
 AttributeGroup = "[" Attribute { "," Attribute } "]" ;
-Attribute      = TypeRef [ "(" [ ActualParams ] ")" ]
-               | Expression [ ".." Expression ] ;   (* dropped: W1074 *)
+Attribute      = [ Ident ":" ]                       (* target: Result *)
+                 ( TypeRef [ "(" [ ActualParams ] ")" ]
+                 | Expression [ ".." Expression ] ) ; (* dropped: W1074 *)
 ```
 
 **Example**
@@ -182,9 +184,34 @@ type
   **position**:
   1. *Before a declaration* → an **attribute group** (this section).
   2. *In an expression* → a **set / array constructor** (§B.9).
-  3. *After an interface ancestor* containing a `'{…}'` string → a **GUID**
-     (ch.14).
+  3. *The first bracket of an interface body* → a **GUID** or the first
+     member's attribute group, by what it names (§14.1.1) - the one place
+     the position does not decide.
   Use the syntactic context (what precedes the `[`) to choose.
+- ⚠️ *A target before an attribute* (dcc64 37.0, RTTI-probed 2026-10-14,
+  PasTree local/probe-b56 R1, R2, RE*, RT*): `[Result: Tag] function F` is
+  F's result's attribute. The target is one attribute's, not the group's:
+  `[Tag, Result: Other]` targets Other only (RTTI lists a result's
+  attributes before the routine's own). It compiles on a method and on a
+  unit-level function; before a procedure, a field, a property, a type or a
+  parameter it is `E2289 Unresolved custom attribute`. The attribute is
+  resolved and checked like any other (`[Result: Tag(Undeclared)]` is
+  E2003, `[Result: TObject]` E2010). `Result` is the one target word:
+  `[Self: Tag]`, `[Foo: Tag]`, `[1: Tag]` are W1074 and the attribute is
+  dropped with nothing in it looked up (`[Foo: Tag(Undeclared)]` compiles),
+  and `[Result]` alone is `E2029 ':' expected`.
+- ⚠️ *Positions besides a declaration's head* (dcc64 37.0, RTTI-probed
+  2026-10-14, local/probe-b56 GP, V, V2), each checked like any other
+  (`[Zork]` there is W1074):
+  - *A generic type parameter* (§16): before each name of a type, record,
+    interface, procedural type or method parameter list - `TGen<[A] T>`,
+    `TGen<K; [A] V: class>`, `TGen<T, [A] U>`, `procedure M<[A] T>`.
+  - *A record's variant part* (§9.1.3): before a branch's field
+    (`0: ([A] I: Integer; [A] [B] J: Byte)`), before a nested `case` (the
+    group lands on that part's first field), before the tag
+    (`case [A] Tag: Integer of` - RTTI shows A on Tag AND on the first
+    field of the first branch), and as the last thing of a branch
+    (`0: (I: Integer; [A])` compiles, no E2289).
 - The attribute's `TypeRef` is resolved to a `TCustomAttribute` descendant; the
   `( … )` arguments must match one of its constructors (evaluated to build the
   attribute instance in RTTI). The trailing `Attribute` suffix is optional.

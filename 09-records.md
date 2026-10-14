@@ -244,6 +244,8 @@ optionally tagged.
 VariantPart   = "case" [ Ident ":" ] OrdinalType "of" VariantField { ";" VariantField } ;
 VariantField  = ConstExpr { "," ConstExpr } ":" "(" [ FieldList ] [ VariantPart ] ")" ;
 (* a variant branch may itself end with a nested variant part *)
+(* an AttributeGroup may stand before the tag, before each field of a branch
+   and before a nested part (19.3.2) *)
 ```
 
 **Example**

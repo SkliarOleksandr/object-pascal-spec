@@ -821,3 +821,13 @@ the helper's), then the type, then its ancestry - with the same visibility filte
     has an instance `StyleServices`. A resolver ranking by scope alone binds
     the outer member there; one that rewrites the earlier calls qualified
     turns a compiling unit into an E2124.
+
+*Names looked up by another rule than the order above.*
+
+- ⚠️ *An attribute's name takes the `Attribute` suffix first* (§19.3.2): `[X]`
+  is `XAttribute` wherever the whole order finds it, the bare `X` only when it
+  finds none. A name in the first bracket of an interface body is looked up
+  the same way, and what it finds makes it the first member's attribute or
+  the GUID (§14.1.1, dcc64 37.0, probed 2026-10-14); so is the name after a
+  `Result:` target (`[Result: Tag]`), while after any other target word
+  nothing is looked up.

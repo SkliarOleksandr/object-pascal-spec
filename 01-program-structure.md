@@ -523,6 +523,14 @@ SwitchDirective = "{$" SwitchLetter ( "+" | "-" ) "}"
   ⚠️ the latter changes the **storage size of enumerated types** (interop headers
   set `{$MINENUMSIZE 4}`). Track current switch state as a stack keyed by source
   position.
+- ⚠️ *Every long form moves the letter `{$IFOPT}` reads*, the ones without a
+  letter of their own in the docs' table too: `{$TYPEINFO ON}` is `M+`,
+  `{$DEFINITIONINFO ON}` is `{$YD}` and reads as `Y+` (its `OFF` as `Y-`),
+  `{$STACKCHECKS ON}` is `S+`. The forms with a digit or a letter: `{$D0}`
+  is `D-`, `{$D1}` and `{$D2}` are `D+`, `{$YD}` is `Y+`; `{$A4}` is `A+`,
+  `{$A1}` `A-`, `{$Z2}` `Z+`. A group goes on after `{$D1,R+}` (R+), but
+  not after `{$YD,R+}` - the R+ is dropped. `{$RUNONLY ON}` moves no letter
+  (probed, dcc64 37.0, 2026-10-15, PasTree local/probe-b62 T, T2).
 
 **Directive families a parser must at least recognise & skip** (heavily used in
 the RTL):
@@ -593,8 +601,8 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   `{$IF}` **unless** `{$LEGACYIFEND ON}` is in effect, which re-imposes the strict
   pairing. The conditional pre-pass must implement both modes (D13 sources set it:
   `Xml.*`, DUnit).
-- Symbols come from `{$DEFINE}`, project options, and built-ins (`MSWINDOWS`,
-  `CPUX64`, `CONSOLE`, etc.).
+- Symbols come from `{$DEFINE}`, project options, built-ins (`MSWINDOWS`,
+  `CPUX64`, etc.) and the program's application type (`CONSOLE`, below).
 - ⚠️ *The built-in set is the compiler's, and the documentation's list is wrong
   in both directions.* Probed on every installed dcc 37.0 with `--no-config`
   over 1056 symbols (every one the Studio source tests plus the documented
@@ -623,7 +631,24 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   WinArm64 (no compiler installed).
 - ⚠️ *The switch start state* (what `{$IFOPT}` sees before any directive) is the
   same on every target: `A C D G H I L N O P V X Y` on, the rest off - `N+`
-  included, although `$N` has done nothing for decades.
+  included, although `$N` has done nothing for decades. That is the
+  no-config state; the command line's `-$` switches change it for every
+  unit, by the in-file rules (1.3.1): `-$D0` is `D-`, `-$D1` `D+`, `-$YD`
+  `Y+`, `-$A4` `A+` with the cap 4, `-$Z2` `Z+`. A `.dproj` reaches dcc
+  as exactly such switches - msbuild turns `DCC_Optimize=false` into
+  `-$O-`, `DCC_DebugInformation=0` into `-$D0`, `DCC_SymbolReferenceInfo=1`
+  into `-$YD`, `DCC_Alignment=4` into `-$A4` - so a Release configuration
+  takes the `{$IFOPT D-}` branches (probed, dcc64 37.0 and msbuild,
+  2026-10-15, PasTree local/probe-b62 Q, ms).
+- ⚠️ *Where `CONSOLE` comes from.* It is no target's built-in: dcc defines
+  it in every unit compiled with a program whose last live
+  `{$APPTYPE CONSOLE}` stands before its `uses` clause (after it, the units
+  are already compiled; a later `{$APPTYPE GUI}` before `uses` takes it
+  back), but not in the program's own text. `-CC` (a `.dproj`'s
+  `DCC_ConsoleTarget`) defines it in the program's text and in the units,
+  unless the program's `{$APPTYPE GUI}` before `uses` takes it from the
+  units; `-CG` is the same as nothing (probed, dcc64 37.0, 2026-10-15,
+  PasTree local/probe-b62 con C1-C6).
 - ⚠️ *`{$DEFINE}`/`{$UNDEF}` (and switch changes) are LOCAL to the unit being
   compiled* — a batch preprocessor must reset to the project define-set per
   file. Leaking one unit's defines into the next mis-branches conditional

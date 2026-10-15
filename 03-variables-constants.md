@@ -466,8 +466,18 @@ const
   `UtilWindowClass: TWndClass = (style: 0; lpfnWndProc: ...)`,
   System.Classes.pas). Applies equally to a `var` with an initializer
   (3.1.2), not just `const` — the same aggregate grammar. A nested aggregate
-  (record-typed field) resolves against THAT field's own type, recursively;
-  array/set elements have no names and need no special handling.
+  (record-typed field) resolves against THAT field's own type, recursively.
+  ⚠️ An array aggregate's elements have no names of their own, but each
+  ELEMENT of an array of records is a record aggregate whose labels resolve
+  against the element type - one aggregate level per dimension, the same
+  whether the array type is written inline (`array[0..1] of TRec`), named
+  (`TArr = array[0..1] of TRec`), multi-dimensional (`array[0..1, 0..0] of
+  TRec = (((A: 1)), ((A: 3)))`), nested (`array of array of TRec`), of an
+  anonymous record (`array[0..1] of record P, Q: Integer; end`), the type of
+  a record field (`Inner: array[0..1] of TRec`), or a record type from
+  another unit; a label naming no field of the element type is E2003, for a
+  `const` and for an initialized `var` alike (dcc64 37.0, probed 2026-10-15,
+  PasTree local/probe-b66 P1-P3). A set aggregate has no labels.
 - ⚠️ *String-literal → `TGUID` magic:* a typed constant (or initialized variable)
   of type `TGUID` may be initialized from a **GUID string literal** —
   `const IID_IFoo: TGUID = '{00000000-…-000046}';` — a compiler-special implicit

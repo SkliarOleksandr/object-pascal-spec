@@ -595,6 +595,18 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   (35.0 and 37.0 agree): `{$ifdef CPU386)}` tests `CPU386` (Delphi 11's
   `getmem.inc` ships that stray paren), `{$DEFINE FOO BAR}` defines only
   `FOO`, `{$UNDEF FOO)}` undefines `FOO`.
+- ⚠️ *A conditional symbol's name is an identifier (B.3), case-insensitive
+  beyond ASCII too* (dcc64 37.0, probed 2026-10-15, PasTree local/probe-b65 D
+  and DF1-DF5 over 1925 BMP letter pairs): `{$DEFINE <A-umlaut>X}` makes
+  `{$IFDEF <a-umlaut>x}` true, and Cyrillic and Greek capitals match their
+  small letters. The fold is the identifiers' (B.3) on 1911 of the pairs; on
+  the other 14 a symbol name folds MORE: a title-case digraph (U+01C5 DZ
+  with caron, U+01C8, U+01CB, U+01F2) matches its upper- and lower-case
+  forms, the final sigma U+03C2 matches U+03A3, U+03F5 matches U+0395,
+  U+1FBE matches U+0399, and the ohm, Angstrom and capital sharp s signs
+  (U+2126, U+212B, U+1E9E) match U+03C9, U+00E5 and U+00DF - none of which
+  is one identifier. The Kelvin sign and the long s still match neither `k`
+  nor `s`.
 - `{$IFOPT X+}`/`{$IFOPT X-}` tests the current **state of a switch directive**
   (e.g. `{$IFOPT R-}` = "if range checking is off") — ties the conditional
   pre-pass to the switch-state stack of 1.3.1. Used in the RTL (`System.pas`,

@@ -128,6 +128,23 @@ IdentChar  = IdentStart | "0".."9" ;
 
 - *Case-insensitive:* `Count`, `count`, `COUNT` are the same identifier. Fold case
   for symbol lookup; keep original spelling on the token.
+- ⚠️ *Beyond ASCII too, by Windows' lower-case table - not by Unicode case
+  folding* (dcc64 37.0, probed 2026-10-15, PasTree local/probe-b65 F and
+  Gen3: every BMP pair (c, f(c)) for f the Windows and the Unicode upper and
+  lower mappings, 1925 pairs, each declared one way and used the other). Two
+  names are one exactly when `CharLowerBuffW` lowers them to the same text:
+  A-umlaut and a-umlaut, a Cyrillic or Greek capital and its small letter,
+  Y-diaeresis U+0178 and U+00FF, an all-capital digraph U+01C4 and U+01C6,
+  fullwidth, circled and Roman-numeral letters with their small forms. NOT
+  one name: the final sigma U+03C2 and sigma (or Sigma), dotted capital I
+  U+0130 and `i`, dotless i U+0131 and `I`, the Kelvin sign and `k`, the long
+  s U+017F and `s`, the micro sign and mu, the Angstrom and ohm signs and
+  their letters, a title-case digraph U+01C5 and either other case, capital
+  sharp s U+1E9E and U+00DF, and the case pairs Windows lacks (Cherokee
+  U+13A0 / U+AB70, Georgian Mtavruli U+1C90 / U+10D0, U+2C7E / U+023F). No
+  character from U+0080 up folds into ASCII. A unit named in `uses` folds the
+  same way (`uses <a-umlaut>ber` finds `unit <A-umlaut>ber` and qualifies
+  with it, probe U); conditional symbols almost so (1.3.2).
 - ⚠️ *Only the FIRST `&` escapes; any further ones are part of the NAME.*
   `&&op_Equality` names `&op_Equality`, which is a **different** member from
   `op_Equality` — dcc32 37.0 accepts both in one record, and rejects

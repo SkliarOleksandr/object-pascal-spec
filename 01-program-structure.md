@@ -847,6 +847,20 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
     record goes (E2003). A guard reads only what lies above it, so the
     decisions settle top down: re-decide until the own-name answers agree
     with the stream they produced.
+  - "Above" is the order of the stream, includes spliced in: an `{$I}`
+    BELOW the directive puts its text below it, however the includer's
+    own lines run. `{$IF Declared(Foo)} {$DEFINE HAS_FOO} {$IFEND}` then
+    `{$I foo.inc}` (which declares `Foo`) then `{$IFNDEF HAS_FOO} const
+    Bar = 1; {$ENDIF}` compiles with `Bar` declared: the guard is False.
+    The `not Declared(Foo)` form takes its text (probed, dcc64 37.0,
+    2026-10-15, local/probe-b61 inc1, inc2).
+  - A unit the decided branch newly imports (`{$IF Declared(KFlag)} uses
+    UNew; {$IFEND}`) is an import like any other: its own imports are part
+    of the closure, its identifiers are checked, and its own guards are
+    decided the same way - dcc64 reports an undeclared identifier in UNew
+    and binds an inherited member a class in the importer takes through
+    UNew's ancestor from UNew's own import (probed, dcc64 37.0, 2026-10-15,
+    local/probe-b61 sub2, sub2b).
   - The same holds for a constant's VALUE in a `{$IF}`: the declaration read
     is the one in the decided stream, above the directive, else an
     import's. Spring4D's shape: `{$IF not Declared(CPP_ABI_ADJUST)} const

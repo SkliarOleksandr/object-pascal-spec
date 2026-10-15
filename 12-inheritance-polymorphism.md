@@ -127,6 +127,11 @@ end;
 
 **Semantics & parsing notes**
 
+- ⚠️ *A named `inherited X` names a METHOD or a PROPERTY* of an ancestor:
+  `inherited M;` and `Z := inherited P;` compile, while a field (`inherited
+  F := 1`), a class var, a nested type (`SizeOf(inherited TN)`) or a class
+  constant (`inherited K`) is `E2096 Method identifier expected` (dcc64 37.0,
+  2026-10-15, PasTree local/probe-cc P7).
 - ⚠️ *Bare `inherited`* (no name) calls the ancestor method of the **same name**,
   forwarding the **same arguments** — the resolver must reconstruct the current
   method's signature. `inherited Foo(x)` names an explicit ancestor method.

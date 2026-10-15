@@ -70,9 +70,11 @@ type
   (`TX = Integer; TX = string;`) and a forward completed twice. dcc32 / dcc64
   37.0, 2026-10-13 (PasTree audit B43, B4-19; local/probe-b43 F1-F3).
 - ⚠️ *A heritage clause cannot name a type declared LATER in the same `type`
-  section* — unlike an ordinary type/const reference (free forward reference
-  within one `type` block, 3.1.1) and unlike a pointer target (10.1.1, its own
-  explicit exception), `class(X)` needs `X` already declared above it; the sole
+  section* — like an ordinary type or const reference (`TA = record X: TB;
+  end; TB = Integer;` is `E2003` too: there is no free forward reference
+  within one `type` block, §3.3.2 "position counts"; dcc64 37.0, 2026-10-15,
+  PasTree local/probe-cc P10a-P10c) and unlike a pointer target (10.1.1, its
+  own explicit exception), `class(X)` needs `X` already declared above it; the sole
   way to name one below is the forward-class form just above (`TFoo = class;`
   earlier, completed later — that forward declaration itself IS the earlier
   declaration a later heritage clause sees, so `class(TFoo)` written between
@@ -247,6 +249,21 @@ type
   base class's protected members from a sibling unit without adding a public
   accessor — legal, if discouraged, and considered part of the language
   specification rather than a bug.
+- ⚠️ *Plain `protected` has no descendant rule beyond the friend rule - what
+  counts is the type of the expression it is reached through.* In a method of
+  `TB = class(TA)` declared in unit UB, TA's protected `P` (unit UA) is legal
+  as `Self.P`, bare `P`, or `X.P` for `X: TB` - all of type TB, a class of
+  UB - and `E2362 Cannot access protected symbol` for `X: TA`, for a sibling
+  `X: TC2` (`class(TA)` in a third unit) and even for `X: TE` where `TE =
+  class(TB)` is declared in another unit. The other way round, code of UB that
+  descends from nothing reaches `X.P` for `X: TB` (a class of UB): the method
+  of an unrelated `TZ` compiles it. `strict protected` is the one with a
+  descendant rule: in TB's method `Self.SP` and `X.SP` for `X: TB` compile,
+  `X.SP` for `X: TA` is `E2362`. A value typed by a TYPE PARAMETER is no
+  class of the unit either: in `TOwnList<T: class>`'s own method, `V.
+  GetDisposed` (TObject's protected) on `V: T` is `E2362`, though `V.Free`
+  compiles. dcc64 37.0, 2026-10-15 (PasTree local/probe-cc UB_*, UE, US_*,
+  UT, P1a).
 - ⚠️ *A GENERIC class's plain `protected` is enforced only OUTSIDE method
   bodies* (dcc32 37.0-probed, four ways). Given `TNodeG<T> = class protected
   FX: Integer; end;` in unit A: a **method** of any class — unrelated,
@@ -262,7 +279,11 @@ type
   declared in another unit with no descent relation — so a checker that
   applies the written rule to generics reports legal shipping code. Whether
   this is intended or a dcc visibility-check gap, it is the compiler of
-  record's observable behavior.
+  record's observable behavior. "A method body" is lexical: a record's method,
+  a `class ... static` method, a routine nested in a method and an anonymous
+  method written in one all count; an anonymous method in a program's main
+  block does not (`E2362`), nor does a unit-level routine (dcc64 37.0,
+  2026-10-15, PasTree local/probe-cc P2a-P2k).
 - ⚠️ *Legacy fifth visibility — `automated`:* old OLE-Automation code may declare an
   `automated` section (like `published` but generating Automation dispatch info).
   Unused in the D13 sources, but still accepted by the compiler — the parser should

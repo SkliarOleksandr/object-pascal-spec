@@ -349,6 +349,15 @@ ParamType = TypeRef
           | "string" | "file" ;                      (* untyped open string/file params *)
 ```
 
+A parameter's type is a type IDENTIFIER (or one of the forms above), never a
+type expression: `procedure P(A: 1..2)` is `E2029 Identifier expected but
+number found`, `(A: eA..eB)` and `(A: K)` over an enum value or a constant
+`E2005 '...' is not a type identifier`. A function's result type and a
+property's type take the same - `function F: 1..2` and `property X: 1..2`
+are `E2029` - while a variable's, a field's or a type declaration's colon
+takes any type, a subrange included (dcc64 37.0, 2026-10-15, PasTree
+local/probe-cc P5a-P5e).
+
 **Example**
 
 ```pascal

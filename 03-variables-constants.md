@@ -613,7 +613,21 @@ otherwise; the probes are cited in the bullets and the sections referenced.
 3. **Position counts.** An inline `var` exists from its declaration on
    (§3.1.3); a conditional's `Declared()` sees only what lies above it
    (§1.3.2); and in a nested type's method dcc's answer can depend on what
-   the unit wrote BEFORE (step 5's lookup history).
+   the unit wrote BEFORE (step 5's lookup history). Every other declaration
+   exists from its declaration on as well - the declarations of either
+   section of a unit and a routine's own: a routine body naming an
+   implementation-section variable, type or routine declared below it is
+   `E2003`, and so is a nested routine naming a local of its enclosing
+   routine declared after it (`procedure A; procedure B; begin L := 1; end;
+   var L: Integer; ...` - dcc64 37.0, 2026-10-15, PasTree local/probe-cc
+   U3a-U3d). Within one `type` section the same holds - `TA = record X: TB;
+   end; TB = Integer;`, `array[0..K]` above `const K`, `class(TD)` above
+   `TD` are each `E2003` (P10a-P10c) - with three exceptions, each completed
+   in that section: a pointer's target (`PB = ^TB` above `TB`, §10.1.1), a
+   class reference's (`TDClass = class of TD` above `TD = class`, P10d), and
+   a class or interface named after its forward `TFoo = class;` (§11.1.1).
+   The one thing position never limits is a structured type's members: a
+   method body sees all of them, wherever they are declared.
 4. **A qualifier's head is an ordinary bare name** (§1.2.3): `A.B` looks up
    `A` by this same order - a member, a local, a with target's member named
    like a unit hides the unit there - and only then `B` in what `A` is.

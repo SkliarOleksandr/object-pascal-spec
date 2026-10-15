@@ -67,7 +67,10 @@ end.
   `program P(Input); var Input: Integer;` compiles. A `library` takes none
   (`library L(A);` is E2029 `';' expected but '(' found`).
 - ⚠️ The file ends with `end.` — the trailing **`.`** terminates the compilation
-  unit; tokens after it are ignored.
+  unit; tokens after it are ignored. Not even lexed for errors: a change
+  note after `end.` with an apostrophe (`don't`) is no E2052, only `W1011
+  Text after final 'END.' - ignored by compiler` - in a unit as in a
+  program (probed, dcc64 37.0, 2026-10-15, PasTree local/probe-b63 misc).
 - ⚠️ The program's name is declared in its global scope: a global of the same
   name is `E2004 Identifier redeclared` (see §1.1.2 for the whole rule).
 - *AST:* `Program { name, params, uses, block }`, `ProgramParams { names }`.
@@ -919,9 +922,19 @@ IncludeDirective = "{$I" FileRef "}" | "{$INCLUDE" FileRef "}" ;
 
 - ⚠️ Textual inclusion happens **before parsing** — the included tokens become part
   of the current unit's stream. Track an include stack for accurate source
-  positions/diagnostics. `{$I %ENV%}` and `{$I %DATE%}` forms inject special
-  values.
-- Beware include cycles; cap recursion.
+  positions/diagnostics. ⚠️ dcc has no insertion form (that is Free
+  Pascal's): `{$I %DATE%}` names a file, and without one is `F1026 File not
+  found: '%DATE%.pas'` (probed, dcc64 37.0, 2026-10-15). A missing include
+  is F1026 and stops the compile.
+- Beware include cycles; cap recursion. dcc's is `E2245 Recursive include
+  file <path>`, fatal.
+- ⚠️ *A name with no extension gets `.pas`* - before it is looked for
+  anywhere, quoted or not, `-I` included: `{$I inc2}` reads `inc2.pas` with a
+  file named plain `inc2` beside it, `{$I inc3}` with only `inc3.inc` is
+  `F1026 File not found: 'inc3.pas'`, and with only a bare `inc4` it is
+  F1026 `'inc4.pas'` too - never the bare name, never `.inc`. A name with an
+  extension of its own (`inc5.defs`) is read as written (probed, dcc64 37.0,
+  2026-10-15, PasTree local/probe-b63 ext P1-P7).
 - ⚠️ *Where the file is looked for - beside the UNIT, not beside the include
   that names it.* dcc32/dcc64 37.0 probed with an elimination loop (every
   candidate directory holds the file, each run deletes the one taken), for an
@@ -967,6 +980,9 @@ Save and restore the current set of switch-directive options as a stack.
 - Formalises the option **stack** the pre-pass already needs. `{$PUSHOPT}` snapshots
   all switch options; `{$POPOPT}` restores the last snapshot.
 - Replaces ad-hoc per-switch save/restore (older `{$I+}{...}{$I-}` idioms).
+- A `{$POPOPT}` with no snapshot is a warning, not an error: `W1078
+  {$POPOPT} with no matching {$PUSHOPT} in <file>`, and the compile goes on
+  (probed, dcc64 37.0, 2026-10-15).
 
 ### 1.3.5 Compiler-version symbols
 

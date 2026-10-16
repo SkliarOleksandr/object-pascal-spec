@@ -534,6 +534,19 @@ SwitchDirective = "{$" SwitchLetter ( "+" | "-" ) "}"
   `{$A1}` `A-`, `{$Z2}` `Z+`. A group goes on after `{$D1,R+}` (R+), but
   not after `{$YD,R+}` - the R+ is dropped. `{$RUNONLY ON}` moves no letter
   (probed, dcc64 37.0, 2026-10-15, PasTree local/probe-b62 T, T2).
+- ⚠️ *Option state is linear in preprocessing order and unit-local.* A
+  switch set in an include holds after the include ends (`{$I x.inc}` with
+  `{$R+}` inside, then `{$IFOPT R+}` in the includer: taken); a `{$PUSHOPT}`
+  in an include pairs with the includer's `{$POPOPT}` (1.3.4); a switch
+  written inside a routine body holds past its `end` (`{$R+}` in `Foo`'s
+  body, `{$IFOPT R+}` after it: taken) - no declaration or block scopes it;
+  a global switch (`{$D-}`) written after a declaration is still read by
+  `{$IFOPT}` from there on; a unit's switches never reach the unit that uses
+  it (unit `UA` ending in `{$R+}{$B+}`, the program's `{$IFOPT R+}` and
+  `{$IFOPT B+}` after `uses UA`: not taken). So the options at a position are
+  the project's start state with every live switch directive before it
+  applied in order, an include's at its `{$I}` (probed, dcc64 37.0,
+  2026-10-15, PasTree local/probe-b67 P1, P2).
 
 **Directive families a parser must at least recognise & skip** (heavily used in
 the RTL):

@@ -676,7 +676,8 @@ otherwise; the probes are cited in the bullets and the sections referenced.
    helper's `Own` over the class's own `Own`), then the type's own
    members, then its ancestors' up to TObject (an `object`'s up to its last
    written ancestor - it has no implicit root, §11.5), each ancestor's helpers by
-   §15.3.3.
+   §15.3.3. A heritage-less class's implicit root is `System.TObject`
+   itself, not whatever `TObject` the `uses` clause names (§11.1.1).
 4. **The unit's own declarations**: unit level of the implementation and
    the interface, enum values of its enumerations (and of nested ones -
    §2.2.4).

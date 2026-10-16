@@ -504,7 +504,8 @@ type
   member lookup asks (all dcc32 37.0-probed):
   - `T: class` — **TObject's members**. `V.Free` and `V.ClassName` compile under
     a bare `class` constraint, because a reference type is a class and every
-    class descends from TObject.
+    class descends from TObject - System's, not a `TObject` the `uses`
+    clause names (§11.1.1, probe R4).
   - `T: record` and a lone `T: constructor` — **nothing**. The same `V.Free` is
     `E2003 Undeclared identifier` under either.
   - `T: TBase` / `T: IFoo` — that type's members, and its ancestors'.

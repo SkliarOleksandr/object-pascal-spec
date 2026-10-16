@@ -61,6 +61,21 @@ type
   merely absent. Records and legacy `object` types have no implicit ancestor;
   an interface's implicit `IInterface` contributes no implementation, so its
   members need no such walk.
+- ⚠️ *The implicit root is System's declaration, not the NAME `TObject`.* A
+  heritage-less class descends from `System.TObject`, a heritage-less
+  interface from `System.IInterface`, a dispinterface from `System.IDispatch`,
+  and a value of a `T: class` parameter has `System.TObject`'s members
+  (§16.4.1) - whatever the `uses` clause brings into scope under those names.
+  With a used unit declaring `TObject = class(System.TObject) procedure
+  OnlyOnFake; end` (and `IInterface` / `IDispatch` likewise), `TBar = class
+  end` then `B.OnlyOnFake` is `E2003`, and so are a bare `OnlyOnFake` in
+  `TBar`'s method, `I.OnlyOnFakeI` on `IBar = interface end`, `D.OnlyOnFakeD`
+  on a dispinterface (its `GetTypeInfoCount` compiles - System's IDispatch)
+  and `V.OnlyOnFake` on `V: T` under `T: class`; written `class(TObject)`,
+  the name resolves normally and the call compiles. So a resolver looks the
+  root up in System directly, never through the declaring unit's `uses`.
+  dcc64 37.0, 2026-10-16 (PasTree audit P7, C1-11; local/probe-p7/root
+  R1-R7).
 - A class declared `class;` with no member block is a **forward declaration**
   (completed later in the same type section) — used for mutually referencing
   classes. `class(TParent);` is NOT one: it is a complete class with no members

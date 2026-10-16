@@ -512,6 +512,15 @@ type
   - `T.Create` needs the `constructor` keyword specifically: under `T: class`
     alone it is `E2568 Can't create new instance without CONSTRUCTOR constraint
     in type parameter declaration`.
+  - ⚠️ *A lone `constructor` does not make T a class.* `T.Create` - through
+    the TYPE - is the one thing it unlocks: `V.Create` on a value is `E2003`,
+    and so are `V.ClassName`, `V.ToString` and `T.Create.Free` (the result
+    is a T, with no members); `V = nil` is `E2015`. It is not even a
+    reference constraint: `TG<Integer>` meets it, while `TG<TRec>` (a record)
+    and `TG<IInterface>` are `E2513 Type parameter 'T' must have one public
+    parameterless constructor named Create`. Together with `class`, T has
+    all of TObject's members (`V.Free`, `T.Create.Free` compile). dcc64 37.0,
+    2026-10-16 (PasTree local/probe-ctor C1-C10, I_*).
 - *Type constraints:* a class type (T must descend from it) or interface (T must
   implement it). `T: TBase, IFoo` combines.
   - ⚠️ *A constraint named through an alias is the aliased type* (dcc64 37.0,

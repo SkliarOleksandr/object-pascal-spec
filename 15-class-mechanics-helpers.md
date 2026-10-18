@@ -654,6 +654,13 @@ end.
   beside UK's `TEHK`). The RTL relies on it: FMX.FontGlyphs.Win reads
   `Style.Slant.IsRegular` (FMX.Graphics' TFontSlantHelper) without using
   FMX.Graphics. dcc64 37.0, probed 2026-10-12 (`probe-b28` H6, H7).
+  ⚠️ It applies to a VARIABLE or a field of the type, not to a function's
+  RESULT: with no other helper for the type in scope, `GE.IsA` and
+  `GFoo2.H2` (a class helper of the class's own unit) compile while
+  `GetE().IsA` is `E2018` and `GetFoo2.H2` `E2003` (dcc64 37.0,
+  2026-10-18, PasTree `local/probe-s10` P4c-P4f) - so the `GetE.IsA` above
+  does not compile without UK either (`E2018`). A class helper of the type's
+  own unit is hidden by a used unit's helper as a record helper is (P4b).
 - dcc-verified (dcc32 37.0 / Delphi 13.1), each point separately: a nested
   interface-section helper resolves both bare inside the extended type's own
   methods and qualified as `T.Member` at unit level; the same nested helper

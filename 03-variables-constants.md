@@ -779,6 +779,42 @@ the helper's), then the type, then its ancestry - with the same visibility filte
 A `{$IF}` designator follows the same rule, the own unit's name by position
 (§1.3.2).
 
+**What a unit can reach of a unit it does not use.** The order above
+finds a UNIT-LEVEL declaration of a unit U - a routine, variable,
+constant, type, a bare enum value - only through U itself: U in a `uses`
+clause (step 6) or U = `System`/`SysInit` (step 7). A MEMBER of U's types
+- and an enum value written after its type - is reached through whatever
+names the type, and the type travels through other units' interfaces.
+dcc64 37.0, probed 2026-10-18 (PasTree `local/probe-s10`), a program C
+using only V, whose INTERFACE uses U (`TFoo = class procedure M; end`,
+`TCol = (cRed, cBlue)`, `function NewFoo: TFoo`):
+
+- compile: `var X := GetFoo; X.M` (P1), `with GetFoo do M` (P2),
+  `GetList.First.M` through V's `TFooList = TList<TFoo>` (P3), V's class
+  helper for TFoo (P4), `TBar.Create.M` through V's `TBar = class(TFoo)`
+  (P5), `TFooAlias.Create.M` through V's `TFooAlias = TFoo` (P10),
+  `TColAlias.cRed` through V's `TColAlias = TCol` (P8) - an enum value
+  qualified by an alias of its type is U's value with U unlisted;
+- through a second hop too: W's interface uses only V and declares
+  `function GetW: TFooAlias`; a program using only W compiles `GetW.M`
+  (P7);
+- E2003: the bare `NewFoo` and `uU.NewFoo` (P9 - a unit qualifier is a
+  `uses` entry's identifier, §1.2.3), the bare `cRed` (P8b);
+- through a unit V2 that uses U only in its IMPLEMENTATION nothing of U
+  is reachable - its interface cannot name U's types: `GetObj.M` on its
+  `TObject` result is E2003, `(GetObj as TFoo)` E2003 on `TFoo` (P6).
+
+So every use of U's declarations lies in a set computable from the `uses`
+graph alone. Let I(U) be U and every unit whose interface `uses` reaches U
+through interface `uses` alone: a unit-level declaration of U can be
+named only in U and the units listing U in either clause (every unit for
+`System` and `SysInit`); a member, or an enum value, only in I(U) and the
+units with a `uses` entry, in either clause, into I(U). That is the
+search set of a Find References over code an analyzer has not analyzed
+yet: nothing outside it can name the declaration. (U's own interface
+helper, §15.3.3, adds no unit: it applies only where a value of U's type
+is reached, which is inside the set.)
+
 **The steps in detail**
 
 *Step 3: Self's ancestry before the unit.*

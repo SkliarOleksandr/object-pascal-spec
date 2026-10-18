@@ -645,7 +645,7 @@ end.
 - Consequently the "active helper" set at a source position is: every helper
   for that type declared in this unit, plus every interface-section helper of
   every used unit — resolved down to ONE by §15.3.3's last-in-scope rule.
-- ⚠️ *When that set is empty, the type's OWN unit's interface helper applies*,
+- ⚠️ *When that set is empty, a variable or field carries the helper of the unit declaring it* (below) -
   used unit or not: with unit UT declaring `TE` and `TEH = record helper for
   TE` (`IsA`), a program using only UM2 (which uses UT and declares `var GE:
   TE` and a record field of type TE) compiles `GE.IsA` and `GM.E.IsA`;
@@ -654,13 +654,26 @@ end.
   beside UK's `TEHK`). The RTL relies on it: FMX.FontGlyphs.Win reads
   `Style.Slant.IsRegular` (FMX.Graphics' TFontSlantHelper) without using
   FMX.Graphics. dcc64 37.0, probed 2026-10-12 (`probe-b28` H6, H7).
-  ⚠️ It applies to a VARIABLE or a field of the type, not to a function's
-  RESULT: with no other helper for the type in scope, `GE.IsA` and
-  `GFoo2.H2` (a class helper of the class's own unit) compile while
-  `GetE().IsA` is `E2018` and `GetFoo2.H2` `E2003` (dcc64 37.0,
-  2026-10-18, PasTree `local/probe-s10` P4c-P4f) - so the `GetE.IsA` above
-  does not compile without UK either (`E2018`). A class helper of the type's
-  own unit is hidden by a used unit's helper as a record helper is (P4b).
+  ⚠️ More exactly, it is the helper the VARIABLE or FIELD carries from where
+  it is DECLARED, and nothing else reaches it. With no helper for the type
+  active in the referring unit, a member access whose base is a variable
+  (`GE.IsA`) or a field of a record or a class (`GR.E.IsA`, `GH.FE.IsA`,
+  `GetR.E.IsA` - a field of a function's result too) uses the helper active
+  for the type in the INTERFACE section of the unit declaring that variable
+  or field: with UW2 using UU2 (`TE` and its helper `IsA`) and UK2 (another
+  helper for TE, `KOnly`), a program using only UW2 compiles `GW.KOnly` and
+  `GRW.F.KOnly` while `GW.IsA` is `E2003`; with UW3 using UK2 only in its
+  implementation, `GW3.IsA` compiles and `GW3.KOnly` is `E2003` (R1-R6). Every
+  other base carries none: a function's result (`GetE().IsA`, `GetE.IsA`,
+  `(GetE).IsA`, a method's `GH.ME.IsA`), a typed constant (`CE.IsA`), an
+  array element (`GA[0].IsA`), a dereference (`GP^.IsA`), a property
+  (`GH.PE.IsA`), an inline `var` inferred from a result, a `with` target -
+  each `E2018` for a record helper, `E2003` for a class helper's member
+  (`GetFoo2.H2`). dcc64 37.0, 2026-10-18, PasTree `local/probe-s10` P4c-P4f,
+  Q1-Q14, R1-R6. The type's OWN unit's helper of the cases above is this
+  rule: their variables and fields are declared in units that see it. A
+  class helper of the type's own unit is hidden by a used unit's helper as a
+  record helper is (P4b).
 - dcc-verified (dcc32 37.0 / Delphi 13.1), each point separately: a nested
   interface-section helper resolves both bare inside the extended type's own
   methods and qualified as `T.Member` at unit level; the same nested helper

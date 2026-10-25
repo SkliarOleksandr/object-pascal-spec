@@ -235,6 +235,13 @@ end;
   the literal captures it like any other name (`P := procedure begin
   Result.Clear; end` compiles, `Result.Bogus` is `E2003`). dcc32 / dcc64
   37.0, 2026-10-13 (PasTree audit B43, B4-16).
+  A function literal's own `Result` follows the routine rule of 03 §3.1.3: a
+  parameter named `Result` is `E2004`, reported at the literal's `begin` -
+  `F := function(Result: Integer): Integer begin end` fails. A procedure
+  literal has no `Result` to collide with (`procedure(Result: Integer)`
+  compiles), and neither does a procedural type's parameter list
+  (`reference to function(Result: Integer): Integer`). dcc64 37.0,
+  2026-10-25 (PasTree audit D2-04).
 - The resolver must compute the **capture set** (which enclosing locals/`Self` are
   referenced) to model lifetime; record it on the AST node.
 - *AST:* `captured[]` listing captured symbols on the `AnonMethod`.

@@ -181,12 +181,38 @@ raise E at ReturnAddress;           // raise at a specific address
   ```
 
   Both the `on … do` bodies and the `else` branch of an `except` part count as
-  handler context. An **anonymous method body does not reset it** — a bare
-  `raise` written inside a `procedure begin … end` in a handler is accepted —
-  which confirms the try-statement part is the *only* boundary. A named nested
-  routine needs no separate rule: its body is never lexically inside a
-  statement, so no part is in effect there and the `raise` is an error even when
-  the routine is called from a handler.
+  handler context. A **plain anonymous method body does not reset it**: a
+  bare `raise` written inside a `procedure begin ... end` in a handler is
+  accepted, and so is one in a literal with `var`, `const` or `type`
+  sections. A **named routine always resets it**: a routine's `raise` is an
+  error even when the routine is called from a handler, and so is one in a
+  routine declared in an anonymous method's declarations, although that
+  routine stands lexically inside the handler.
+- ⚠️ *An anonymous method that declares a routine resets the context for its
+  whole body.* Written in a handler, such a literal's own `raise` is
+  `E2145`, and so is one in a literal written inside it; a plain literal
+  around it keeps its own context. A `try ... except` inside it gives the
+  context back, as anywhere:
+
+  ```pascal
+  try except G := procedure begin raise; end; end;                 // legal
+  try except G := procedure var V: Integer; begin raise; end; end; // legal
+  try except G := procedure
+    procedure N; begin raise; end;                                 // E2145
+  begin N; raise; end; end;                                        // E2145
+  try except G := procedure
+    procedure N; begin end;
+  begin G := procedure begin raise; end; end; end;                 // E2145
+  try except G := procedure
+    procedure N; begin end;
+  begin try N; except raise; end; end; end;                        // legal
+  ```
+
+  *Evidence:* dcc64 37.0, 2026-10-29, PasTree's local/probe-m-b/b418
+  pa.dpr: E2145 on A (the nested routine), B (the literal's own body), I (a
+  literal inside it) and K (a nested function); none on C (`var`), D
+  (plain), E (`const` and `type`), F and H (a `try ... except` inside) and J
+  (a plain literal around one that declares a routine).
 - `raise` **transfers ownership** of the exception object to the RTL — do not free
   the raised instance.
 - `at Address` overrides the reported raise location (diagnostics).

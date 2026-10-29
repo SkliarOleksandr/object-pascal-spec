@@ -394,6 +394,18 @@ for var J := High(A) downto Low(A) do   // inline counter, 10.3+
   limit expression per iteration).
 - ⚠️ *Counter is read-only in the body:* assigning to the loop variable inside the
   body is a compile error; its value **after** normal completion is undefined.
+  - *What counts as a write* - each `E2081 Assignment to FOR-Loop variable
+    'I'`: `I := ...`; `Inc(I)` / `Dec(I, 2)`, bare or `System.Inc(I)`; a
+    nested `for I := ...` (`to` or `downto`) or `for I in ...` on the same
+    counter; any argument of `Read` / `ReadLn` (`ReadLn(I)`, `Read(F, I)`,
+    `ReadLn(C, I)`); the value argument of `Val(S, I, Code)`. The same holds
+    for an inline `for var K` counter (`for var K := 0 to 9 do for K := 0 to
+    1 do`). Passing the counter to a `var` or `out` parameter, to an untyped
+    `var` one (`FillChar(I, 4, 0)`) or as `Val`'s `Code` is only `W1015
+    FOR-Loop variable 'I' cannot be passed as var parameter`; `@I` is
+    accepted. dcc reports a nested `downto` loop inside a `to` loop twice, on
+    the same line; once is enough for a tool. dcc64 37.0, 2026-10-29 (PasTree
+    audit E3-15, local/probe-m-b/e315 fc.dpr, fc2.dpr, fc3.dpr).
 - ⚠️ *Scope of inline counter:* limited to **the loop statement** — an exception
   to the general to-end-of-enclosing-block rule of 03 §3.1.3. Sibling loops may
   reuse the same counter name; a resolver that declares the counter into the

@@ -853,6 +853,16 @@ type
   `E2003`). dcc32 / dcc64 37.0, 2026-10-13 (PasTree audit B41, A4-03;
   local/probe-b41 G16).
 
+  The type need not be named. Written inline in a declaration's type slot -
+  `var F: function: TCls`, a record field, an array's element `array[0..1]
+  of function: TCls`, an inline `var L: function: TCls := nil` - it is called
+  by its name and through `()` exactly as a named `TG = function: TCls` is:
+  `F.Nope`, `F().Nope`, `R.F.Nope`, `A[0]().Nope` and `L.Nope` are each
+  `E2003 Undeclared identifier: 'Nope'`, a member of TCls, and the
+  all-defaulted rule below holds the same (`M: function(X: Integer = 0):
+  TCls`, `M.Nope`). dcc64 37.0, 2026-10-29 (PasTree audit B3-38,
+  local/probe-park/b338 IP.dpr).
+
   Two shapes are NOT called this way, and a resolver needs both to stop it: a
   procedural type with a parameter the CALLER must supply, and a `procedure`
   type, which has no result to take a member from. The same

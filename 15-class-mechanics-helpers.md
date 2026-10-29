@@ -49,6 +49,15 @@ type
 - ⚠️ *`Self` is a class reference here*, not an instance — class methods may be
   `virtual` and dispatched via the metaclass (15.2). Distinguish from `static`
   class methods (15.1.4) which have no `Self`.
+  Overload resolution reads it so: with `Reg(C: TFooClass)` beside `Reg(O:
+  TFoo)`, `Reg(Self)` in `class function TFoo.Make` calls the first and in an
+  instance method the second, in either declaration order; `RegC(Self)` against
+  `RegC(C: TClass)` / `RegC(O: TObject)` takes TClass from a class method and
+  TObject from an instance method - an instance is no class reference, so a
+  `class of` parameter does not take it at all. In a nested routine or an
+  anonymous method inside the class method, `Self` is still the class
+  reference. dcc64 37.0, 2026-10-29 (PasTree audit B3-30,
+  local/probe-park/b330 SP.dpr, SP2.dpr).
 - ⚠️ *The implementation repeats `class`, both ways.* `class procedure P;`
   implemented as `procedure TX.P;`, or `procedure Q;` as `class procedure
   TX.Q;`, is `E2037 Declaration of 'P' differs from previous declaration`
@@ -418,7 +427,10 @@ type
 - ⚠️ Helpers **cannot add instance fields** (no per-instance storage); only methods,
   class vars, properties (backed by existing state). Enforce in the type-checker.
 - ⚠️ *`Self` in a helper's method is a value of the EXTENDED type*, not of the
-  helper (which is no value type at all): `var S := Self` in a `class helper
+  helper (which is no value type at all) - and in a class helper's `class`
+  method the class reference of the extended class (15.1.1: `RegC(Self)`
+  there takes `RegC(C: TClass)`, dcc64 37.0, local/probe-park/b330 SP.dpr):
+  `var S := Self` in a `class helper
   for TList` method is a TList, `Self.Names[I]` reads the class's property and
   `Self.Tag` in a `record helper for TRec` the record's field; the helper's own
   members are still reached through it (`Self.Own`), as through any value of

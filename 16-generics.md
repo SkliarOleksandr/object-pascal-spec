@@ -400,7 +400,16 @@ P := TPair<string, Integer>.Create('a', 1);
     and a substitution step naturally returns it untouched; but its definition
     is written in the enclosing generic's parameters, which is precisely the
     frame the next step (indexing it) needs. The RTL's own containers are built
-    this way, so `with SomeList.List[I] do` is ordinary code;
+    this way, so `with SomeList.List[I] do` is ordinary code. It travels the
+    same way when the nested type is an ARGUMENT of another instantiation:
+    `TLoader<F>` declaring `TElement = record Val: F; end` and `FKeys:
+    TArray<TElement>`, then in a method of `TRecLoader = class(TLoader<TRec>)`
+    a bare `FKeys[0].Val.Fld` is TRec's field (`.Nope` is E2003 'Nope', a
+    member of TRec), and so is `FCache[0].Value[0].Fld` through `TCache =
+    TPair<string, TArray<F>>`; under `TObjCache<K; V: class> =
+    class(TLoader<V>)`, `FKeys[0].Val.Free` is V's constraint's (dcc64 37.0,
+    2026-10-29, PasTree audit B3-35, local/probe-park/b335 GA.dpr, GB.dpr,
+    GC.dpr - the ancestor in the same unit and in another);
   - and it must be recorded WITH the binding. A resolver that records only
     "which symbol does this name denote" and re-derives the type later has thrown
     away the only thing that closes it: nothing downstream can tell which hop the

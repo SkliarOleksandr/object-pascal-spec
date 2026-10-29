@@ -244,6 +244,13 @@ type
   it, and not what it is nested in. `System.JSON.Builders` depends on the legal
   direction (`TJSONCollectionBuilder.TBaseCollection` reads the outer class's
   `FJSONWriter`).
+
+  The message names the declaring type with every type around it:
+  `TOuter.TInner.TDeep.FD`, `TPlain.FP`, `TR.FR` for a record. A generic
+  instance is spelled with its unit in braces and its arguments qualified:
+  `{PV4}TG<System.Integer>.FG`, `{PV4}TG<System.string>.FG`, and a type
+  nested in one `{PV4}TH<System.Byte>.TN.FN`. dcc64 37.0, 2026-10-29
+  (PasTree audit E3-46, local/probe-m-b/e346 PV4.dpr).
 - ⚠️ *`published` requires RTTI:* `published` members generate runtime type info and
   are restricted to classes compiled with `{$M+}` (or descending from `TPersistent`).
   Allowed member types are constrained (e.g. method pointers for events, ordinal/

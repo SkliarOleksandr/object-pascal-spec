@@ -167,6 +167,19 @@ and **custom managed records** (ch.09 §9.4).
   with `[weak] I: IInterface` is (and `HasWeakRef` is True for it), one with
   `[weak] O: TObject` is neither (see 20.6.1). `IsManagedType` and
   `HasWeakRef` are the compile-time intrinsics to model (ch.04 §4.11).
+- *More of the same set* (dcc64 37.0, 2026-10-30, `IsManagedType` run,
+  PasTree audit E2-40 / E3-45, local/probe-park/e345 MG.dpr):
+  - NOT managed: a sized short string `string[20]`, and a record or static
+    array built on one; a distinct alias `type ShortString`; a record whose
+    only managed member is a `class var` (it lives in global storage); a
+    record whose only managed field is `[unsafe]` - an interface or a
+    `string` alike.
+  - Managed: an alias of an instantiation (`TArray<Integer>`,
+    `TStringDynArray`, `TGenDyn<Integer>` of `TGenDyn<T> = array of T`) and
+    a record field typed through one; an old-style `object` with a managed
+    field; a record that declares only `class operator Assign`; a field of
+    an inline anonymous type (`Inner: record S: string end`, `A: array of
+    Integer`, `A: array[0..1] of string`); a distinct alias `type string`.
 - `Default(T)`, `Initialize`, `Finalize` intrinsics interact with this.
 
 ---

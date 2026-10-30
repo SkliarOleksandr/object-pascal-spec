@@ -387,6 +387,12 @@ Inc(P);         // steps by SizeOf(P^) on any typed pointer, no directive needed
   pointer type `Pointer`), while `var X := @I` then takes `PI := X` and `X^ +
   1`. The directive is positional, read where the `@` stands. dcc64 37.0,
   2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2 C5.dpr, C6.dpr).
+  A member through such a pointer is the pointee's, by the implicit
+  dereference (10.1): under `{$T+}`, with `R: TRec`, `var P := @R; P.Y := 1;
+  P^.Y := 2;` compile and `P.Nope` / `P^.Nope` are `E2003 Undeclared
+  identifier: 'Nope'`; under `{$T-}` `Q.Nope` is `E2018 Record, object or
+  class type required` (dcc64 37.0, 2026-10-30, PasTree audit E3-20,
+  local/probe-park/e320 TA.dpr).
 - ⚠️ *`@@` double address-of:* for a **procedural variable**, `@P` yields the
   routine address stored in it, while `@@P` yields the address **of the variable
   itself**. Grammatically it is just `@` applied twice (`"@" Factor` recursion) —

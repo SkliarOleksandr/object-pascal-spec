@@ -611,7 +611,12 @@ otherwise; the probes are cited in the bullets and the sections referenced.
    - a TYPE of another generic arity than the reference is written with
      (§16.1.2: a bare `TFoo` passes over `TFoo<T>`, `TFoo<Integer>` over a
      plain `TFoo`, and a bare `Pointer` over a used unit's `Pointer<T>` to
-     the predefined type - B.4);
+     the predefined type - B.4). Where `H < I1, I2 > (E)` may be either
+     type arguments or two comparisons (§16.3.1), the head is first found
+     with no arity at all: the first declaration of the name decides the
+     reading - a value (a local shadowing a generic method included) makes
+     comparisons and no filter applies; a type or a routine makes type
+     arguments, and the filter then applies as to any written arity;
    - a MEMBER the code cannot see (private of another unit, strict private
      outside its type): the walk goes on up the ancestry, then on to the
      unit (step 3 below);

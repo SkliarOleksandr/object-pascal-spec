@@ -337,11 +337,40 @@ P := TPair<string, Integer>.Create('a', 1);
     Variants (which dcc compiles as a comparison chain) is kept. A fused
     `>=` closes the list only when the list has no top-level comma - with
     one, `A < B, C >= D` is two complete comparisons. `(` reads as a call or
-    cast, a comma or not: inside an argument list that misreads `F(A < B, C
-    > (D))`, but the Delphi 13 sources, a large client project and a
-    third-party library set hold no comparison of that shape and seven
-    generic calls and casts of it (`source.Aggregate<Integer, string>(5,
-    ...)`, `IMap<TKey, TValue>(this)`).
+    cast, except in the one shape below that the parse leaves open.
+  - ⚠️ *`(` after a list with a top-level comma is decided by the head
+    alone* (dcc64 37.0, 2026-10-30, PasTree audit E2-04, local/probe-park/e204
+    G1.dpr, G3.dpr). In `F(H < I1, ..., In > (E))` the list is type
+    arguments when `H` names a generic type (a cast) or a generic routine -
+    a bare generic method, `H.Gen<Integer, string>(D)`, and an overload set
+    that holds a generic overload, `H.Ovl<Integer, string>(D)` beside a
+    plain `Ovl(X: Integer)`: one argument. It is `n` arguments - `H < I1`,
+    the middle items as values, `In > (E)` - when `H` names a value: a
+    variable, a field (`Fld`, `H.Fld`, `R.F`), a parameter, a constant, a
+    property, a NON-generic routine called without parentheses (`PlainF`,
+    `H.NonGen`), and a local that SHADOWS a generic method of the same name
+    (3.3.2: the innermost declaration decides, its kind decides the
+    reading). Three items give three arguments, `Foo3(A < B, E, C > (D))`
+    for `Foo3(Boolean; Integer; Boolean)`. The overload chosen for `F`
+    follows: `Foo(Gen<Integer, string>(D))` takes `Foo(Integer)`,
+    `Foo(Fld < B, C > (D))` takes `Foo(Boolean; Boolean)`. The Delphi 13
+    sources, a large client project and a third-party library set hold no
+    comparison of that shape and seven generic calls and casts of it
+    (`source.Aggregate<Integer, string>(5, ...)`, `IMap<TKey,
+    TValue>(this)`).
+  - *AST:* where the parse cannot decide, a FLAT `Ambiguous` node: an item
+    of an argument, index or set-constructor list that is exactly `H <
+    I1, ..., In > ( E )` - `H` a name or a dotted name, each `Ii` a name or
+    a dotted name, `E` one expression, and the list's `,` or closer right
+    after the `)` - has the leaves `H`, `I1` ... `In` and the parenthesis
+    `( E )` as its children, in token order, no grouping; the `<`, the `,`s
+    and the `>` are its own. The reading - a generic call or cast, `n`
+    comparisons, or not yet known - is decided by what `H` binds to and
+    lives beside the tree, which is not rewritten. Any other `(` shape (a
+    tail with several arguments, `Aggregate<Integer, string>(5, F)`; an
+    operator or selector after the `)`; a head with a prefix or an operand
+    to its left) keeps the call or cast reading: in each of them the tail
+    parses differently in the two readings, so no flat node can hold both.
   - *A `>` glued to a dereference*, `GetData<PRec>^.X`: lexed context-free,
     `^.` after an operator is a caret character (B.6.2); a `^.` character
     right after a comparison's `>` is never written, so a lexer can take

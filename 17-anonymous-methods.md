@@ -165,6 +165,15 @@ P(42);
     way a multi-line literal argument gets written — resolves exactly like the
     bare literal. A resolver testing the ARGUMENT node for the literal shape
     must look through the parenthesis node first.
+- ⚠️ *A literal as an inline `var`'s initializer types the variable by the
+  literal's own signature* - an anonymous procedural type no declaration
+  names. Inside a routine, `var F := function: TA begin ... end;` makes `F()`
+  and the paren-less `F` calls of a parameterless function: `F().OnlyA` and
+  `F.OnlyA` read TA's member, `F().Nope` and `F.Nope` are `E2003 Undeclared
+  identifier: 'Nope'`. A literal invoked where it is written is no call:
+  `X := (function: TA begin ... end)().B;` is `E2066 Missing operator or
+  semicolon`. dcc64 37.0, 2026-10-30 (PasTree audit E3-39,
+  local/probe-park/e339 AL.dpr, local/probe-m-d P3.dpr).
 - ⚠️ *A function returning a `reference to` value needs a double call to invoke
   the closure* (dcc-verified, dcc32 37.0). Given
   `function GetShowMethod: TIntProc;` (`TIntProc = reference to procedure(N: Integer)`):

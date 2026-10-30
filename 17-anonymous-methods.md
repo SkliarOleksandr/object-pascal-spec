@@ -258,7 +258,13 @@ end;
   string`) are captured like locals, and a value parameter may be assigned in
   the literal. A NESTED routine (not a literal) uses the same `var`
   parameter freely; the restriction is the literal's, because its frame may
-  outlive the call.
+  outlive the call. An open array is refused in any mode - a value `A: array
+  of Integer` and `const A: array of const` too; a literal nested in a
+  literal refuses the outer routine's `var` parameter as the outer one does;
+  a routine declared INSIDE the literal, and the literal's own `var`
+  parameter, are its own. dcc stops at the first E2555 of a routine (dcc64
+  37.0, 2026-10-30, PasTree audit E3-16, local/probe-park/e316 C1-C11,
+  V.dpr).
 - ⚠️ *Own scope, own `Result`:* an anonymous method body owns its locals and its
   OWN implicit `Result` (typed by the literal's result type). Two sibling
   literals may declare the same local name (dcc-verified:

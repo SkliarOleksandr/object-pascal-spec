@@ -101,8 +101,7 @@ Directive = "{$" DirectiveBody "}" | "(*$" DirectiveBody "*)" ;
   or exclude whole token ranges; `{$INCLUDE}` / `{$I}` splices another file's
   tokens in. A correct parser must run a **directive/conditional pre-pass** (or
   interleave it with lexing) — it cannot treat directives as inert comments.
-- `{$PUSHOPT}` / `{$POPOPT}` (13.0) snapshot and restore the current directive
-  option state — model directive options as a stack.
+- `{$PUSHOPT}` / `{$POPOPT}` (13.0): see 1.3.4.
 - Full directive catalogue belongs in [01-program-structure.md](01-program-structure.md);
   the lexer only needs to *recognise and route* them here.
 
@@ -215,16 +214,21 @@ type       unit       until      uses       var        while      with       xor
 ### B.4.2 Directives (context-sensitive — legal as identifiers elsewhere)
 
 ```
-absolute   abstract   assembler  at         automated  cdecl      contains
-default    delayed    dependency deprecated dispid     dynamic    experimental
-export     external   far        final      forward    helper     implements
-index      local      message    name       near       nodefault  noreturn
-on         operator   out        overload   override   package    pascal
-platform   private    protected  public     published  read       readonly
-reference  register   reintroduce requires  resident   safecall   sealed
-static     stdcall    stored     strict     unsafe     varargs    virtual
-winapi     write      writeonly
+absolute   abstract   align      assembler  at         automated  cdecl
+contains   default    delayed    dependency deprecated dispid     dynamic
+experimental export   external   far        final      forward    helper
+implements index      local      message    name       near       nodefault
+noreturn   on         operator   out        overload   override   package
+pascal     platform   private    protected  public     published  read
+readonly   reference  register   reintroduce requires  resident   safecall
+sealed     static     stdcall    stored     strict     unsafe     varargs
+virtual    winapi     write      writeonly
 ```
+
+(`align` is the record suffix `end align N`, ch.09 §9.1; elsewhere it is a
+plain name - `var align: Integer;` and a parameter `align` compile beside
+`record A: Byte; end align 8` - dcc64 37.0, 2026-10-30, spec audit g1,
+local/probe-park/spec-audit/g1 AlignW.dpr.)
 
 **Semantics & parsing notes**
 
@@ -457,6 +461,16 @@ const
   identifier. (A correction: this note used to call those forms lex errors.)
 - *Value type:* the literal's type is the smallest predefined integer type that
   holds it (up to `Int64`/`UInt64`); see ch.02 for the integer type ladder.
+  The ladder, signed first at each width: `ShortInt`, `Byte`, `SmallInt`,
+  `Word`, `Integer`, `Cardinal`, `Int64`, `UInt64` - with overloads for all
+  eight, `P(1)` and `P(-1)` take ShortInt, `P(200)` Byte, `P(300)` and
+  `P(-200)` SmallInt, `P(40000)` Word, `P(70000)` and `P(-40000)` Integer,
+  `P(3000000000)` Cardinal, `P(5000000000)` and `P(-3000000000)` Int64,
+  `P($FFFFFFFFFFFFFFFF)` UInt64, and `SizeOf` of the literal (or of an
+  untyped constant of it) is 1, 1, 2, 2, 4, 4, 8, 8 accordingly. An inline
+  `var` infers from the shorter ladder `Integer` upward instead (ch.03
+  §3.1.3: `var X := 200` is 4 bytes). dcc64 37.0, 2026-10-30
+  (spec audit g1, local/probe-park/spec-audit/g1 LitSize.dpr, LitSize2.dpr).
 - *Hex above `High(Int64)`:* as a constant `$FFFFFFFFFFFFFFFF` is a `UInt64`
   (`Writeln` prints 18446744073709551615, `SizeOf` is 8), but as a **subrange
   bound** the same literal is the `Int64` of the same bits:
@@ -501,7 +515,10 @@ RealLiteral = Digit { "_" | Digit }
   `1e1_0` and `1e+1_0` are 1E10, `2E-0_1` is 0.2, `1e1__0_` 1E10; right after
   the `e` or its sign one is `E2053 Syntax error in real number` (`1e_1`,
   `1e+_1`). dcc64 37.0, probed 2026-10-14 (PasTree local/probe-b57 N1-N3).
-- Default type is `Extended`/`Double` (platform-dependent); see ch.02.
+- Default type is `Extended` (which is `Double`-sized on Win64); see ch.02. On
+  Win64 a literal shaped like a Currency (no exponent, at most four fractional
+  digits, inside Currency's range) is `Currency` instead - the rule and its
+  examples are owned by ch.03 §3.1.3 and §3.2.1.
 - `$`/`%` prefixes are integer-only — no hex/binary floats.
 
 ## B.6 Character & string literals
@@ -750,8 +767,16 @@ semantics live in the cited chapters; here we fix the *syntax* and the *names*.
 IdentList      = Ident { "," Ident } ;
 QualifiedIdent = Ident { "." Ident } ;                 (* unit.scope.name *)
 
-Designator     = ( Ident [ GenericArgs ] | Literal | "inherited" [ Ident ] )
+Designator     = ( Ident [ GenericArgs ] | Literal | "inherited" [ Ident ]
+                 | "(" Expression ")" )                 (* parenthesized head *)
                  { Selector } ;
+(* A parenthesized expression takes selectors like a name: (O as TFoo).Bar,
+   (P)^, (S)[1], ('ab' + 'c').Length, (I + 1).ToString, and an anonymous
+   method called in place, (function: Integer begin Result := 7 end)(),
+   all compile and run (prints 7); without the parentheses the call is
+   E2066 Missing operator or semicolon - dcc64 37.0, 2026-10-30, spec audit
+   g1, local/probe-park/spec-audit/g1 ParenHead.dpr, AnonCall.dpr,
+   AnonCall2.dpr. *)
 (* Literal heads are legal: helper calls bind to literals —
    '.amazonaws.com'.Length, 42.ToString, and even nil^ (all shipped in
    the D13 sources); a caret character too, `^A.IsLetter`, `^[.IsControl`
@@ -793,9 +818,9 @@ SimpleExpr   = Term { AddOp Term } ;
 AddOp        = "+" | "-" | "or" | "xor" ;
 Term         = Factor { MulOp Factor } ;
 MulOp        = "*" | "/" | "div" | "mod" | "and" | "shl" | "shr" | "as" ;
-Factor       = Designator
+Factor       = Designator                                (* incl. "(" Expression ")", B.8 *)
              | Literal
-             | "(" Expression ")"
+             | AnonMethodExpr                            (* ch.17 *)
              | "not" Factor
              | "@" Factor
              | ( "+" | "-" ) Factor                       (* unary sign, level 1 *)
@@ -842,6 +867,11 @@ ConstExpr = Expression ;   (* must be evaluable at compile time *)
 - Syntactically identical to `Expression`; the **constraint** (compile-time
   constant) is enforced semantically. Used for case labels, array bounds, enum
   values, default parameters, and `const` declarations.
+- What counts as constant is owned elsewhere: a typed constant is NOT one
+  (`E2026`, ch.03 §3.2.2); a folded expression is computed in its operator's
+  type without widening, so `MaxInt + 1` is `E2099` and `1 div 0` is `E2098`
+  (ch.04 §4.2, §4.2.1); a constant out of the target's range is `E1012` or
+  `W1012` (ch.02 §2.6.1).
 
 ## B.11 Type references
 
@@ -894,10 +924,11 @@ GenericArgs = "<" TypeRef { "," TypeRef } ">" ;
 Block         = { DeclSection } CompoundStmt ;
 DeclSection   = LabelDeclSection
               | ConstSection | TypeSection | VarSection
-              | ProcedureDeclSection ;
-ConstSection  = ( "const" | "resourcestring" ) { ConstDecl } ;
-TypeSection   = "type" { TypeDecl } ;
-VarSection    = ( "var" | "threadvar" ) { VarDecl } ;
+              | ProcedureDeclSection
+              | ExportsClause ;                        (* global level only, 1.1.3 *)
+ConstSection  = ( "const" | "resourcestring" ) ConstDecl { ConstDecl } ;
+TypeSection   = "type" TypeDecl { TypeDecl } ;
+VarSection    = ( "var" | "threadvar" ) VarDecl { VarDecl } ;
 ```
 
 **Semantics & parsing notes**
@@ -905,6 +936,16 @@ VarSection    = ( "var" | "threadvar" ) { VarDecl } ;
 - A routine body is a `Block`. Declaration sections may repeat and interleave
   (`const` … `var` … `const` …) in modern Object Pascal — do not require a fixed
   order.
+- *A section keyword needs at least one declaration* (an earlier revision
+  wrote `{ ConstDecl }`): `var` followed by `const`, `type` followed by
+  `begin`, `resourcestring` followed by `threadvar` are each `E2029
+  Identifier expected but 'CONST' found` (resp. `'BEGIN'`, `'THREADVAR'`).
+  Not every section is legal in every block: in a routine's block
+  `threadvar` is `E2189 Thread local variables cannot be local to a
+  function` and `exports` is `E2191 EXPORTS allowed only at global scope`,
+  while a local `resourcestring` compiles. dcc64 37.0, 2026-10-30 (spec
+  audit g1, local/probe-park/spec-audit/g1 EmptyVar.dpr, EmptyRs.dpr,
+  Local.dpr, LocalExp.dpr).
 - *Inline `var`/`const`* (10.3+) appear **inside** `CompoundStmt` as statements,
   not in `DeclSection` — see ch.03; they change scope-resolution within the block.
 - `CompoundStmt`, `StatementList`, and all statement productions are defined in

@@ -52,7 +52,13 @@ Q := A div B;   R := A mod B;   F := A / B;   // F is floating-point
 **Semantics & parsing notes**
 
 - ⚠️ `/` on two integers **still produces a real** result type — do not infer
-  Integer. `div`/`mod` require integer operands.
+  Integer. `div`/`mod` require integer operands: `D div 2` and `I mod D` are
+  `E2015 Operator not applicable to this operand type`.
+- ⚠️ *`div` truncates toward zero and `mod` takes the DIVIDEND's sign*, at run
+  time and when folded alike: `-7 div 2` is -3, `-7 mod 2` -1, `7 mod -2` 1
+  (`A = (A div B) * B + A mod B`). A constant divisor of zero is `E2098
+  Division by zero` (`const K = 1 div 0`). dcc64 37.0, 2026-10-30 (spec audit
+  g2, local/probe-park/spec-audit/g2 A1.dpr, A4.dpr).
 - `+` is overloaded across numeric, string, set, and dynamic-array operands
   (resolved by operand type). For records, `+` may be user-overloaded (ch.09).
 - Operand promotion follows the numeric ladder (ch.02); mixed int/real ⇒ real.
@@ -102,6 +108,9 @@ typed by its value instead (3.2.1).
 | `[S] + [S]` | anonymous | same |
 | `Names + Arr`, `Names + Other` (two array types of one element) | E2010 | same |
 | `B > I`, `Bo and Bo` | `Boolean` | same |
+| `BB and BB`, `Bo and LB`, `not WB`, `BB = Bo` (`ByteBool`, `LongBool`, `WordBool`) | `Boolean` (2.2.2; spec audit g2 C3.dpr, 2026-10-30) | same |
+| `P - Q` (two `PChar`, two `PAnsiChar`, two `PByte`) | `Integer` - the distance in elements (`(P + 4) - P` is 4), a `NativeInt`; two `PInteger` under `{$POINTERMATH OFF}` are `E2015` (spec audit g2 C1.dpr, C7.dpr, A5.dpr) | `Int64` |
+| `Ch + 1`, `Ch + I` (Char with an integer) | `W1058 Implicit string cast with potential data loss from 'string' to 'ShortString'` and `E2008 Incompatible types` - no Char arithmetic (`Succ`, `Chr(Ord(Ch) + 1)`; spec audit g2 A4.dpr, A5.dpr) | same |
 
 **Semantics & parsing notes**
 
@@ -121,9 +130,23 @@ typed by its value instead (3.2.1).
   value fits it: `C + 1`, `1 - C`, `C * 2`, `C div 2`, `C and $FF`,
   `C or 1`, `C + K` (`const K = 5`) over a Cardinal are Cardinal, `B and
   $FF` and `B and K` over a Byte Byte. One that does not fit keeps the
-  type of its value - ShortInt for -128..127, Byte to 255, SmallInt down to
-  -32768, then Integer, Cardinal, Int64 - and mixes like a variable:
+  type of its value (the ladder of 3.2.1) and mixes like a variable:
   `C + (-1)`, `C + KN` (`KN = -1`), `C + 5000000000` are Int64.
+- ⚠️ *A folded constant expression is computed IN that type and does not
+  widen* - a result outside it is `E2099 Overflow in conversion or
+  arithmetic operation`, not a wider constant. `2147483647 + 1`, `MaxInt +
+  1`, `High(Integer) + 1`, `2147483647 * 2`, `100000 * 100000` and
+  `Integer(5) * 1000000000` (Integer by the rules above) fail, as do
+  `4294967295 + 1`, `High(Cardinal) + 1` and `Cardinal(1) - 2` (Cardinal),
+  `0 - 4294967295` (the 0 adapts to Cardinal), `65535 * 65537` (Word with
+  Integer: Integer)
+  and `High(Int64) + 1`. One 64-bit operand makes room: `Int64(2147483647) +
+  1`, `2147483647 + Int64(1)` and `4294967295 + Int64(1)` fold to 2147483648
+  and 4294967296, and `5000000000 + 1` is an Int64 already. Narrow operands
+  compute in Integer as variables do (`Byte(200) + Byte(200)` is 400). A
+  constant evaluator that folds in 64 bits and types the result by its value
+  accepts all of these. dcc64 and dcc32 37.0, 2026-10-30 (spec audit g2,
+  local/probe-park/spec-audit/g2 A7.dpr, A8.dpr).
 - ⚠️ *Signedness, not width, decides a 32-bit mix.* A Cardinal with a signed
   operand of ANY width is Int64 (`C + Sh`, `C + SI`, `C + I`), with an
   unsigned one Cardinal (`C + B`, `C + W`, `C - C`); `-C` is Int64,
@@ -192,7 +215,10 @@ typed by its value instead (3.2.1).
 
 - ⚠️ *Same tokens as bitwise* (4.4) — the operand **type** disambiguates: Boolean
   operands ⇒ logical; integer operands ⇒ bitwise. The parser produces the same
-  `BinaryExpr`; the type-checker picks the meaning.
+  `BinaryExpr`; the type-checker picks the meaning. A Boolean with an integer
+  is neither: `Bo and I` is `E2015 Operator not applicable to this operand
+  type` (spec audit g2 A4.dpr). Any mix of `Boolean` and the `*Bool` types
+  yields `Boolean` (2.2.2).
 - *Short-circuit:* by default (`{$BOOLEVAL OFF}`, the modern default) `and`/`or`
   short-circuit (right operand not evaluated when the result is determined).
   `{$BOOLEVAL ON}` forces full evaluation — a directive-dependent **semantic**,
@@ -221,6 +247,13 @@ Hi := Value shr 8;
 
 - Integer operands ⇒ bitwise semantics (see 4.3 disambiguation note).
 - `shl`/`shr` are at the multiplicative level (§B.7).
+- ⚠️ *`shr` is a LOGICAL shift and the count is taken modulo the width*, for
+  a constant as for a variable - a constant folder must reproduce both. The
+  width is the left operand's computing type (4.2.1: at least Integer):
+  `-8 shr 1` is 2147483644 (`const KN = -8 shr 1` too), not -4; `1 shl 33`
+  is 2 (`const KS = 1 shl 33` too), an Int64 `1 shl 65` 2, and `B shl 1`
+  of a Byte 255 is 510. dcc64 and dcc32 37.0, 2026-10-30 (spec audit g2,
+  local/probe-park/spec-audit/g2 A1.dpr).
 
 ---
 
@@ -241,7 +274,16 @@ Hi := Value shr 8;
   Boolean sub-expressions.
 - Overloadable on records (`Equal`, `LessThan`, … operators, ch.09).
 - Operand types must be compatible; comparing incompatible types is a semantic
-  error (except via implicit numeric promotion).
+  error (except via implicit numeric promotion): `I = S` is `E2010
+  Incompatible types: 'string' and 'Integer'`.
+- *A comparison has its own warnings,* which a checker that reproduces dcc's
+  output must emit: a signed with an unsigned 32-bit operand (`I < C`) is
+  `W1023 Comparing signed and unsigned types - widened both operands` - and
+  the widening is real, `-1 < Cardinal(1)` is TRUE; a constant outside the
+  other operand's range gives `W1021 Comparison always evaluates to False`
+  (`B < 0`, `B > 255` of a Byte, `C < 0` of a Cardinal) or `W1022 Comparison
+  always evaluates to True` (`B >= 0`). dcc64 and dcc32 37.0, 2026-10-30
+  (spec audit g2, local/probe-park/spec-audit/g2 A1.dpr, A4.dpr, A5.dpr).
 
 ---
 
@@ -273,6 +315,15 @@ Both := S1 * S2;
   2026-09-26). Write `(X in S) and C`.
 - `not in` (13.0) is the negated membership test, parsed as the `not`+`in` pair at
   relational level.
+- *The set relations are `=`, `<>`, `<=`, `>=` only:* `S1 < S2` and `S1 > S2`
+  are `E2008 Incompatible types` (not E2015).
+- *`in` with a left operand outside the set's range is simply False* - no
+  diagnostic, no wrap-around: `300 in [1, 2]`, `-1 in S` and, with `I :=
+  300`, `I in S` of a `set of Byte` holding 0..255 are all FALSE (300 is not
+  read as 44). The constructor's own elements are range-checked instead:
+  `I in [1, 300]` is `E1012 Constant expression violates subrange bounds`.
+  dcc64 and dcc32 37.0, 2026-10-30 (spec audit g2,
+  local/probe-park/spec-audit/g2 A4.dpr, A5.dpr, A10.dpr).
 
 ---
 
@@ -310,7 +361,7 @@ Both := S1 * S2;
 ```pascal
 P := @X;        // address-of
 V := P^;        // dereference
-Inc(P);         // pointer math when enabled
+Inc(P);         // steps by SizeOf(P^) on any typed pointer, no directive needed (§10.1.4)
 ```
 
 **Semantics & parsing notes**
@@ -318,6 +369,13 @@ Inc(P);         // pointer math when enabled
 - ⚠️ `^` is **both** a prefix type-constructor (`^T` = pointer-to-T, ch.10) and a
   **postfix** dereference (`p^`). Position decides — track which in the AST.
 - `@` result type depends on `{$TYPEDADDRESS}` (typed vs. untyped pointer).
+  Under the default `{$T-}` `@I` is the untyped `Pointer`: `PB := @I` with
+  `PB: PByte` compiles, and `var Z := @I; Writeln(Z^)` is `E2054 Illegal type
+  in Write/Writeln statement`. Under `{$T+}` it is a `^Integer`: `PB := @I` is
+  `E2010 Incompatible types: 'PByte' and 'Pointer'` (dcc names the anonymous
+  pointer type `Pointer`), while `var X := @I` then takes `PI := X` and `X^ +
+  1`. The directive is positional, read where the `@` stands. dcc64 37.0,
+  2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2 C5.dpr, C6.dpr).
 - ⚠️ *`@@` double address-of:* for a **procedural variable**, `@P` yields the
   routine address stored in it, while `@@P` yields the address **of the variable
   itself**. Grammatically it is just `@` applied twice (`"@" Factor` recursion) —
@@ -380,8 +438,10 @@ Inc(P);         // pointer math when enabled
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 
-`is` tests runtime class/interface type (Boolean); `as` performs a checked
-downcast (raises on failure). Full treatment in [ch.12](12-inheritance-polymorphism.md).
+`is` tests an object's runtime class (Boolean); `as` performs a checked
+downcast (raises on failure) or an interface query. Full treatment in
+[ch.12](12-inheritance-polymorphism.md) §12.4.1 (classes) and
+[ch.14](14-interfaces.md) §14.5.1 (interfaces).
 
 **Example**
 
@@ -394,6 +454,13 @@ if Obj is TButton then
 
 - `is` is relational-level; `as` is multiplicative-level (§B.7).
 - Operands must be class or interface references; checked at compile and run time.
+  The compile-time part is concrete: `is`/`as` between unrelated classes is
+  `E2010`, and an interface on the RIGHT of `is` is always `E2015 Operator not
+  applicable to this operand type` - even when the object's class lists that
+  interface (`C is IG` with `TC = class(TInterfacedObject, IG)`); use `as` or
+  `Supports`. The per-case rules are owned by §12.4.1 and §14.5.1. dcc64 37.0,
+  2026-10-30 (spec audit v, local/probe-park/spec-audit/v V2.dpr; g4 IIsAs.dpr,
+  g5 I05.dpr).
 - ⚠️ *The right operand of `is` may be any CLASS-REFERENCE EXPRESSION, not
   only a type name* (dcc32 37.0-probed): with `CV: TPlainClass` (a `class of`
   variable) and `function GC: TPlainClass`, both `Obj is CV` and `Obj is GC`
@@ -420,8 +487,7 @@ if Obj is TButton then
   constant, a cast `TFooClass(CV)` or even a PARENTHESIZED type name `(TFoo)`,
   `O is X and C` is `O is (X and C)` - `E2015`, while `O is X` alone compiles
   for each. The LEFT operand is never affected: `C and O is TFoo` is `(C and
-  O) is TFoo` (`E2015`), and `in` has no such rule: `X in S and C` and `X in
-  [1, 2] and C` are `X in (S and C)` - `E2015`.
+  O) is TFoo` (`E2015`), and `in` has no such rule (4.6).
 - ⚠️ *The table's grouping on the right of `is` also COMPILES* where an
   overloaded operator yields a class reference (dcc64 37.0, probed
   2026-09-26): with `R: TRec` and `class operator LogicalAnd(const A: TRec;
@@ -498,6 +564,12 @@ Btn := TButton(Sender);     // unchecked reference cast
   resolution.
 - *Variable (hard) casts* reinterpret storage and can appear as an lvalue
   (`Byte(I) := 1`); *value casts* produce an rvalue. The kind depends on operand.
+- *Numeric casts go one way:* an integer to a real type converts (`Double(I)`
+  compiles), a real to an integer type is `E2089 Invalid typecast`
+  (`Integer(D)` - use `Trunc`/`Round`). An integer cast of an out-of-range
+  CONSTANT truncates silently - `B := Byte(300)` compiles with no E1012
+  (2.6.1). dcc64 and dcc32 37.0, 2026-10-30 (spec audit g2,
+  local/probe-park/spec-audit/g2 A4.dpr, A6.dpr).
 - *AST:* `TypeCastExpr { targetType, expr }`.
 
 ---

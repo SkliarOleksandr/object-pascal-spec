@@ -15,11 +15,12 @@ parser sees.
 SourceFile = Program | Unit | Package | Library ;
 
 Program    = "program" QualifiedIdent [ "(" IdentList ")" ] ";"
-             [ UsesClause ] Block "." ;
+             [ UsesClause ] ProgramBody "." ;
 Unit       = "unit" QualifiedIdent [ HintDirectives ] ";"
              InterfaceSection ImplementationSection
-             [ InitSection ] "." ;
-Library    = "library" QualifiedIdent ";" [ UsesClause ] Block "." ;
+             ( InitSection | "end" ) "." ;
+Library    = "library" QualifiedIdent ";" [ UsesClause ] ProgramBody "." ;
+ProgramBody = Block | { DeclSection } "end" ;   (* main "begin" optional, 1.1.1 *)
 Package    = "package" QualifiedIdent ";" [ RequiresClause ] [ ContainsClause ] "end" "." ;
 ```
 
@@ -41,8 +42,9 @@ code.
 **Grammar**
 
 ```ebnf
-Program = "program" QualifiedIdent [ "(" IdentList ")" ] ";"
-          [ UsesClause ] Block "." ;
+Program     = "program" QualifiedIdent [ "(" IdentList ")" ] ";"
+              [ UsesClause ] ProgramBody "." ;
+ProgramBody = Block | { DeclSection } "end" ;
 ```
 
 **Example**
@@ -73,6 +75,14 @@ end.
   program (probed, dcc64 37.0, 2026-10-15, PasTree local/probe-b63 misc).
 - ⚠️ The program's name is declared in its global scope: a global of the same
   name is `E2004 Identifier redeclared` (see §1.1.2 for the whole rule).
+- ⚠️ *The main `begin ... end` is optional in a program too, not only in a
+  library (1.1.3):* `program P; var X: Integer; end.` compiles to an
+  executable that does nothing - the declarations are followed directly by
+  `end.`. A program header takes no hint directive (unlike a unit's,
+  1.1.2): `program P deprecated;` and `library L platform;` are `E2029 ';'
+  expected but identifier 'deprecated' found`. dcc64 37.0, 2026-10-30 (spec
+  audit g1, local/probe-park/spec-audit/g1 NoBegin.dpr, LibNoBegin.dpr,
+  ProgHint.dpr, LibHint.dpr).
 - *AST:* `Program { name, params, uses, block }`, `ProgramParams { names }`.
 
 ### 1.1.2 The unit file
@@ -92,8 +102,9 @@ A reusable compilation unit (`.pas`) with a public `interface` and a private
 InterfaceSection      = "interface" [ UsesClause ] { InterfaceDecl } ;
 ImplementationSection = "implementation" [ UsesClause ] { ImplDecl } ;
 InitSection           = "initialization" StatementList
-                        [ "finalization" StatementList ]
-                      | "begin" StatementList ;   (* legacy: begin..end as init *)
+                        [ "finalization" StatementList ] "end"
+                      | "begin" StatementList "end" ;   (* legacy: begin..end as init *)
+(* a unit with neither ends "implementation ... end." - Unit, chapter umbrella *)
 ```
 
 **Example**
@@ -133,7 +144,11 @@ end.
 - `initialization`/`finalization` are reserved words; the legacy bare `begin … end`
   before `end.` is an older equivalent of `initialization`. It takes no
   `finalization` part: `begin S; finalization T; end.` is `E2029 'END'
-  expected but 'FINALIZATION' found`. The two spellings compile to the same
+  expected but 'FINALIZATION' found`. Nor is there a `finalization` without
+  `initialization`: `implementation finalization S; end.` is `E2029
+  Declaration expected but 'FINALIZATION' found` (dcc64 37.0, 2026-10-30,
+  spec audit g1, local/probe-park/spec-audit/g1 FinOnly.dpr, UFin.pas).
+  The two spellings compile to the same
   code, but not to the same `.dcu`: under `$D+ $L+` the section's line
   records differ (on one line with its statements too; the word's case and
   column do not matter), under `-$D- -$L-` the files are identical - a
@@ -196,8 +211,8 @@ bundle of units (BPL).
 
 ```ebnf
 ExportsClause = "exports" ExportEntry { "," ExportEntry } ";" ;
-ExportEntry   = Ident [ "(" ParamList ")" ] [ "index" ConstExpr ] [ "name" ConstExpr ] [ "resident" ] ;
-RequiresClause = "requires" IdentList ";" ;
+ExportEntry   = QualifiedIdent [ "(" ParamList ")" ] [ "index" ConstExpr ] [ "name" ConstExpr ] [ "resident" ] ;
+RequiresClause = "requires" QualifiedIdent { "," QualifiedIdent } ";" ;
 ContainsClause = "contains" ContainsEntry { "," ContainsEntry } ";" ;
 ContainsEntry  = QualifiedIdent [ "in" StringLiteral ] ;   (* uses-like paths *)
 ```
@@ -212,9 +227,23 @@ ContainsEntry  = QualifiedIdent [ "in" StringLiteral ] ;   (* uses-like paths *)
   `ExportsClause` as a declaration in units, not only in library files.
 - *Entry clauses (dcc64 37.0, probed 2026-10-01):* `index`, `name` and `resident` come in THAT order only, each at most once - `Q name 'a' index 3`, `Q resident name 'a'`, a repeated `name` / `index` / `resident` are all E2029 (", or ; expected"). `name` and `index` take any constant expression (`name 'a' + 'b'`, a named constant); an overload is picked by a parameter list - `P(A: Integer) name 'a'` (parameter NAMES are required: `P(Integer)` is E2067) - and the same routine may be exported twice under two names. An entry may be a bare `Q;`.
 - ⚠️ *A library may omit the main `begin`-block entirely:*
-  `library X; ... exports Foo name 'Test'; end.` (DUnit's testXpgenLib.dpr).
+  `library X; ... exports Foo name 'Test'; end.` (DUnit's testXpgenLib.dpr);
+  so may a program (1.1.1).
+- *Where `exports` may stand, and what it names* (dcc64 37.0, 2026-10-30,
+  spec audit g1, local/probe-park/spec-audit/g1 ExpProg.dpr, LocalExp.dpr,
+  ExpQual.dpr, ExpMeth.dpr): at the global level of a library, of a unit,
+  and of a PROGRAM too (`program P; procedure Q; ... exports Q; begin end.`
+  compiles); inside a routine it is `E2191 EXPORTS allowed only at global
+  scope`. An entry is a routine's name, unit-qualified if wanted (`exports
+  UExp.Q name 'q1';` compiles); a class's static class method is not
+  exportable - `exports TK.S` is `E2276 Identifier 'TK' cannot be exported`.
 - `requires`/`contains` are package-only clauses: `requires` names other
-  PACKAGES (semantic analysis must not resolve them as units); `contains` names
+  PACKAGES (semantic analysis must not resolve them as units), dotted names
+  included - `requires rtl, Nope.Sub.Pkg;` parses and fails only on the
+  lookup (`E2202 Required package 'Nope.Sub.Pkg' not found`, reported as
+  Fatal), while a string there is `E2029 Identifier expected but string
+  constant found` (dcc64 37.0, 2026-10-30, spec audit g1,
+  local/probe-park/spec-audit/g1 PkgDot.dpk, PkgDot2.dpk); `contains` names
   units and — like a program's `uses` — may bind each to a source path with
   `in 'path'` (dcc-verified: the RTL's own BuildWinRTL.dpk,
   `System.SysUtils in 'sys\System.SysUtils.pas'`). A `.dpk`'s contains-list is
@@ -256,9 +285,16 @@ uses
 - ⚠️ *Resolution-order significance:* when the same identifier is exported by
   multiple used units, the **last unit in the `uses` list wins**. The
   name-resolution pass must preserve `uses` order.
-- *Interface vs. implementation uses:* interface-section imports are transitively
-  visible considerations for circular-reference rules; `implementation` uses break
-  interface circular dependencies.
+- *Interface vs. implementation uses - circularity:* a cycle made only of
+  INTERFACE `uses` is fatal, `F2047 Circular unit reference to 'UC1'`
+  (UC1's interface uses UC2, UC2's interface uses UC1); the same cycle
+  closed through an `implementation` uses compiles (UC3's interface uses
+  UC4, UC4's implementation uses UC3). dcc64 37.0, 2026-10-30 (spec audit
+  g1, local/probe-park/spec-audit/g1 Circ.dpr, Circ2.dpr).
+- *One clause per section, right after its header:* a second `uses`, and a
+  `uses` after a declaration (`program P; const A = 1; uses X;`), is `E2029
+  Declaration expected but 'USES' found` (dcc64 37.0, 2026-10-30, spec audit
+  g1, local/probe-park/spec-audit/g1 TwoUses.dpr, UsesLate.dpr).
 - *Only ANOTHER unit can be used.* A unit naming itself is `F2092 Program or
   unit 'a1' recursively uses itself`; a program file found under the name is
   compiled as a unit and fails (`E2029 'UNIT' expected but 'PROGRAM' found`,
@@ -279,7 +315,11 @@ uses
 - A unit named twice - in both clauses, or twice in one - is `E2004
   Identifier redeclared` at the second entry. dcc64 37.0, probed 2026-10-12
   (PasTree audit B25, `probe-b25` P1, UD1, UD2).
-- The `in 'file'` form binds a unit name to a source path (program/`.dpr` only).
+- The `in 'file'` form binds a unit name to a source path - in a program's
+  or a library's `uses` (`.dpr`) and in a package's `contains` (1.1.3); in a
+  unit's `uses` it is `E2029 ',' or ';' expected but 'IN' found` (dcc64
+  37.0, 2026-10-30, spec audit g1, local/probe-park/spec-audit/g1
+  UnitIn.dpr, UIn.pas, LibIn.dpr).
 - ⚠️ *A declaration may be spelled like a used unit's name:* it is legal,
   not E2004. An undotted entry is an identifier (§1.2.3), and a declaration
   of its name HIDES the bare unit name from that point on (dcc64 37.0:
@@ -484,9 +524,9 @@ Every unit's interface scope is seeded with **two** units it never names in a
   name, like `System` and the unit's own name (PasTree's resolver rung,
   2026-10-08).
 - ⚠️ *`System.` qualifies COMPILER INTRINSICS too, though nothing declares
-  them* (dcc32 37.0-probed): `System.Delete(S, 1, 1)`, `System.Length(S)`
-  and `System.Inc(N)` all compile, exactly like their bare spellings —
-  routinely used to reach the intrinsic past a member of the same name
+  them* - the rule and its probes are 1.2.3's ("What a unit qualifier
+  reaches"; `System.Delete(S, 1, 1)` and `System.Inc(N)` compile too, dcc32
+  37.0). It is routinely used to reach the intrinsic past a member of the same name
   (`System.Delete` inside a class that has its own `Delete`, as
   `System.WideStrings` does). So the `System` qualifier's namespace is the
   unit's interface PLUS the compiler-provided names; a resolver or a
@@ -628,7 +668,14 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   closed with `{$IFEND}` (not `{$ENDIF}`). Modern compilers accept `{$ENDIF}` for
   `{$IF}` **unless** `{$LEGACYIFEND ON}` is in effect, which re-imposes the strict
   pairing. The conditional pre-pass must implement both modes (D13 sources set it:
-  `Xml.*`, DUnit).
+  `Xml.*`, DUnit). The precise rule (dcc64 37.0, 2026-10-30, spec audit g1,
+  local/probe-park/spec-audit/g1 Leg1-Leg4.dpr): in the default mode the two
+  closers are interchangeable both ways - `{$IFDEF}`/`{$IFNDEF}` closed by
+  `{$IFEND}` compiles too. Under `{$LEGACYIFEND ON}` each opener takes its
+  own: `{$IF}...{$ENDIF}` is `E2029 $IFEND expected but $ENDIF found`,
+  `{$IFDEF}...{$IFEND}` is `E2029 $ENDIF expected but $IFEND found`; the
+  wrong closer still closes (a further `{$IFEND}` after it is `E1030 Invalid
+  compiler directive: '$IFEND'`), and a False `{$IF}` is checked the same.
 - Symbols come from `{$DEFINE}`, project options, built-ins (`MSWINDOWS`,
   `CPUX64`, etc.) and the program's application type (`CONSOLE`, below).
 - ⚠️ *The built-in set is the compiler's, and the documentation's list is wrong
@@ -1007,7 +1054,12 @@ Save and restore the current set of switch-directive options as a stack.
 - Replaces ad-hoc per-switch save/restore (older `{$I+}{...}{$I-}` idioms).
 - A `{$POPOPT}` with no snapshot is a warning, not an error: `W1078
   {$POPOPT} with no matching {$PUSHOPT} in <file>`, and the compile goes on
-  (probed, dcc64 37.0, 2026-10-15).
+  (probed, dcc64 37.0, 2026-10-15). The opposite, a `{$PUSHOPT}` still open
+  when the unit ends, is a warning too, reported at the end of the unit:
+  `W1079 Previous {$PUSHOPT} on line 4 not restored`; the snapshot dies with
+  the unit (its switches never reach an importer anyway, 1.3.1) - dcc64
+  37.0, 2026-10-30 (spec audit g1, local/probe-park/spec-audit/g1
+  PushOpen.dpr, UPush.pas).
 
 ### 1.3.5 Compiler-version symbols
 
@@ -1031,6 +1083,13 @@ code.
 **Semantics & parsing notes**
 
 - `CompilerVersion` is a real constant (e.g. 36.0 = Athens, 37.0 = Florence);
-  `VER360`-style symbols are auto-`{$DEFINE}`d. The pre-pass must seed these per
+  `VER360`-style symbols are auto-`{$DEFINE}`d - exactly ONE, the
+  compiler's own: dcc64 37.0 defines `VER370` and neither `VER360` nor
+  `VER371`. A point release keeps the number (the installed build, dcc64
+  37.0.57242: `CompilerVersion = 37.0` and System's `RTLVersion = 37.0`
+  hold, no `RTLVersion131`/`RTLVersion132` is declared), so "this version or
+  later" is written `{$IF CompilerVersion >= 36}`, never as a list of
+  `VERnnn` (dcc64 37.0, 2026-10-30, spec audit g1,
+  local/probe-park/spec-audit/g1 VerSym.dpr). The pre-pass must seed these per
   target so `{$IF}` evaluates correctly.
 - Cross-reference [Appendix A](A-version-history.md) for the version↔number map.

@@ -48,6 +48,17 @@ type
 
 - ⚠️ *Index type must be ordinal* (integer subrange, char, enum, boolean). The
   bounds come from the index type's `Low`/`High` — not a separate length.
+- *An index expression is checked against the index type* (dcc64 37.0): a
+  constant outside the bounds is an ERROR, `E1012 Constant expression
+  violates subrange bounds` (`S[0]`, `S[4]` over `array[1..3]`,
+  `SC['z']` over `array['a'..'c']`); another enumeration or an integer for
+  an enumeration index is `E2010 Incompatible types: 'TE' and 'TF'` / `'TE'
+  and 'Integer'`; a real is `E2010` (`'Integer' and 'Double'`). Any integer
+  type indexes an integer-indexed array (`S[I64]` compiles). A DYNAMIC
+  array's index type is `NativeInt`: a Char index is `E2010 'Int64' and
+  'Char'` on dcc64, `'Integer' and 'Char'` on dcc32, and a negative constant
+  (`D[-1]`) is `E1012` too. dcc64 / dcc32 37.0, 2026-10-30 (spec audit g3,
+  local/probe-park/spec-audit/g3 ArrIdx.dpr).
 - Static arrays are **value types** (copied on assignment, no reference counting).
 - ⚠️ *Array compatibility is NOMINAL, not structural.* Two independently-declared
   array types with identical shape and element type are still two distinct,
@@ -60,6 +71,27 @@ type
   print identically are still not the same type unless one is declared as the
   other (`T2 = T1;`, a true alias) or the check is a subtype-in-context case
   like an open-array parameter.
+  - ⚠️ *An ANONYMOUS array type is created per declaration, and the names of
+    one declaration share it* (dcc64 37.0): `var S1: array[0..1] of Integer;
+    S2: array[0..1] of Integer;` makes `S1 := S2` `E2008 Incompatible
+    types`, while `var S3, S4: array[0..1] of Integer;` makes `S3 := S4`
+    compile. The same holds for dynamic arrays (`A1 := A2` E2008 for two
+    `array of Integer` declarations, `A3 := A4` fine for one) and for a
+    named type against an anonymous one (`T1 := S1` with `T1: TSA` is `E2010
+    'TSA' and 'array[0..1] of Integer'`). A generic instance is the
+    exception that makes `TArray<T>` the interchange type: every
+    `TArray<Integer>` is one type wherever it is written (16.3.1), but it is
+    still not an `array of Integer` (`A1 := G1` is `E2010 'array of
+    Integer' and 'TArray<Integer>'`) nor a named `TDA = array of Integer`.
+  - *Comparison:* `=` / `<>` between two static arrays is `E2015 Operator
+    not applicable to this operand type`, even of one type; between two
+    dynamic arrays of ONE type it compiles (it compares the references), of
+    two types it is `E2008`. At run time `A := [1, 2]; B := [1, 2]` gives
+    `A = B` False, and after `B := A` True (DynEq.dpr).
+  - A static array takes no constructor by assignment: `T1 := [1, 2]` is
+    `E2010 'TSA' and 'Set'` (a dynamic array takes it, 8.2.2).
+  - dcc64 37.0, 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3
+    ArrCompat.dpr).
 - *AST:* `StaticArrayType { indexTypes[], elementType }`.
 
 ### 8.1.2 Multidimensional static arrays
@@ -150,9 +182,9 @@ end;
 - ⚠️ *The element type may be another dynamic array, and §8.1.2's indexing sugar
   applies there too.* `array of array of T` is the idiomatic jagged/2-D dynamic
   array — `SetLength(A, 2, 3)` takes one length per dimension — and both
-  `A[0][1]` and the comma form `A[1, 2]` compile (dcc-verified). §8.1.2 states
-  the `M[i, j]` ≡ `M[i][j]` normalisation for the STATIC form only, which reads
-  as though the dynamic case were different; it is not.
+  `A[0][1]` and the comma form `A[1, 2]` compile (dcc-verified); the
+  `M[i, j]` ≡ `M[i][j]` normalisation and the root-first indexing rule are
+  8.1.2's and cover the dynamic form (`TJag`) as well.
   - *Implementation note:* written inline, the two nest as one array-type node
     inside another, so an element walk that peels a single level answers "array
     of T" where the index count says the caller wanted T. Peel to the innermost
@@ -192,6 +224,14 @@ B := A + [4, 5];       // concatenation (XE7+)
   typed by that operand, parenthesized or not: `A + [X]` and `(A + [X])`
   concatenate alike. An inline `if` passes no target type to its branches
   either (05 §5.4.1).
+- *Operands of `+` and the dynamic-array intrinsics must be dynamic arrays of
+  one element type* (dcc64 37.0): `D + S` with a static `S` is `E2008
+  Incompatible types` (also from a for-in, 5.5.2), `D + DS` over
+  `TArray<string>` `E2010 'TArray<Integer>' and 'TArray<string>'`, `D + 1`
+  `E2008` (an element is not an array - write `D + [1]`); `Copy(S, 0, 2)`
+  and `SetLength(S, 2)` of a static array are `E2008`. `Concat(D, D2, [1])`
+  and `[1] + [2]` assigned to a `TArray<Integer>` compile. dcc64 37.0,
+  2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 ArrOps.dpr).
 - *AST:* `ArrayLiteral { elements[] }` (or shared `BracketConstructor`).
 - `Insert(Item, DynArray, Index)` and `Delete(DynArray, Index, Count)` are
   intrinsics that mutate a **dynamic array** in place — inserting a value (or,
@@ -272,11 +312,16 @@ The RTL leans on it: `TBytes.Create($EF, $BB, $BF)` (System.SysUtils),
   a dynamic-array-typed parameter — different ABI. The open-array constructor
   `[a, b, c]` at the call site is an open-array value, not a set/dynamic array.
 - `Slice(A, Count)` builds an open-array value covering the **first `Count`
-  elements** of a static (or dynamic) array `A`, for passing a partial array
-  where an open-array parameter is expected — without copying and without
-  needing a `[…]` constructor at the call site. Confirmed (dcc-verified, dcc32
-  37.0): given `S: array[0..9] of Integer` and a routine
+  elements** of a static array or an open-array parameter `A`, for passing a
+  partial array where an open-array parameter is expected — without copying and
+  without needing a `[…]` constructor at the call site. Confirmed (dcc-verified,
+  dcc32 37.0): given `S: array[0..9] of Integer` and a routine
   `procedure P(const Arr: array of Integer)`, `P(Slice(S, 3))` compiles and `Arr`
-  inside `P` has `Length(Arr) = 3` covering `S[0]..S[2]`. `Slice` is itself an
-  intrinsic, not an ordinary function — a resolver must recognise it rather than
-  look it up as a declared symbol.
+  inside `P` has `Length(Arr) = 3` covering `S[0]..S[2]`. ⚠️ NOT of a dynamic
+  array: `P(Slice(D, 3))` with `D: TArray<Integer>` is `E2016 Array type
+  required` (dcc64 37.0, 2026-10-30, spec audit g3,
+  local/probe-park/spec-audit/g3 SliceDyn.dpr). Where `Slice` may stand at all is 4.11's rule
+  (`E2193`); `Slice` is an intrinsic, not a declared symbol.
+- What else an open-array parameter accepts - a single variable as a
+  one-element array, constants (`E2192`), the rules inside the callee - is
+  6.2.6.

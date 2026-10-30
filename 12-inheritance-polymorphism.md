@@ -65,12 +65,12 @@ type
   joins only a class's OWN member scope into a method body binds the global and
   then reports the call as `E2035 Not enough actual parameters` — the diagnostic
   points at the argument count, but the defect is the binding.
-  - *The same holds against a PREDEFINED name*, which is the weaker-looking half
-    of the rule and the one that bites hardest. A class with
-    `property Word: string` makes bare `Word` in a descendant's method mean the
-    PROPERTY, not the built-in type (dcc-verified) — and the same goes for any
-    member named `Text`, `Real`, `Insert`, `Delete`, `Copy`, `Round`, ... which
-    component code is full of.
+  - *The same holds against a PREDEFINED name* - stated, with its probe, in
+    11.4.1 ("A member - including an INHERITED one - outranks a
+    compiler-PREDEFINED name"). Beyond that section's `Text`, it covers
+    `property Word: string` (bare `Word` in a descendant's method is the
+    property, not the type) and any member named `Real`, `Insert`, `Delete`,
+    `Copy`, `Round`, ... which component code is full of.
   - *And against a USED UNIT's name.* A dotted `uses` makes the unit reachable
     by its LAST segment, so `uses Some.Header` puts `Header` in scope as a unit
     — but a bare unit name is never a value, so in a class with a `Header`
@@ -196,6 +196,24 @@ virtual method while remaining polymorphic.
 - ⚠️ *Signature match required:* `override` must match the ancestor's `virtual`/
   `dynamic` signature exactly; otherwise it is an error (use `reintroduce`/
   `overload` to deliberately diverge). Resolver checks against the ancestor VMT.
+- ⚠️ *The `override` errors, by cause:*
+  - no inherited method of that name: `E2137 Method 'Nope' not found in base
+    class`;
+  - one exists but differs in a parameter TYPE or the result type
+    (`V(X: string)` over `V(X: Integer)`, `R: Byte` over `R: Integer`):
+    `E2037 Declaration of 'V' differs from previous declaration`;
+  - one exists but is not virtual: `E2170 Cannot override a non-virtual
+    method`; it is `final`: `E2352 Cannot override a final method` (12.2.5);
+  - redeclaring a virtual method with no directive is legal but warned:
+    `W1010 Method 'Hid' hides virtual method of base type 'TA'` (12.2.3).
+  NOT checked: parameter NAMES (`V(Y: Integer); override` over `V(X:
+  Integer)` compiles), default values (`W(X: Integer = 2); override` over
+  `= 1` compiles, and a call `A.W` takes the default of the STATIC type: 1
+  through a `TA` variable, 2 through a `TB`, both running TB.W), and
+  visibility (a `private` override of a `public` virtual compiles, and the
+  base-typed call still dispatches to it). dcc64 37.0, 2026-10-30 (spec
+  audit g4, local/probe-park/spec-audit/g4 IOvr.dpr, IOvr2.dpr; run-time
+  output for the dispatch and defaults).
 - A call through a base-typed reference dispatches to the most-derived `override`.
 - ⚠️ *Which slot an `override` joins - the chain a "find overrides" tool
   walks* (dcc64 37.0, probed 2026-10-10, `probe-b19` Q1, Q2):
@@ -260,6 +278,9 @@ function Create(X: Integer): TThing; reintroduce; overload;
 - `reintroduce` starts a **new** non-overriding member that shadows the inherited
   one; calls through a base reference still hit the ancestor version. Often paired
   with `overload`.
+- `reintroduce` on a method that hides nothing (no ancestor member of that
+  name) is accepted silently - no error, no hint (dcc64 37.0, 2026-10-30,
+  spec audit g4, local/probe-park/spec-audit/g4 IOvr.dpr, `TB.Fresh`).
 - ⚠️ *Plain redefinition of a NON-virtual ancestor method needs no keyword at
   all, and is static shadowing rather than late binding* (dcc-verified, dcc32
   37.0) — distinct from the `reintroduce`-for-hiding-a-virtual case above. If
@@ -295,9 +316,15 @@ procedure Speak; virtual; abstract;
 
 **Semantics & parsing notes**
 
-- ⚠️ `abstract` requires `virtual`/`dynamic`. Instantiating a class with an
-  unoverridden abstract method is allowed to compile but raises
+- ⚠️ `abstract` requires `virtual`/`dynamic` (`procedure Ab; abstract;` is
+  `E2167 Abstract methods must be virtual or dynamic`). Instantiating a class
+  with an unoverridden abstract method is allowed to compile but raises
   `EAbstractError` at the call — a semantic/runtime note.
+- ⚠️ *`inherited` aimed at an abstract method:* a BARE `inherited` in the
+  override is compiled to nothing - no call, no exception (the method goes
+  on); a NAMED `inherited Ab` compiles and raises `EAbstractError` when it
+  runs. dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 IAbs.dpr, IOvr2.dpr; run-time output).
 - ⚠️ *The compile-time signal and the run-time signal are two different
   mechanisms, firing at two different sites* (dcc-verified, dcc32 37.0).
   Constructing an instance of a class with an unoverridden abstract method
@@ -363,6 +390,10 @@ procedure DoIt; override; final;
   E2029). `packed` comes before `class`: `packed class sealed` compiles,
   `class sealed packed` does not. Deriving from a sealed class is `E2353
   Cannot extend sealed class`.
+- `final` needs a virtual slot: on a static method (`procedure NF; final;`)
+  it is `E2351 Final methods must be virtual or dynamic`; overriding a
+  `final` one is `E2352 Cannot override a final method`. dcc64 37.0,
+  2026-10-30 (spec audit g4, local/probe-park/spec-audit/g4 IOvr.dpr).
 - *AST:* `isSealed` on class, `isFinal` on method.
 
 ---
@@ -395,6 +426,14 @@ procedure WMSize(var Msg: TWMSize); message WM_SIZE;
 
 - `message` is a **directive** taking a constant message id; the single `var`
   parameter receives the message record. Dispatched dynamically by id, not by name.
+- ⚠️ *The shape is enforced:* an instance `procedure` with exactly ONE `var`
+  parameter, typed (`var Msg: TWMSize`, `var Msg: Integer`) or untyped
+  (`var Msg`). A value parameter, two parameters, none, a `function` or a
+  `class procedure` are each `E2138 Invalid message parameter list`. A
+  handler for the same id in a descendant needs no `override` and may have
+  another name (TB's `M3` for id 100 replaces TA's `M2` under `Dispatch`;
+  its bare `inherited` reaches `M2`, 12.1.2). dcc64 37.0, 2026-10-30 (spec
+  audit g4, local/probe-park/spec-audit/g4 IMsg.dpr, IOvr2.dpr).
 - *AST:* `MethodDecl { …, messageId }`.
 
 ---
@@ -427,4 +466,13 @@ Lbl := Sender as TLabel;              // checked: raises EInvalidCast on mismatc
 - Operates on class and interface references; for interfaces `as` also does
   `QueryInterface`.
 - `is not` (13.0) negates the test (ch.04 §4.9.1).
+- ⚠️ *Statically unrelated classes are a COMPILE-time error, not a False:*
+  with sibling classes `TDog` and `TCat`, `D is TCat` and `D as TCat` (for
+  `D: TDog`) are `E2010 Incompatible types: 'TDog' and 'TCat'` - the test
+  needs the target to be a descendant (or ancestor) of the operand's static
+  type; the hard cast `TCat(D)` compiles. An interface operand takes a class
+  target (`I is TDog`, `I as TObject` compile), but a class operand cannot
+  be tested against an interface TYPE with `is` (`O is IInterface`: `E2015
+  Operator not applicable to this operand type`). dcc64 37.0, 2026-10-30
+  (spec audit g4, local/probe-park/spec-audit/g4 IIsAs.dpr).
 - *AST:* `IsExpr`, `AsExpr`, `TypeCastExpr` (ch.04 §4.10).

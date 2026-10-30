@@ -120,6 +120,13 @@ A property at class level, backed by `class var`/class methods.
 class property Instance: TFoo read GetInstance;
 ```
 
+- ⚠️ *Each accessor is a `class var` or a `static` class method.* A plain
+  `class function GetV` (it has a `Self`) or an instance method as accessor
+  is `E2355 Class property accessor must be a class field or class static
+  method`; `read FV write FV` over a `class var FV` and a `class function
+  GetS: Integer; static;` compile. dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 C02.dpr, C02c.dpr).
+
 ### 15.1.4 `static` class methods
 
 | | |
@@ -140,6 +147,23 @@ class function Make: TFoo; static;
 
 - `static` (directive) removes the class-reference `Self`; such methods cannot be
   `virtual`. Required for class methods used as ordinary procedure references.
+- *The procedural-type side of it:* with `TPr = procedure` and `TMe =
+  procedure of object`, `P := TA.S` (static) and `M := TA.C` (plain class
+  method - its `Self` is the class reference) compile; `P := TA.C` is `E2009
+  Incompatible types: 'regular procedure and method pointer'` and `M := TA.S`
+  `E2009 ... 'method pointer and regular procedure'`. dcc64 37.0,
+  2026-10-30 (spec audit g5, local/probe-park/spec-audit/g5 C03.dpr).
+- ⚠️ *Directives AFTER `static` - a parser trap.* `virtual; static;` is
+  `E2376 STATIC can only be used on non-virtual class methods`, `static;
+  abstract;` `E2167`, `static; final;` `E2351` - semantic errors on a parsed
+  heading. But `overload`, `virtual`, `dynamic`, `reintroduce` and `message`
+  are NOT read as directives after `static;`: the word starts a new member,
+  and dcc reports `E2169 Field definition not allowed after methods or
+  properties` (`class procedure SP; static; overload;` fails this way, so the
+  RTL writes `overload; static;`). Accepted after `static;`: `inline`, the
+  calling conventions, the hint directives (`deprecated`, `platform`,
+  `experimental`). dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 C02*.dpr).
 
 ### 15.1.5 Class constructors & destructors
 
@@ -182,14 +206,18 @@ type
   unit's `initialization` section, and a class destructor runs AFTER that
   unit's `finalization` section. For a unit declaring both, the observed order
   across a whole program run is: class constructor → `initialization` →
-  (program body) → `finalization` → class destructor. Book-stated only, not
-  independently confirmed here — verifying it would require inspecting
-  binary/symbol presence rather than program output, which this probe pass did
-  not attempt: class-constructor/destructor code is linked into the program
-  only if the class is actually USED, whereas a unit's `initialization`/
-  `finalization` is always linked in once the unit itself is compiled into the
-  program (i.e. class ctors/dtors are more linker-friendly than unit init
-  code for otherwise-unused classes).
+  (program body) → `finalization` → class destructor.
+- ⚠️ *Only for a class the program USES, and in declaration order* (dcc64
+  37.0, 2026-10-30, spec audit g5, local/probe-park/spec-audit/g5 C01.dpr,
+  CUnit.pas - this replaces an earlier "book-stated, not confirmed" note on
+  the linking point): a unit declaring `TUsed`, `TUnused` and `TSecond`, each
+  with a class constructor that prints, and a program touching `TSecond`
+  then `TUsed` prints `TUsed cctor`, `TSecond cctor`, `CUnit init`, `main`,
+  `CUnit fin`, `TSecond cdtor`, `TUsed cdtor`. So the class constructors of a
+  unit run in their DECLARATION order (not the order of first use), the
+  destructors in reverse, and `TUnused`'s never runs - its code is not linked,
+  while the unit's `initialization` always is. A generic class's class
+  constructor runs once per instantiation (16.3.1).
 - ⚠️ *At most one class constructor and one class destructor per class* — a
   second one is a compile-time error, `E2359` (dcc-verified, dcc32 37.0: a
   class declaring both `class constructor Create` and `class constructor Foo`
@@ -426,6 +454,10 @@ type
   (dcc64 37.0, probed 2026-10-13), and an `object` takes no helper at all.
 - ⚠️ Helpers **cannot add instance fields** (no per-instance storage); only methods,
   class vars, properties (backed by existing state). Enforce in the type-checker.
+  A field in a class helper is `E2599 Field definition not allowed in helper
+  type`; in a record helper a `var` section is not even parsed (`E2029 'END'
+  expected but 'VAR' found`). dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 C04.dpr).
 - ⚠️ *`Self` in a helper's method is a value of the EXTENDED type*, not of the
   helper (which is no value type at all) - and in a class helper's `class`
   method the class reference of the extended class (15.1.1: `RegC(Self)`
@@ -578,6 +610,14 @@ recently in scope (latest `uses` / nearest declaration) wins; others are hidden.
   source position (`uses`-order dependent, ch.01 §1.2.1).
 - This single-helper rule is a frequent source of "method not found" confusion —
   worth a diagnostic.
+- ⚠️ *"One per type" means per TYPE in the ancestry, not per value.* With
+  `TBH = class helper for TB` (`Own`, `X`) and `TDH = class helper for TD`
+  (`Y`), `TD = class(TB)`: on a `TD` value `D.Y` is TDH's and `D.X` still
+  TBH's - the descendant's helper does not hide the ancestor's, because they
+  help different types - and `D.Own` and `B.Own` are TBH's `Own`, not TB's
+  own method of that name: the active helper is searched before the type it
+  helps (the full order is 3.3.2). dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 C05.dpr).
 - ⚠️ *A hidden helper answers no name at all, not even one the active helper
   lacks* - that name is the type's own. With `TQH0 = record helper for TQ`
   declaring `Baz` and a later `TQH1` declaring only `Bar`, `Q.Baz` is

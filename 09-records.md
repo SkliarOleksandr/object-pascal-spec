@@ -20,7 +20,7 @@ FieldList   = FieldDecl { ";" FieldDecl } [ ";" ] ;
 FieldDecl   = IdentList ":" TypeRef ;
 RecordMember = MethodDecl | PropertyDecl | ConstDecl | TypeDecl
              | ClassVarDecl | OperatorDecl | Visibility ;
-Visibility  = [ "strict" ] ( "private" | "public" ) ;   (* records: private/public only *)
+Visibility  = [ "strict" ] "private" | "public" ;   (* records: private/public only, 9.2.1 *)
 ```
 
 ---
@@ -319,6 +319,16 @@ type
   `:` at depth 0 after the tag type's `of` and before any `;` or `end` - the
   lookahead that tells a tag from a field typed below an unfinished `case`
   (`case` NEWLINE `Reserve: array[0..3] of Byte;` reaches its `;` first).
+- ⚠️ *The variant part is LAST, and nothing managed may stand in it.* A
+  field after the part (`case Integer of 0: (I: Integer); A: Integer; end`)
+  is read as a further branch label: `E2003 Undeclared identifier: 'A'`.
+  A branch field that needs finalization is refused per kind: `E2154 Type
+  'string' needs finalization - not allowed in variant record` (also an
+  interface, a `Variant`, a dynamic array, a record holding one), and a
+  custom managed record (9.4) gets its own code, `E2651 Type 'TM' is
+  managed record - not allowed in variant record`. A class reference is
+  fine (`0: (O: TObject)`). dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 RVar.dpr, RVar2.dpr, RVar3.dpr).
 - Branch fields belong to the **enclosing record**, not to a sub-scope — every
   branch's fields, at every nesting depth, are members of the same record and
   must collect into its one member scope.
@@ -373,6 +383,26 @@ type
 - ⚠️ *No inheritance:* records have **no ancestor**, no `virtual`/`override`, and
   visibility is limited to `[strict] private` / `public` (no `protected`/
   `published`). Reject inheritance/virtual on records.
+  The section words are still recognised there, so the errors are specific:
+  `protected`, `strict protected` and `published` are `E2184 PROTECTED
+  section valid only in class types` (`... PUBLISHED section ...`), and
+  `strict public` is `E2375 PRIVATE or PROTECTED expected` - `strict` takes
+  only `private` or `protected`, in a class too (11.2.1).
+- ⚠️ *A class method of a record must be `static`:* `class function Make:
+  TR3;` without `static` is `E2398 Class methods in record types must be
+  static` (a record has no metaclass to pass as `Self`). A record cannot
+  declare a destructor either: `E2465 A record cannot introduce a
+  destructor`.
+- *`const` protects the fields, not the methods:* on a `const R: TR`
+  parameter, `R.X := 1` and a write through a property (`R.PX := 1`) are
+  `E2064 Left side cannot be assigned to`, but `R.Bump` - a method that
+  increments `X` - compiles, and so does `Get.Bump` on a function result.
+  Whether the caller sees the change depends on how `const` passed the
+  record: the 4-byte `TR` of the probe reached the callee as a copy on
+  Win64 - the callee prints 2, the caller still reads 1. A checker must not
+  flag the method call.
+- dcc64 37.0, 2026-10-30 (spec audit g4, local/probe-park/spec-audit/g4
+  RVis.dpr, RVis2.dpr, RCtor.dpr, RConst.dpr).
 - `Self` inside a record method is the record instance (by reference for `var`-like
   methods).
 - *AST:* same member nodes as classes, on a `RecordType`.
@@ -402,6 +432,12 @@ type
 - ⚠️ *No parameterless record constructor* is allowed (classic rule) — initial
   value comes from zero-fill or a custom managed `Initialize` operator (9.4). The
   parser should reject `constructor Create;` with no parameters on a record.
+  dcc: `E2394 Parameterless constructors not allowed on record types`; a
+  constructor whose parameters ALL have defaults (`constructor Create(A:
+  Integer = 0)`) is refused too, as `E2471 Possibly parameterless
+  constructors not allowed on record types` - the test is "callable with no
+  arguments" (`TR2.Create`). dcc64 37.0, 2026-10-30 (spec
+  audit g4, local/probe-park/spec-audit/g4 RCtor.dpr).
 - A record constructor does not allocate (value type); it initialises an instance.
 
 ---
@@ -486,12 +522,31 @@ type
   (`Multiply(TVec, TVec): Single` beside `Multiply(TVec, Single): TVec`). The
   expression's type is the chosen operator's result type, so `(B - A).Len` is a
   member access on that result. `and`/`or`/`xor` map to `LogicalAnd`/
-  `BitwiseAnd` (etc.), unary `-`/`+`/`not` to `Negative`/`Positive`/
+  `BitwiseAnd` (etc.; which one when both exist: next bullet), unary
+  `-`/`+`/`not` to `Negative`/`Positive`/
   `LogicalNot`. (dcc64 37.0, probed 2026-10-08.)
   *Implementation note (PasTree):* the result is typed only when the
   best-fitting candidates agree on it; an unknown operand or a tie between
   results (the Byte case above, scored like the Single one) leaves the
   expression untyped rather than guessed.
+- ⚠️ *`and`/`or`/`xor` have TWO operator names each, and the `Bitwise` one
+  wins.* `A and B` calls `LogicalAnd` when the record declares only that,
+  `BitwiseAnd` when it declares only that, and `BitwiseAnd` when it declares
+  both (likewise `or` -> `LogicalOr`/`BitwiseOr`, `xor` ->
+  `LogicalXor`/`BitwiseXor`; printed at run time). Unary `not` has only
+  `LogicalNot`: `class operator BitwiseNot` is no operator name. dcc64 37.0,
+  2026-10-30 (spec audit g4, local/probe-park/spec-audit/g4 RAnd.dpr,
+  RAnd2.dpr, RNot.dpr).
+- *Declaration errors:* a name not in `OperatorName` (`class operator
+  Foo(...)`, `BitwiseNot`) is `E2393 Invalid operator declaration`; a known
+  name with the wrong arity is `E2517 Operator 'Add' must take 2
+  parameter(s)` (`Negative` ... 1), and the operator is then unusable
+  (`R + R`: `E2015`).
+  In a CLASS (dcc64, a desktop target) `class operator` is not even
+  recognised: `E2123 PROCEDURE, FUNCTION, PROPERTY, or VAR expected` - the
+  "records only" rule of ch.04 §4.12 is a syntax rule there. dcc64 37.0,
+  2026-10-30 (spec audit g4, local/probe-park/spec-audit/g4 ROpCls.dpr,
+  ROpAr.dpr).
 - `Implicit`/`Explicit` define conversions to/from other types — they drive
   implicit/explicit cast resolution.
 - *`nil` reaches a record through `Implicit`:* with `class operator
@@ -534,13 +589,19 @@ scope guards).
 **Grammar**
 
 ```ebnf
-ManagedOp = "class" "operator" ( "Initialize" | "Finalize" )
-              "(" [ ManagedSelfParam ] ")" ";"
+ManagedOp = "class" "operator" "Initialize" [ "(" "out" Ident ":" TypeRef ")" ] ";"
+          | "class" "operator" "Finalize"   [ "(" "var" Ident ":" TypeRef ")" ] ";"
           | "class" "operator" "Assign"
-              "(" "var" Ident ":" TypeRef ";" "const" [ "[" "Ref" "]" ] Ident ":" TypeRef ")" ";" ;
-ManagedSelfParam = ( "var" | "out" ) Ident ":" TypeRef ;
+              "(" "var" Ident ":" TypeRef ";"
+                  ( "const" "[" "Ref" "]" | "var" ) Ident ":" TypeRef ")" ";" ;
 (* pre-13.0: explicit param required; 13.0: optional (implicit Self).
-   The RTL uses the "out" form: class operator Initialize(out Dest: TLightweightMREW) *)
+   The RTL uses the "out" form: class operator Initialize(out Dest: TLightweightMREW).
+   The modes are fixed (dcc64 37.0, 2026-10-30, spec audit g4 RMgd.dpr, RMgd2.dpr):
+   Initialize(var ...) is E2644 "The parameter of Initialize operator must be a out
+   parameter of the container type", Finalize(out ...) E2645 (... "must be a var
+   parameter"), and an Assign source passed plain "const" or by value is E2618
+   "Second parameter of Assign operator must be a const[Ref] or var parameter of
+   the container type". *)
 ```
 
 **Example**
@@ -549,7 +610,7 @@ ManagedSelfParam = ( "var" | "out" ) Ident ":" TypeRef ;
 type
   TGuard = record
     FHandle: THandle;
-    class operator Initialize(var G: TGuard);   // run on allocation
+    class operator Initialize(out G: TGuard);   // run on allocation (out, not var: E2644)
     class operator Finalize(var G: TGuard);      // run on deallocation
     class operator Assign(var Dest: TGuard; const [ref] Src: TGuard);  // run on copy
   end;
@@ -559,8 +620,8 @@ type
 
 - ⚠️ A record with **any** of these operators becomes a **managed type** — it gets
   automatic init/finalize/copy codegen and may no longer be a valid `case`/variant
-  field or used where unmanaged layout is required. The type-checker must track
-  "is managed".
+  field (`E2651`, 9.1.3) or used where unmanaged layout is required. The
+  type-checker must track "is managed".
 - `Initialize` runs on every instance creation (locals, fields, array elements);
   `Finalize` on destruction; `Assign` replaces the default field-copy.
 - ⚠️ *Parameter-passing matrix — which operators fire on a call.* Probed with a
@@ -623,9 +684,16 @@ type
 
 **Semantics & parsing notes**
 
-- ⚠️ *Version-gated grammar:* before 13.0 the explicit `(var X: TGuard)` parameter
+- ⚠️ *Version-gated grammar:* before 13.0 the explicit parameter
+  (`(out X: TGuard)` for `Initialize`, `(var X: TGuard)` for `Finalize`, 9.4.1)
   was **required**; from 13.0 it is **optional** and a `Self` is implied. The
   parser must accept both arities for these two operators on the target version,
   and bind `Self` to the instance when the parameter is absent.
 - Applies only to `Initialize`/`Finalize` (not `Assign`, which needs its two
   explicit parameters).
+- In the parameterless form the body reaches the instance by bare field
+  names (the implicit `Self`): `class operator Initialize; begin X := 5; end` sets
+  the local's `X` (a later `Writeln(A.X)` prints 5) and the parameterless
+  `Finalize` reads it back - the implementation header is
+  `class operator T1.Initialize;` with no list. dcc64 37.0, 2026-10-30 (spec
+  audit g4, local/probe-park/spec-audit/g4 RMgd.dpr).

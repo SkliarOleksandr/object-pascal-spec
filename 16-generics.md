@@ -55,7 +55,11 @@ type
   (`<T; U: class>` is two, `<T, U>` is one). A reader that takes the first name
   of each group silently loses every parameter after the first comma, and a
   positional binding of actuals to parameters then goes wrong rather than
-  failing.
+  failing. After a `:` the `,` belongs to the CONSTRAINT list: `TG<T: class,
+  U>` is one parameter `T` constrained by `class` and a type `U`, which is
+  `E2003 Undeclared identifier: 'U'`; a second parameter after a constrained
+  one needs `;` (`<T: class; U>`). dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 G10.dpr).
 - ⚠️ *A generic RECORD has a size, and it is the body laid out with the
   parameters bound* — `SizeOf(TPair<Byte, Int64>)` is 16 by the ordinary rules
   of 9.1.2, with `TKey` and `TValue` replaced by the actuals. The parameters
@@ -64,7 +68,11 @@ type
   and the substitution has to follow them there.
 - ⚠️ *A generic record may NOT contain a variant part over a parameter* —
   `E2569 Type parameter 'T' may need finalization - not allowed in variant
-  record`.
+  record`. A `class` constraint does not lift it (a class reference needs no
+  finalization, yet `TR2<T: class>` with `0: (A: T)` is the same E2569); only
+  `T: record` does - `TR3<T: record>` with the same variant part compiles and
+  instantiates as `TR3<Integer>`. dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 G09.dpr, G09b.dpr).
 - *AST:* `GenericTypeDecl { name, typeParams[], constraints, body }`.
 
 ### 16.1.2 Overloading by arity
@@ -235,8 +243,9 @@ function Max<T>(const A, B: T): T;
   decide it: `Id<Args>` whose `Id` binds a ROUTINE, in a value position, is a
   call. Typing it as a type expression (it is shaped like `TList<Integer>`)
   yields nothing, or the open `T`, and every member after it goes dark.
-- ⚠️ *Constraints live on the DECLARATION here too* (§16.4.1), so a generic
-  method's implementation header repeats a bare `<T>`:
+- ⚠️ *Constraints live on the DECLARATION here too* (§16.4.1 states the rule
+  and its error), so a generic method's implementation header repeats a bare
+  `<T>`:
 
   ```pascal
   // interface
@@ -278,6 +287,14 @@ function Max<T>(const A, B: T): T;
   resolver that collects a generic method's type parameters into the SAME
   scope as its value parameters (rather than a scope of their own) reports
   this shape as a false redeclaration error.
+- ⚠️ *A generic method cannot be virtual, and an interface cannot declare
+  one.* `procedure V<T>; virtual;`, `dynamic`, and a `class procedure
+  CV<T>; virtual;` are each `E2533 Virtual, dynamic and message methods
+  cannot have type parameters`; `procedure M<T>;` in an interface is `E2535
+  Interface methods must not have parameterized methods`. So a generic
+  method is always statically bound - no VMT slot, no interface slot - and a
+  call to one never dispatches. dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 G05.dpr).
 - *AST:* `MethodDecl { typeParams[], … }`.
 
 ---
@@ -554,8 +571,10 @@ type
     the TYPE - is the one thing it unlocks: `V.Create` on a value is `E2003`,
     and so are `V.ClassName`, `V.ToString` and `T.Create.Free` (the result
     is a T, with no members); `V = nil` is `E2015`. Together with `class`, T
-    has all of TObject's members (`V.Free`, `T.Create.Free` compile). The
-    types meeting it are classes with a public parameterless `Create`:
+    has all of TObject's members (`V.Free`, `T.Create.Free` compile). Every
+    class type meets it - `TObject.Create` is always inherited, so even a
+    class whose own `Create` takes parameters passes (the last bullet of
+    this section says what `T.Create` then runs); a non-class does not:
     `TG<TRec>` (a record) and `TG<IInterface>` are `E2513 Type parameter 'T'
     must have one public parameterless constructor named Create`. dcc64 37.0
     also accepts `TG<Integer>` - read as a compiler gap, not a rule: an
@@ -571,6 +590,35 @@ type
     'TBase'` - the message names the real class, not the alias. A checker
     that compares the ancestry walk against the alias symbol rejects even the
     exact class.
+  - ⚠️ *Which constraint lists are legal, and the error for each that is
+    not* (dcc64 37.0, 2026-10-30, spec audit g5,
+    local/probe-park/spec-audit/g5 G02.dpr, G02b.dpr):
+    - `class, record` - `E2507 CLASS constraint and RECORD constraint cannot
+      be specified together`; `record, constructor` - `E2516 Constraint
+      'constructor' is conflicting with previous constraints`; `record, IFoo`
+      - `E2666 Constraint 'record' and interface type constraint cannot be
+      specified together`; `class, TBase` - `E2552 CLASS or RECORD constraint
+      and class type constraint cannot be specified together`.
+    - Repeats: `TBase, TBase` - `E2553 Class type constraint cannot be
+      specified more than once`; `IFoo, IFoo` - `E2670 Identical interface
+      type constraint cannot be specified more than once`; `constructor,
+      constructor` - `E2603 Constraint 'constructor' cannot be specified
+      more than once`.
+    - Not a constraint type: `Integer` and `TObject` (alone or after another
+      class, `TBase, TObject`) are `E2510 Type 'TObject' is not a valid
+      constraint` - write `class` for "any class"; `string` is a keyword, so
+      `<T: string>` is a syntax error (`E2029 Identifier expected`).
+    - Legal: `class, IFoo`, `TBase, IFoo, constructor`, an interface alone
+      (`IInterface` included), a class type alone (`TInterfacedObject`), and
+      another parameter of the same list (`<T: TBase; U: T>`).
+  - *What each kind rejects at instantiation:* `class` - `E2511 Type
+    parameter 'T' must be a class type` for an interface or a record;
+    `record` - `E2512 Type parameter 'T' must be a non-nullable value type`
+    for `string` or a class (`Integer` is accepted); an interface type -
+    `E2514 Type parameter 'T' must support interface 'IFoo'` for a class not
+    implementing it (an interface type argument equal to the constraint is
+    accepted); a class type - `E2515` (above). dcc64 37.0, 2026-10-30 (spec
+    audit g5, local/probe-park/spec-audit/g5 G06.dpr).
   - ⚠️ *Combining means the UNION of what each unlocks, and a member lookup has
     to try them ALL.* `TKey: IComparable<TKey>, IEquatable<TKey>, IHashable`
     makes `AKey.Compare`, `AKey.Equals` and `AKey.Hash` equally legal, and a
@@ -582,7 +630,11 @@ type
 - ⚠️ Constraints are written **once, on the declaration**. A method body may not
   repeat them — `procedure TList<T>.Sort;` carries a bare `<T>` — so a tool that
   reads constraints off the parameter it finds must follow the body's parameter
-  back to the declaring type's.
+  back to the declaring type's (for a generic METHOD's own parameters, back to
+  the method's declaration - 16.2.1). Repeating one is a syntax error:
+  `procedure TL<T: class>.Sort;` is `E2029 ',', ';' or '>' expected but ':'
+  found`. dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 G08.dpr).
 - *A generic METHOD's constraints are checked at an explicit
   instantiation like a type's* - `F.Pick<TObject>(O)` against `Pick<T:
   TItem>` is `E2515 Type parameter 'T' is not compatible with type 'TItem'`,
@@ -612,7 +664,9 @@ type
   permissive than a direct call, not just resolving to the same thing). A
   type-checker that rejects `TFoo<TNoDefaultCtor>` outright for failing the
   constraint would be STRICTER than dcc32 actually is here — match the
-  compiler's leniency, don't "fix" it.
+  compiler's leniency, don't "fix" it. Same on dcc64 37.0 (2026-10-30, spec
+  audit g5, local/probe-park/spec-audit/g5 G01.dpr: `TG<TNoDef>.Make`
+  prints `TNoDef 0`, the own `Create(A)` never ran).
 - *AST:* per-parameter `constraints: [ kind | typeRef ]`.
 
 ---
@@ -681,6 +735,34 @@ var X := Max(3, 7);          // T inferred as Integer, X inferred as Integer
   value arguments alone sees two parameterless candidates, takes the first
   (the `Pointer` one), and the written `<TItem>` then has nothing to
   instantiate.
+- ⚠️ *What inference can and cannot do* (dcc64 37.0, 2026-10-30, spec audit
+  g5, local/probe-park/spec-audit/g5 G03.dpr, G03b.dpr, G03c.dpr):
+  - `T` only in the result (`Make<T>: T`) - `I := TU.Make;` is `E2531
+    Method 'Make' requires explicit type argument(s)`; the assignment target
+    is not consulted.
+  - Arguments of different types bound to one `T` do not unify to a common
+    type: `Max(3, 7.5)` against `Max<T>(const A, B: T)` is `E2532 Couldn't
+    infer generic type argument from different argument types for method
+    'Max'`, although Integer converts to the real type; `Max(1, 'a')` the
+    same. `Max(nil, nil)` infers `Pointer`.
+  - Inference sees `T` directly or as an open array's element: `First([1,
+    2])` against `First<T>(const A: array of T)` infers Integer. It does NOT
+    look inside another generic's instantiation: `FirstD(A)` with `A:
+    TArray<Integer>` against `FirstD<T>(const A: TArray<T>)` is `E2010
+    Incompatible types: 'TArray<T>' and 'TArray<Integer>'`, and `FirstL(L)`
+    with a `TList<Integer>` against `FirstL<T>(L: TList<T>)` likewise - the
+    caller writes `FirstD<Integer>(A)`. A resolver that unifies `TArray<T>`
+    with `TArray<Integer>` accepts calls dcc rejects.
+- ⚠️ *A plain and a generic overload that both accept the arguments* (dcc64
+  37.0, 2026-10-30, spec audit g5, local/probe-park/spec-audit/g5
+  G03.dpr, G04.dpr): the generic one is instantiated with the argument's own
+  type and then competes as an ordinary candidate (6.3.1). With `P(A:
+  Integer)` and `P<T>(A: T)`, `P(1)` calls the plain one (both exact, the
+  non-generic wins the tie) and `P('s')` the generic; `R('x')` calls `R(const
+  A: string)` over `R<T>(const A: T)`. With `P(A: Int64)` instead, `P(B)` for
+  `B: Byte` and `P(1)` call the GENERIC one - its exact match beats the plain
+  one's widening. `P<Integer>(1)`, type arguments written, is always the
+  generic (the filter above).
 - Inference combines with inline-var inference for terse code.
 
 ---

@@ -69,7 +69,12 @@ end;
   taking the VARIABLE, not the object: since 10.4 its `System.SysUtils` signature
   is `procedure FreeAndNil(const [ref] Obj: TObject);` — a `const [ref]`
   parameter (ch.06 §6.2.3) — so the routine receives the caller's variable's
-  ADDRESS and can zero it through that reference after freeing. Pre-10.4 it took
+  ADDRESS and can zero it through that reference. ⚠️ It zeroes the variable
+  FIRST and frees afterwards (`Temp := Obj; TObject(Pointer(@Obj)^) := nil;
+  Temp.Free;` in System.SysUtils): a destructor reached through
+  `FreeAndNil(G)` already sees `G = nil`, one reached through `G.Free` sees
+  `G` still set (dcc64 37.0, 2026-10-30, spec audit g6,
+  local/probe-park/spec-audit/g6 D02.dpr). Pre-10.4 it took
   an untyped `var` pointer instead; the `const [ref] TObject` form is what lets
   it accept any `TObject`-descended reference while still writing back to the
   exact variable passed (dcc-verified, dcc32 37.0: `Obj.Free;` leaves `Obj`
@@ -77,8 +82,10 @@ end;
   leaves it `nil`). Relies on the same subclass-permissive `const [ref]`
   compatibility rule as the next bullet.
 - `TObject.DisposeOf` — `Free`'s ARC-era sibling — is still declared, `inline`,
-  and `deprecated 'Use Free instead'` (dcc-verified, dcc32 37.0: `W1000` hint on
-  use). Under the current (10.4+) manual model its body is simply `Free;` — it
+  and `deprecated 'Use Free instead'` (dcc-verified, dcc32 37.0; dcc64 37.0
+  2026-10-30, D01.dpr: a call is the WARNING `W1000 Symbol 'DisposeOf' is
+  deprecated: 'Use Free instead'`, not a hint). Under the current (10.4+)
+  manual model its body is simply `Free;` — it
   only differed from `Free` on the historical mobile-ARC compilers (§20.5),
   where it forced immediate disposal instead of waiting for the reference count
   to reach zero. Kept for source compatibility; on current compilers it has no
@@ -98,9 +105,14 @@ end;
   coverage: that section is about HOW the argument is passed (by address, for
   efficiency); this is about WHICH argument types are accepted. `const
   [ref]`'s read-only contract is what makes the exact-type restriction
-  unnecessary — the callee can never write back through it, so accepting a
+  unnecessary — the callee cannot assign the parameter (`A := nil` in the
+  body is `E2064 Left side cannot be assigned to`), so accepting a
   wider/more-derived reference is safe — while `var`'s read/write contract
-  cannot be relaxed the same way. This is precisely why `FreeAndNil` (above)
+  cannot be relaxed the same way. The contract is only the compiler's: a
+  cast through the address (`TBase(Pointer(@A)^) := nil`) compiles, and is
+  exactly how `FreeAndNil` writes back (dcc64 37.0, 2026-10-30, spec audit
+  g6, local/probe-park/spec-audit/g6 D03.dpr). This is precisely why
+  `FreeAndNil` (above)
   can be declared `const [ref] Obj: TObject` and still accept any
   `TObject`-descended variable.
 - *`NewInstance`/`FreeInstance`: the allocation hooks under `Create`/`Free`.*
@@ -143,6 +155,18 @@ and **custom managed records** (ch.09 §9.4).
   enclosing record/array to also get finalize codegen; managed types are
   zero-/nil-initialized on entry and finalized on scope exit. The type-checker must
   compute managedness transitively.
+- ⚠️ *The exact set, as the compiler's own `IsManagedType(T)` reports it*
+  (dcc64 37.0, 2026-10-30, spec audit g6, local/probe-park/spec-audit/g6
+  W02.dpr, run): managed - `string`, `AnsiString`, `WideString`,
+  `Variant`, `OleVariant`, a dynamic array, an interface, a `reference to`
+  type, a record with a managed field, a record with an `Initialize`
+  operator (no managed field needed), a static array of a managed element;
+  NOT managed - `ShortString` (and a record holding only one), a class
+  reference/instance (`TObject`). A field's attribute changes the answer:
+  a record whose only field is `[unsafe] I: IInterface` is NOT managed, one
+  with `[weak] I: IInterface` is (and `HasWeakRef` is True for it), one with
+  `[weak] O: TObject` is neither (see 20.6.1). `IsManagedType` and
+  `HasWeakRef` are the compile-time intrinsics to model (ch.04 §4.11).
 - `Default(T)`, `Initialize`, `Finalize` intrinsics interact with this.
 
 ---
@@ -189,7 +213,8 @@ broke cycles.
 - ⚠️ *Removed in 10.4* — all platforms returned to the manual model. A parser
   targeting current Delphi should treat object ARC as **historical**. Code written
   for ARC (relying on auto-free) may leak under the unified model.
-- `[weak]`/`[unsafe]` (20.6) survived and apply to interface references.
+- `[weak]`/`[unsafe]` (20.6) survived; with object references no longer
+  counted, only their effect on interface references remains (20.6.1).
 
 ---
 
@@ -221,6 +246,38 @@ type
 - These are **attributes** (ch.19 syntax), parsed as `[weak]`/`[unsafe]` before the
   field. The semantic layer changes ref-count codegen: `[weak]` registers for
   zeroing, `[unsafe]` does nothing on assign/release.
+- ⚠️ *Placement check:* `[weak]` is only allowed on a field or variable of a
+  class or interface type - `[weak] FI: Integer;` and `[weak] FA:
+  TArray<TObject>;` are `E2584 Weak attribute only allowed on fields and
+  variables of type class or interface: FI`. It is accepted on a local
+  variable (`var [weak] O: TObject;`) and on a parameter (`const [weak] I:
+  IInterface`). `[unsafe]` has no such check (`[unsafe] FS: string;`
+  compiles). dcc64 37.0, 2026-10-30 (spec audit g6,
+  local/probe-park/spec-audit/g6 M4.dpr, M5.dpr, M6.dpr, M8.dpr, M9.dpr,
+  MA.dpr).
+- ⚠️ *On an object reference `[weak]` is accepted and does nothing* (dcc32 and dcc64
+  37.0, 2026-10-30, spec audit g6, W01.dpr and W02.dpr, run): after
+  `O.Free` a `[weak] FW: TObject` field still holds the dangling pointer,
+  exactly like a plain or `[unsafe]` field, and `HasWeakRef` of a record
+  whose field is `[weak] O: TObject` is False. A `[weak] FI: IInterface`
+  field IS zeroed when the last strong reference goes. The zeroing rule
+  above is therefore an interface-reference rule on the current (non-ARC)
+  compilers.
+- *Why, and since when:* zeroing an OBJECT reference was an ARC feature. The
+  RTL guards it with `{$IFDEF WEAKINSTREF}` (`_InstWeakClear` and friends in
+  System.pas) and the interface case with `WEAKINTFREF`. On every 37.0
+  compiler - dcc32, dcc64, dccaarm, dccaarm64, dcciosarm64, dccosx64,
+  dccosxarm64 - `WEAKINTFREF` is defined and neither `AUTOREFCOUNT` nor
+  `WEAKINSTREF` is, so the mobile targets behave like Win32/Win64 here; dcc64
+  22.0 (11) and 23.0 (12) show the same defines. Object ARC, and with it
+  object `[weak]` zeroing, ended in 10.4 Sydney (§20.5.1); from then on
+  Embarcadero documents weak references as available only for interface
+  references. dcc 37.0 / 23.0 / 22.0, 2026-10-30 (spec audit v,
+  local/probe-park/spec-audit/v UArc.pas, `{$MESSAGE}` per define).
+- *Parser/analyzer consequence:* code that still guards on `AUTOREFCOUNT`,
+  `NEXTGEN` or `WEAKINSTREF` takes its `{$ELSE}` branch on every current
+  target, so an analyzer that models `[weak]` object fields as auto-nilled
+  is modelling a compiler that no longer exists.
 - *AST:* attribute on the `FieldDecl`; analyzer flags strong reference cycles that
   these resolve.
 

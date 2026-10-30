@@ -214,7 +214,20 @@ procedure Swap(var A, B: Integer);
   `P(GetVal)` where `GetVal` is a function, and `P(Foo.Val)` where `Val` is a
   read/write property all report `E2197 Constant object cannot be passed as var
   parameter`.) A resolver must not reuse the assignment-LHS check for
-  `var`/`out` argument binding.
+  `var`/`out` argument binding. This is the one place the rule is stated;
+  5.1.1 points here.
+- ⚠️ *"Exact type" is type IDENTITY, checked for `var` and `out` alike*
+  (dcc64 37.0): a mismatch is `E2033 Types of actual and formal var
+  parameters must be identical: Integer and Byte`, also for an argument that
+  would merely widen (`Byte`, `Cardinal` against `var X: Integer`), a
+  DESCENDANT class against `var X: TB` (`TB and TD` - no polymorphism through
+  `var`), a distinct type (`type Integer`), `AnsiString` against `var S:
+  string`, and `out X: Integer` with a Byte. A weak alias (`TAl = Integer`) is
+  the same type and passes. A VALUE typecast of a variable is an lvalue here
+  and is how code adapts: `PB(TB(D))` and `PV(Integer(C))` for `C: Cardinal`
+  compile. A `const` parameter passed on to a `var` one is `E2197`.
+  dcc64 37.0, 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3
+  Params.dpr).
 
 ### 6.2.3 `const` parameters (and `const [Ref]`)
 
@@ -234,7 +247,12 @@ procedure Draw(const [Ref] R: TRect);      // guaranteed by-reference
 
 **Semantics & parsing notes**
 
-- Assigning to a `const` parameter inside the body is a **compile error**.
+- Assigning to a `const` parameter inside the body is a **compile error**:
+  `E2064 Left side cannot be assigned to`, for `X := 1` and for a field of a
+  `const` record parameter (`R.F := 1`) alike; passing it on to a `var`
+  parameter is `E2197 Constant object cannot be passed as var parameter`, and
+  using it as a `for` counter is `E2064` too (5.5.1). dcc64 37.0, 2026-10-30
+  (spec audit g3, local/probe-park/spec-audit/g3 Params.dpr, ForCtr.dpr).
 - `const [Ref]` guarantees reference passing (relevant for large records /
   interop). `[Ref]` is a compiler-recognized **parameter attribute**
   (ch.19 §19.3.3) and may be written **before or after** `const`
@@ -293,7 +311,19 @@ procedure Show(Msg: string; Modal: Boolean = True);
 
 - ⚠️ *Trailing-only rule:* once one parameter has a default, **all following**
   parameters must too. Defaults must be **constant expressions** and are only
-  allowed on value/`const` parameters (not `var`/`out`). Enforce both.
+  allowed on value/`const` parameters (not `var`/`out`). Enforce both: a
+  parameter without a default after one with it is `E2238 Default value
+  required for 'B'`, a default on a `var` or `out` parameter `E2239 Default
+  parameter 'A' must be by-value or const`. Which TYPES take a default
+  (dcc64 37.0): ordinals, enumerations, Char, reals, strings, sets
+  (`['a'..'z']`, `[e1]`), pointers, classes, class references and interfaces
+  (`nil`); a `Variant` / `OleVariant`, a record (`TGUID`, `TPoint`), an
+  untyped `const A = nil` and an open array `array of Integer = nil` are
+  `E2268 Parameters of this type cannot have default values`; a dynamic
+  array only `nil` (below). An argument cannot be skipped to reach a later
+  default: `E1(, 3)` is `E2029 Expression expected but ',' found`. dcc64
+  37.0, 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3
+  Defaults.dpr, Defaults2.dpr, Defaults3.dpr).
 - ⚠️ *A default takes ONE name:* `procedure P(A, B: Integer = 0)` is `E2237
   Parameter 'B' not allowed here due to default value`, `const A, B` alike
   (dcc64 37.0). So `(A: T = X)` - one name, a type, a default - and `(A, T:
@@ -373,6 +403,31 @@ procedure Log(const Fmt: string; const Args: array of const);
   argument.
 - `array of const` builds a `TVarRec` array; the literal `[a, 'b', 3]` at the call
   site is an open-array constructor, not a set.
+- ⚠️ *What an `array of T` parameter accepts* (dcc64 37.0):
+  - a static array, a dynamic array or an open-array parameter of element
+    type `T` exactly - for `const`, value AND `var` open arrays (`PW(D)`,
+    `PW(S)` compile against `var A: array of Integer`); a static `array[0..1]
+    of Byte` for `array of Integer` is `E2010 Incompatible types: 'array of
+    Integer' and 'array[0..1] of Byte'` - elements are not converted;
+  - an open-array constructor `[1, 2]`, `[]`, `[I, B]` whose elements are
+    assignment-compatible with `T` (`[1, 300]` for `array of Byte` is
+    `E1012`); not for a `var` open array (`PW([1, 2])` is `E2197`);
+  - ⚠️ a single VARIABLE of type `T`, as a one-element array: `P(I)` for an
+    Integer `I` gives `Length(A) = 1`, `A[0] = I`, and through a `var` open
+    array the callee writes `I` itself (`A[0] := 42` sets `I`); a record
+    variable likewise. A constant there is `E2192 Constants cannot be used as
+    open array arguments` (`P(5)`, `PS('abc')`, also the range `P(1..3)`), any
+    other expression `E2010 'array of Integer' and 'Integer'` (`P(I + 1)`);
+  - NOT a `string` for `array of Char` (`E2010 'array of Char' and 'string'`).
+- ⚠️ *Inside the callee an open array is no dynamic array:* `SetLength(A, 2)`
+  is `E2008 Incompatible types`, `D := A` into a `TArray<Integer>` is `E2010
+  'TArray<Integer>' and 'array of Integer'`, passing it to a dynamic-array
+  parameter `E2010`, to an `array of const` `E2010 'array of TVarRec' and
+  'array of Integer'`, and `A := nil` (a `var` open array) `E2010`. A `const`
+  open array's element is not assignable (`A[0] := 1` is `E2064`), a VALUE
+  open array's is (the callee's copy). Passing it on to another `array of
+  T` parameter works. dcc64 37.0, 2026-10-30 (spec audit g3,
+  local/probe-park/spec-audit/g3 OpenArr.dpr, OpenOne.dpr, OpenOne2.dpr).
 
 ### 6.2.7 Untyped parameters
 
@@ -397,6 +452,14 @@ procedure FillZero(var Buf; Count: Integer);
   C, D; const E, F);` compiles, while a value list without a type is `E2067
   Missing parameter type` (dcc64 37.0). Hence `(const A, B)` - two untyped
   names - beside `(const A: B)` - one name of type `B`.
+- *The argument must be addressable, even for `const`:* against `procedure
+  PCU(const X)` a numeric constant, `nil`, a real literal or an expression
+  (`PCU(5)`, `PCU(K)` with `const K = 5`, `PCU(nil)`, `PCU(1.5)`, `PCU(I +
+  1)`) are `E2036 Variable required`, while a STRING literal or string
+  constant (`PCU('abc')`, `PCU(KS)`) compiles. Against `var X` a literal is
+  `E2197 Constant object cannot be passed as var parameter`. dcc64 37.0,
+  2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 Params.dpr,
+  UntypedC.dpr).
 
 ---
 
@@ -421,7 +484,54 @@ function Area(C: TCircle): Double; overload;
 **Semantics & parsing notes**
 
 - `overload` is a **directive**. Resolution picks the best match by argument types
-  (with implicit-conversion ranking); ambiguity is a compile error.
+  (with implicit-conversion ranking); ambiguity is a compile error. No
+  candidate is `E2250 There is no overloaded version of 'F' that can be
+  called with these arguments`; a tie is `E2251 Ambiguous overloaded call to
+  'S'` (`S(1, 1)` against `S(X: Single; Y: Integer)` and `S(X: Integer; Y:
+  Single)`).
+- ⚠️ *A default can make two declarations collide only at the call:*
+  `V(X: Integer; Y: Integer = 0); overload;` beside `V(X: Integer);
+  overload;` declares cleanly, `V(1, 2)` calls the first, and `V(1)` is
+  `E2251`. dcc64 37.0, 2026-10-30 (spec audit g3,
+  local/probe-park/spec-audit/g3 OvAmb.dpr, OvAmb2.dpr).
+- ⚠️ *Numeric ranking, observed* (dcc64 and dcc32 37.0, each pair tried in
+  both declaration orders with the same result; the rule behind it is not
+  derived here, so a resolver should reproduce the table, not a guess):
+
+  | overloads | argument | chosen |
+  |---|---|---|
+  | `Integer` / `Double` | `5`, an Integer, a Byte | Integer |
+  | `Integer` / `Double` | `1.5` | Double |
+  | `Byte` / `Word` | `5` | Byte |
+  | `Byte` / `Word` | `300`, an Integer | Word |
+  | `ShortInt` / `Byte` | `5`, `-5` | ShortInt |
+  | `ShortInt` / `Byte` | `200`, an Integer | Byte |
+  | `SmallInt` / `Word` | `5`, `-5`, a Byte | SmallInt |
+  | `SmallInt` / `Word` | an Integer | Word |
+  | `ShortInt` / `Word` | a Byte | Word |
+  | `Int64` / `Cardinal` | an Integer | Int64 |
+  | `Int64` / `Cardinal` | a Byte, a Word | Cardinal |
+  | `Integer` / `Int64` | `5`, a Byte | Integer |
+  | `Integer` / `Int64` | `5000000000` | Int64 |
+  | `Int64` / `Double` | an Integer | Int64 |
+  | `Int64` / `Double` | a Currency | Double |
+  | `Single` / `Double` | `1.5`, an Int64 | Double |
+  | `Single` / `Double` | an Integer, a Single | Single |
+  | `Double` / `Extended` | `1.5` | Extended |
+  | `Double` / `Extended` | an Integer | Double |
+  | `Single` / `Extended` | an Integer, a Single | Single |
+  | `Int64` / `Double` / `Single` | an Integer, a Word | Int64 |
+  | `Integer` / `Variant` | `'x'`, `1.5` | Variant |
+  | `TObject` / `TB` | a `TDD` (`TDD < TD < TB`) | TB |
+  | `TObject` / `Pointer` | `nil` | Pointer |
+  | `string` / `AnsiString` | an AnsiString | AnsiString |
+  | `string` / `AnsiString` | `'abc'` | string |
+  | `string` / `PChar` | `'abc'` | string |
+
+  A real literal ranks as `Extended` (it takes `Extended` over `Double` on
+  dcc64 as on dcc32). dcc64 / dcc32 37.0, 2026-10-30
+  (spec audit g3, local/probe-park/spec-audit/g3 OvRank.dpr, OvRank2.dpr,
+  OvAmb2.dpr).
 - ⚠️ Overload resolution interacts with **default parameters** and **distinct type
   aliases** (ch.02) — both can change which candidate wins.
 - ⚠️ *One type under two predefined names is an EXACT match, not a merely
@@ -606,7 +716,8 @@ function Area(C: TCircle): Double; overload;
   `function F(X: Integer): Integer; overload;` followed by
   `function F(X: Integer): string; overload;` fails with
   `E2004 Identifier redeclared: 'F'` — the *same* diagnostic dcc32 gives for a
-  plain non-overloaded re-declaration, not an overload-specific error.) A
+  plain non-overloaded re-declaration, not an overload-specific error; dcc64
+  37.0 the same, 2026-10-30, spec audit g3 OvAmb.dpr.) A
   resolver's overload key must be the parameter-type signature only.
 - ⚠️ *An anonymous-method literal argument removes every candidate it cannot
   convert to* — an `of object` or plain procedural parameter, or a
@@ -752,12 +863,10 @@ CallDirective = CallConv | "far" | "near" | "varargs" | "overload"
   end`, `procedure of object stdcall; cdecl` - and the LAST one is the
   routine's or the type's: assignment compatibility follows it (`E2009
   Incompatible types: 'Calling conventions differ'`, `E2010` for a literal).
-- ⚠️ *Placement is loose (all corpus-shipped):* the convention may follow the
-  heading **without** a separating semicolon (`function F(...): Bool stdcall;`,
-  System.SysUtils.pas), appear inside anonymous-method literals before the body
-  (`function(...): HResult stdcall begin`, Vcl.Edge.pas), and several directives
-  may run together after one `;` without separators
-  (`...; cdecl varargs;`, System.Curl.pas).
+- The shapes of the "where no `;` separates" bullet all ship in the RTL: `function F(...): Bool
+  stdcall;` (System.SysUtils.pas), `function(...): HResult stdcall begin` in an
+  anonymous method (Vcl.Edge.pas), `...; cdecl varargs;` after one `;`
+  (System.Curl.pas).
 - ⚠️ *The semicolon after the LAST directive in a run is OPTIONAL* (dcc-verified):
   `procedure A; stdcall` followed directly by the next declaration compiles, as
   do `procedure P; platform deprecated` + `procedure`/`begin`, and
@@ -1009,6 +1118,12 @@ procedure Fatal(const Msg: string); noreturn;
 - `noreturn` is a **directive** (B.4.2, new in 13.0) in the routine's directive
   list. Tells the flow analyser that code after a call to it is unreachable, and
   suppresses "function might not return a value" warnings on paths that end in it.
+  Verified: `if X > 0 then Exit(1); Fatal('x');` in a function gives no
+  warning, the same body without the `Fatal` call `W1035 Return value of
+  function 'G' might be undefined`. ⚠️ The directive is TRUSTED, not
+  checked: a `procedure Bad; noreturn;` whose body is empty, and so returns,
+  compiles without a diagnostic, and a FUNCTION may carry it too. dcc64 37.0,
+  2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 NoRet.dpr).
 - *AST:* flag `noReturn: true` on the routine node.
 
 ---
@@ -1035,6 +1150,14 @@ begin Inner; end;
 
 - Nested routines create a lexical scope chain — the resolver must allow `Inner`
   to see `Outer`'s locals (captured via a static link / frame pointer).
+- ⚠️ *A nested routine is no value of a plain procedural type:* `G := Inner`
+  with `G: procedure` and `Take(Inner)` against `Take(P: TP)` are `E2094
+  Local procedure/function 'Inner' assigned to procedure variable`. Two
+  doors stay open: a `reference to` type takes it (`R := Inner` with `R:
+  TProc`, `TakeR(Inner)` compile - 17), and `@Inner` is accepted even for
+  the plain type (`G := @Inner`, `Take(@Inner)` compile without a
+  diagnostic). dcc64 37.0, 2026-10-30
+  (spec audit g3, local/probe-park/spec-audit/g3 NestP.dpr, NestP2.dpr).
 - *AST:* nested `Routine` within the parent's declaration sections.
 
 ---

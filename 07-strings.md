@@ -93,6 +93,16 @@ type TName = string[20];   // ShortString of capacity 20
   string[10]`, a parameter - it is a `ShortString` like a named `TS =
   string[N]`: `F(L)` takes `F(const S: ShortString)` beside `F(I: Integer)`,
   and `L[1]` is an `AnsiChar` (dcc32 / dcc64 37.0, 2026-10-12).
+- *Capacity and the length byte* (dcc64 37.0): `string[256]` is `E2056
+  String literals may have at most 255 elements`; `string[0]` is accepted
+  (`SizeOf` 1, `High` 0). Element 0 is the length byte, an `AnsiChar`, read
+  and written by index: after `S5 := 'abc'`, `Ord(S5[0]) = 3`, and `S5[0] :=
+  #2` shortens it to `'ab'`. Hence `Low(S5) = 0` (a long string's `Low` is
+  1), `High(S5) = 5` - the capacity, not the length - `SizeOf(S5) = 6`,
+  `High(ShortString) = 255`. A literal longer than the capacity is truncated
+  with `W1014 String constant truncated to fit STRING[5]`. dcc64 37.0,
+  2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 ShortS.dpr,
+  StrConv.dpr).
 
 ### 7.1.4 `WideString`
 
@@ -226,7 +236,13 @@ C := S[0];      // first char when zero-based
   AnsiString and `F(AC)` of an AnsiChar variable take the AnsiChar one; with
   no AnsiString overload all of them take AnsiChar, and every one of them
   infers `AnsiChar` (dcc64 37.0, 2026-10-12). A `for ... in` over a string
-  walks the same character type: `AnsiChar` over the 1-byte kinds.
+  walks the same character type (5.5.2 lists the kinds).
+- *A constant index is range-checked at compile time:* on a long string `S[0]`
+  is `E2157 Element 0 inaccessible - use 'Length' or 'SetLength'` (under
+  the default 1-based mode); on a `string[5]` `S5[6]` is `E1012 Constant
+  expression violates subrange bounds`, while `S5[0]` is legal - 7.1.3.
+  dcc64 37.0, 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3
+  ShortS.dpr).
 - ⚠️ *`S.Chars[i]` (the record-helper property, §7.4.1) is a separate, ALWAYS
   0-based, read-only path — unaffected by `{$ZEROBASEDSTRINGS}`.* `S[1]` under
   the default directive and `S.Chars[0]` name the same character; flip
@@ -286,6 +302,46 @@ buffer (reference-counted) until mutated (copy-on-write).
   buys performance (no ref-count traffic) at the cost of the callee being
   unable to outlive a caller-side mutation during the call.
 
+### 7.3.2 Implicit conversions between string, character and `PChar` types
+
+| | |
+|---|---|
+| **Introduced** | Delphi 2009 (the Unicode string family and its warnings) |
+| **Deprecated** | - |
+| **Status** | ✅ Current |
+
+Assignment between the string kinds converts implicitly, with a warning when
+the code page changes; the character and pointer types are stricter.
+
+**Semantics & parsing notes**
+
+- *Assignment matrix* (`:=`, likewise a value argument; dcc64 37.0):
+
+  | target := source | verdict |
+  |---|---|
+  | `AnsiString`, `RawByteString`, `ShortString` := `string` | `W1058 Implicit string cast with potential data loss from 'string' to 'AnsiString'` |
+  | `string` := `AnsiString` / `UTF8String` / `ShortString` | `W1057 Implicit string cast from 'AnsiString' to 'string'` |
+  | `UTF8String` := `string` | `W1057` (no data loss: UTF-8 holds every code point) |
+  | `AnsiString` := `UTF8String` | both: `W1057` to `string`, then `W1058` to `AnsiString` - the conversion goes THROUGH `string` |
+  | `WideString` := `string`, `string` := `WideString` | silent |
+  | `string` := `PChar`; `AnsiString` := `PChar` | silent; `W1058` (from `PWideChar`) |
+  | `PChar` := `string`; `PAnsiChar` := `AnsiString` | `E2010 Incompatible types: 'PWideChar' and 'string'` - only a cast converts |
+  | `PChar` / `PAnsiChar` := a literal | silent: a literal is a null-terminated constant |
+  | `PAnsiChar(S)` of a `string` | `W1044 Suspicious typecast of string to PAnsiChar` |
+  | `string` := `Char`; `string` := `AnsiChar` | silent; `W1057 Implicit string cast from 'AnsiChar' to 'string'` |
+  | `Char` := `string`, `Char` := `'ab'` | `E2010 Incompatible types: 'Char' and 'string'` |
+  | `AnsiChar` := `Char`, `Char` := `AnsiChar` (variables) | `E2010 Incompatible types: 'AnsiChar' and 'Char'` - two character VARIABLES never convert; a one-character constant fits either |
+  | `string[5]` := a longer literal | `W1014 String constant truncated to fit STRING[5]` |
+
+- A `var` parameter takes none of these: `AnsiString` for `var S: string` is
+  `E2033` (6.2.2).
+- *For a checker:* the W1057/W1058 pair is the code-page change, so it is
+  decided by the two types alone (never by the value); none of the
+  string-to-string rows above is an error, while every character or pointer
+  mismatch above is a hard `E2010`.
+- dcc64 37.0, 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3
+  StrConv.dpr).
+
 ---
 
 ## 7.4 String (record) helpers
@@ -311,9 +367,8 @@ if S.StartsWith('http') then
 
 **Semantics & parsing notes**
 
-- Method-call syntax on a string value resolves through the active helper (ch.15
-  helper-resolution rules: only **one** helper is in scope at a time — the most
-  recently declared/used wins).
+- Method-call syntax on a string value resolves through the active helper; which
+  helper is active is owned by §15.3.3 (one per type, the last in scope).
 - *Parser impact:* `S.Method` is an ordinary `Designator` member access; the
   resolver routes it to the helper.
 - ⚠️ *`S.Chars[i]` is a read-only, unconditionally 0-based property* of the

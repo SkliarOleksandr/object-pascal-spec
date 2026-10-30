@@ -13,7 +13,7 @@ B](B-lexical-grammar.md).
 VarSection = ( "var" | "threadvar" ) VarDecl { VarDecl } ;
 VarDecl    = IdentList ":" TypeRef [ VarInitOrAbsolute ] ";" [ HintDirectives ] ;
 VarInitOrAbsolute = "=" ConstExpr            (* initialized *)
-                  | "absolute" ( Ident | ConstExpr ) ;   (* overlay *)
+                  | "absolute" QualIdent ;   (* overlay - a variable, 3.1.4 *)
 
 ConstSection = ( "const" | "resourcestring" ) ConstDecl { ConstDecl } ;
 ConstDecl    = Ident [ ":" TypeRef ] "=" ConstExpr ";" [ HintDirectives ] ;
@@ -117,8 +117,10 @@ is **inferred**.
 **Grammar**
 
 ```ebnf
-InlineVarStmt = "var" IdentList [ ":" TypeRef ] [ ":=" Expression ] ";" ;
+InlineVarStmt = "var" { AttributeGroup } IdentList [ ":" TypeRef ] [ ":=" Expression ] ";" ;
 (* note ':=' here, an executable initializer, vs '=' for a section ConstExpr.
+   AttributeGroup (ch.19 §19.3.2): `var [A] I := 1;` compiles - dcc64 37.0,
+   2026-10-30 (spec audit g6, local/probe-park/spec-audit/g6 C3.dpr, C6.dpr).
    Multiple names are legal: `var V, S: string;` — System.SysUtils.pas.
    TypeRef is the FULL B.11 production, structural forms included — see the
    notes below. *)
@@ -219,7 +221,8 @@ end;
   - a string literal denoting exactly one UTF-16 unit is `Char` (`'a'`,
     `''''`, `#65`, `#$41`, `^M`); anything else is `string` (`''`, `'ab'`,
     `'a'#0`, `#$1F600` — a surrogate pair).
-  - `True` ⇒ Boolean; `@X` ⇒ Pointer; `nil` is accepted (`var P := nil`
+  - `True` ⇒ Boolean; `@X` ⇒ Pointer under the default `{$T-}`, a typed
+    `^T` under `{$TYPEDADDRESS ON}` (4.8); `nil` is accepted (`var P := nil`
     compiles); `[1, 2]` ⇒ an anonymous set type; a bare class name ⇒ an
     anonymous class-reference type.
 - ⚠️ *A routine name as the initializer is a CALL when the routine needs no
@@ -273,7 +276,8 @@ typed reinterpretation overlay).
 **Grammar**
 
 ```ebnf
-AbsoluteVar = IdentList ":" TypeRef "absolute" ( Ident | ConstExpr ) ";" ;
+AbsoluteVar = IdentList ":" TypeRef "absolute" QualIdent ";" ;
+(* QualIdent = Ident { "." Ident } - a variable, never an address or index *)
 ```
 
 **Example**
@@ -288,6 +292,16 @@ var
 
 - `absolute` is a **directive** (B.4.2), keyword only in this position.
 - No initializer allowed on an `absolute` variable.
+- ⚠️ *The target is a variable NAME - no address form on dcc32/dcc64.* The
+  Turbo Pascal `absolute $0040:$0049` / `ConstExpr` address is gone: `absolute
+  $400` and `absolute 0` are `E2088 Variable name expected`, and so are an
+  expression (`absolute G + 1`), an indexed element (`absolute A[1]`) and an
+  initializer after the target (`absolute G = 3`). What compiles: a global or
+  local variable, a parameter (`var L: Byte absolute A;` over a parameter
+  `A`), a record variable's field (`absolute R.F`), a typed constant, and
+  several names at once (`var Z1, Z2: Byte absolute G;`). dcc64 and dcc32
+  37.0, 2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2 B1.dpr,
+  B2.dpr).
 - *AST:* `VarDecl { …, absolute: target }`.
 
 ### 3.1.5 `threadvar`
@@ -312,7 +326,11 @@ ThreadVarSection = "threadvar" VarDecl { VarDecl } ;
   routines, and not inside a type body on its own - there only `class threadvar`
   is a member, §15.1.2).
 - ⚠️ No initializer is allowed (thread-local storage is zero-initialized per
-  thread). Reject `= ConstExpr` here.
+  thread). Reject `= ConstExpr` here: `threadvar T: Integer = 5;` is `E2194
+  Cannot initialize thread local variables`; a `threadvar` section in a
+  routine is `E2189 Thread local variables cannot be local to a function`.
+  dcc64 37.0, 2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2
+  B1.dpr).
 - *AST:* mark the `VarDecl` with `storage = threadlocal`.
 
 ---
@@ -455,6 +473,15 @@ const
 - ⚠️ *Typed constant ≠ true constant.* It has an address and storage. Under
   `{$J+}` (default off in modern code) it can be assigned to at runtime — a
   directive-dependent semantic, so the directive state at the declaration matters.
+  Under `{$J-}` an assignment is `E2064 Left side cannot be assigned to`.
+- ⚠️ *A typed constant is NOT a constant expression* (B.10): with `const KT:
+  Integer = 5;`, `K3 = KT + 1`, another typed constant's value (`K3: Integer
+  = KT`), an array bound (`array[0..KT]`), an initialized variable's value
+  (`G: Integer = KT`) and a `case` label `KT:` are each `E2026 Constant
+  expression expected`. What reads only its type or address folds:
+  `SizeOf(KT)`, `High(KT)` and `K2: Pointer = @KT` compile. dcc64 and dcc32
+  37.0, 2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2 B3.dpr,
+  A4.dpr).
 - Structured typed constants use **parenthesised aggregate** initializers:
   records `(Field: val; …)`, arrays `(a, b, c)`, sets `[…]`.
 - ⚠️ *A record aggregate's `Field` names are NOT ordinary identifier
@@ -534,6 +561,13 @@ resourcestring
   true constant of one character would be - `R1.Substring(0)` compiles, `var
   V := R1` infers a string, and `F(R1)` takes F(string) over F(Char). dcc32 /
   dcc64 37.0, 2026-10-13 (PasTree audit B42, A3-29).
+- *A resourcestring is no constant itself:* a non-string value (`R1 = 5`) is
+  `E2010 Incompatible types: 'string' and 'Integer'`; a value naming another
+  resourcestring (`R3 = 'x' + R2`) is `E2026 Constant expression expected`,
+  while one over a true string constant (`R4 = KS + 'z'`) compiles. A
+  `resourcestring` section is legal in a routine's declaration part too.
+  dcc64 37.0, 2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2
+  B1.dpr).
 - *AST:* `ResourceStringDecl { name, value }`.
 
 ---

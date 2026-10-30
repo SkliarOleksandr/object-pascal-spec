@@ -48,6 +48,13 @@ blocks are where the value lives.
    https://docwiki.embarcadero.com/RADStudio/en/Delphi_Language_Reference
 2. **"What's New" per release** (authoritative for *which version* a feature landed in),
    plus the official Embarcadero blog posts announcing language changes.
+3. **The compiler itself** (authoritative for *behaviour*, and it overrides 1
+   when they disagree). A note ending in a provenance line - compiler and
+   version, date, and the probe program(s), e.g. `dcc64 37.0, 2026-10-30
+   (spec audit g6, local/probe-park/spec-audit/g6 X01.dpr)` - was checked by
+   compiling (and where needed running) that program with dcc32/dcc64 37.0
+   (Delphi 13); the probe paths are relative to the `object-pascal-tree`
+   repository. Notes without such a line are documentation-derived.
 
 > Everything for **12 Athens** and **13 / 13.1 Florence** comes from the official
 > "What's New" pages and Embarcadero blog announcements.
@@ -189,12 +196,13 @@ case-insensitive for identifiers and keywords); the lexer normalises case.
 
 ## Status of this draft
 
-🚧 **Skeleton / work in progress.**
+**Complete draft, under continuous audit** - every chapter is populated; notes
+are being re-verified against the compiler (provenance lines, see Primary
+sources) and corrected where dcc disagrees.
 
 - [x] Structure, conventions, numbering, version legend (this file)
 - [x] Parser-oriented template (Grammar + Semantics/parsing notes), EBNF legend
 - [x] Appendix A — version history
-- [x] Chapter 05 — exemplar (fully populated, defines the template)
 - [x] Appendix B — lexical grammar & shared EBNF productions
 - [x] Chapter 01 — program structure & compilation
 - [x] Chapter 02 — fundamental & simple types
@@ -236,12 +244,17 @@ case-insensitive for identifiers and keywords); the lexer normalises case.
       (§1.1.3), `automated` legacy visibility (§11.2.1), `[HPPGEN]`/`[Align]`
       (§19.3.3), `{$LEGACYIFEND}` `{$IF}`-terminator rules (§1.3.2), plus
       Output/Codegen directive families (§1.3.1).
+- [x] **Compiler-probe audit** (dcc32/dcc64 37.0, with the PasTree parser and
+      semantic analyzer built from this spec) - notes checked chapter by
+      chapter against probe programs, duplicates between chapters merged into
+      one owner with cross-references; see the provenance lines.
 
 **First full draft complete and source-validated** — all 20 chapters +
 appendices A & B populated against the parser template, cross-checked against
 the complete Delphi 13.0 source tree, and version-verified against official
-release documentation. Next: build the AST parser; expand any feature the
-parser work surfaces as under-specified.
+release documentation. The AST parser built on it (PasTree, the
+`object-pascal-tree` repository) exists; features its work surfaces as
+under-specified are expanded in place, appended under stable IDs.
 
 ---
 

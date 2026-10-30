@@ -12,7 +12,19 @@ Shared productions (`TypeRef`, `Expression`) → [Appendix B](B-lexical-grammar.
 AttributeGroup = "[" Attribute { "," Attribute } "]" ;
 Attribute      = TypeRef [ "(" [ ActualParams ] ")" ] ;   (* attribute class + ctor args *)
 RttiDirective  = "{$RTTI" RttiVisibilitySpec "}" | "{$M" ("+"|"-") "}" ;
+RttiVisibilitySpec = ( "EXPLICIT" | "INHERIT" ) { RttiClause } ;
+RttiClause     = ( "METHODS" | "FIELDS" | "PROPERTIES" ) "(" ConstExpr ")" ;
+                 (* ConstExpr: a TVisibilityClasses constant *)
 ```
+
+Each clause at most once and in any order; `EXPLICIT` or `INHERIT` alone is
+legal. A bare `{$RTTI}`, an unknown clause word and a repeated clause are
+`E1030 Invalid compiler directive: 'RTTI'`; the argument is an ordinary
+constant expression - a set constructor (`[vcPrivate..vcPublished]`, `[]`)
+or a constant (`FIELDS(DefaultFieldRttiVisibility)`) - resolved like code
+(`[vcBogus]` is E2003, `FIELDS(5)` is `E2572 RTTI visibility set constant
+expression of type System.TVisibilityClasses expected`). dcc64 37.0,
+2026-10-30 (spec audit g6, local/probe-park/spec-audit/g6 R03.dpr, R04.dpr).
 
 ---
 
@@ -33,7 +45,12 @@ etc.; `published` members generate the classic RTTI used by streaming.
 
 - `{$M+}`/`{$TYPEINFO ON}` enables published RTTI for a class (and is implied by
   descending from `TPersistent`). Directive state at the class declaration governs
-  what RTTI is emitted — track it.
+  what RTTI is emitted — track it. `{$TYPEINFO ON}` is the same switch: a
+  class declared under it takes a `published` section without the `W1055
+  PUBLISHED caused RTTI ($M+) to be added to type` warning a plain class
+  gets (dcc64 37.0, 2026-10-30, spec audit g6, R02.dpr, A04.dpr). What
+  `published` does without `{$M+}` (W1055), the published-member type
+  restrictions and the `{$M+}` default visibility are owned by §13.2.1.
 - *Not parsing* beyond the directive; affects emitted metadata.
 
 ---
@@ -143,7 +160,8 @@ type
 
 - An attribute class is an ordinary class; only its **usage** has special syntax
   (19.3.2). By convention the `Attribute` suffix may be omitted at the use site
-  (`[Table('X')]` finds `TableAttribute`).
+  (`[Table('X')]` finds `TableAttribute`); the exact lookup order (suffixed
+  name first) is in 19.3.2.
 
 ### 19.3.2 Applying attributes
 
@@ -212,9 +230,27 @@ type
     (`case [A] Tag: Integer of` - RTTI shows A on Tag AND on the first
     field of the first branch), and as the last thing of a branch
     (`0: (I: Integer; [A])` compiles, no E2289).
+  - *An enumeration value:* `TE = ([Tag] e1, [Tag, Tag] e2 = 5, e3)`
+    compiles; the group is resolved like any other (`([Zork] f1)` is W1074,
+    `([TObject] g1)` E2010).
+  - *A local variable and an inline variable:* `var [A] L: Integer;` in a
+    routine's declarations, and `var [A] I := 1;` and `var [Zork] I:
+    Integer := 1;` (W1074) in a statement list, compile.
+
+  dcc64 37.0, 2026-10-30 (spec audit g6, local/probe-park/spec-audit/g6
+  A03.dpr, CA.dpr, C3.dpr, C6.dpr).
 - The attribute's `TypeRef` is resolved to a `TCustomAttribute` descendant; the
   `( … )` arguments must match one of its constructors (evaluated to build the
-  attribute instance in RTTI). The trailing `Attribute` suffix is optional.
+  attribute instance in RTTI). The match is ordinary constructor overload
+  resolution with the ordinary errors: `[Tag(1.5)]` against `Create(I:
+  Integer)` / `Create(const S: string)` is `E2250 There is no overloaded
+  version of 'Create' that can be called with these arguments`, `[Tag(1,
+  2)]` and arguments to a class with no constructor of its own are `E2034 Too
+  many actual parameters`, and `[TDbl]` / `[TDbl()]` against a lone
+  `Create(D: Double)` are `E2035 Not enough actual parameters` - but when the
+  constructor is declared `overload`, TObject's parameterless `Create` joins
+  the set and `[TOv]` compiles. dcc64 37.0, 2026-10-30 (spec audit g6,
+  local/probe-park/spec-audit/g6 A01.dpr, A02.dpr).
 - ⚠️ *The suffixed name is looked up FIRST, through the whole search order.*
   `[X]` means `XAttribute` wherever that name is found - the local scopes,
   the unit, the used units, `System` - and the bare `X` only when
@@ -232,7 +268,13 @@ type
   way in that unit: `[UAt.Test(2)]` is `UAt.TestAttribute`. dcc64 37.0,
   probed 2026-10-12 (PasTree audit B27, `probe-b27` A1-A4).
 - Attributes are only retained in binaries where extended RTTI is enabled
-  (`{$RTTI}`); otherwise they parse but emit nothing.
+  (`{$RTTI}`); otherwise they parse but emit nothing. ⚠️ Precisely: a
+  member's attributes go with that member's RTTI, a type's do not depend on
+  the visibility sets - under `{$RTTI EXPLICIT METHODS([]) FIELDS([])
+  PROPERTIES([])}` a class's own attribute is still returned by
+  `GetAttributes` while its public field and method (and their attributes)
+  are gone. The attributes are resolved and checked either way (dcc64 37.0,
+  2026-10-30, spec audit g6, local/probe-park/spec-audit/g6 R02.dpr).
 - ⚠️ *Constructor arguments must be compile-time constant expressions*
   (dcc-verified, dcc32 37.0), because they are resolved at compile time to
   build the attribute instance in RTTI. Confirmed with an attribute whose
@@ -245,9 +287,19 @@ type
   - a class-reference argument (constructor parameter typed `TClass`, applied
     as `[ClassRef(TObject)]`) — OK, confirming class references are among the
     allowed constant-expression kinds alongside ordinals/strings/sets.
+  - Also accepted (dcc64 37.0, 2026-10-30): a real (`[TDbl(1.5)]`), a set
+    constructor of constants, a constant string expression (`'a' + 'b'`),
+    `SizeOf`/`Ord`/`High` folds, `TypeInfo(Integer)` for a `PTypeInfo`
+    parameter, `nil` for a class-reference or pointer parameter, and an
+    interface name for a `const G: TGUID` parameter. Each `E2026 Constant
+    expression expected`: a typed constant (`const TypedC: Integer = 5`),
+    an address (`@GV`), an open-array constructor `[1, 2]` for an `array of
+    Integer` parameter, a variable for a `var` parameter (`[TVar(GV)]`),
+    and a class method call (`T01.ClassName`). Spec audit g6,
+    local/probe-park/spec-audit/g6 A05.dpr.
 - ⚠️ *No `AttributeUsage`-style target restriction exists* (dcc-verified,
   dcc32 37.0): an ordinary `TCustomAttribute` descendant with no special
-  marker or metadata compiles cleanly when applied to all four attributable
+  marker or metadata compiles cleanly when applied to four different
   target kinds — a type, a field, a method, and a formal parameter — in the
   same program, with no restriction-related error or warning from any of the
   four placements. Object Pascal has no language mechanism (unlike .NET's
@@ -266,11 +318,29 @@ type
   `class var F: Integer; [A] public procedure M;` annotate `M`, and
   `const C = 1; [A] strict private FX: Integer;` annotates the field `FX`.
   A group before a name of the section is that declaration's
-  (`var X: Integer; [A] Y: Integer;`). A group with no member after it - before
+  (`var X: Integer; [A] Y: Integer;`) - except a constant's, below. A
+  group with no member after it - before
   a class's `end`, before `implementation`, before a routine's `begin` - is
   `E2289 Unresolved custom attribute`. The ancestry check still applies
   where the group lands: `var GX: Integer; [TNotAnAttr] procedure P;` is
   E2010.
+  - ⚠️ *A constant never takes a group:* `const [A] K = 1;` passes A on
+    like any other group - in a class, `public const [A] K = 1; procedure
+    M;` gives `M` the attribute (RTTI) - and with nothing after it the group
+    is E2289: before a class's `end`, before a routine's `begin`, before
+    `implementation` after a unit's interface constant.
+  - ⚠️ *Before a section WORD at unit or program level a group is E2289:*
+    `[A] type T1 = class end;`, `[A] const C = 1;`, `[A] var V: Integer;`,
+    after a type, a var or a routine alike. Inside a class the word is
+    crossed as above (`[B] const K = 1; published procedure M2;` gives `M2`
+    the attribute B, RTTI).
+  - ⚠️ *A program's main block is the exception:* a dangling group before a
+    program's `begin` (`const C = 1; [A] begin end.`, `const [A] C = 1;
+    begin end.`) compiles with no diagnostic.
+
+  dcc64 37.0, 2026-10-30 (spec audit g6, local/probe-park/spec-audit/g6
+  A04.dpr, A06.dpr, A07.dpr, C1.dpr, C4.dpr, C5.dpr, C8.dpr, CU.dpr,
+  U1-U6.dpr).
 - ⚠️ *Any expression is accepted as an attribute, and dropped* (dcc-verified,
   dcc64 37.0, probed 2026-10-02, x-f32 B01-B60): `['abc']`, `[1 + 2]`, `[-X]`,
   `[nil]`, `[(TA)]`, `[(TA)(1)]`, `[[1]]`, `[1..2]`, `[inherited]` compile with
@@ -322,11 +392,18 @@ type
 - ⚠️ *Same grammar, special resolution:* these parse exactly like custom attributes
   (19.3.2) — including on **formal parameters** (ch.06 grammar). The semantic
   layer must special-case the names:
-  - `[Ref]` (on `const` params) — force by-reference passing (≡ `constref`).
+  - `[Ref]` (on `const` params) — force by-reference passing (FreePascal
+    spells this `constref`; Delphi has no such word - `procedure
+    P(constref X: Integer)` is `E2067 Missing parameter type`, see 6.2.3).
+    `[Ref]` is also accepted on a value and a `var` parameter
+    (`procedure P([Ref] X: Integer)`, `procedure P(var [Ref] X: Integer)`
+    compile clean). dcc64 37.0, 2026-10-30 (spec audit g6,
+    local/probe-park/spec-audit/g6 M1.dpr, M2.dpr, M3.dpr).
   - `[Volatile]` (fields/vars) — every access is a real memory access; no register
     caching/reordering. The RTL marks e.g. `TObject.FRefCount` with it.
-  - `[weak]` / `[unsafe]` (interface/object fields) — reference-counting opt-outs;
-    full semantics in ch.14 §14.3.2 / ch.20 §20.6.
+  - `[weak]` / `[unsafe]` (interface/object fields and variables) —
+    reference-counting opt-outs; full semantics, the E2584 placement check
+    included, in ch.20 §20.6 (ch.14 §14.3.2 summarizes).
 - Matching is by attribute-class identity in `System` (`VolatileAttribute` etc.),
   not raw string — but a lightweight parser may match by name.
 - *Related toolchain attributes:* `[HPPGEN('C++ decl')]` (emit a custom C++Builder

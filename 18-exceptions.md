@@ -13,11 +13,19 @@ B](B-lexical-grammar.md). These are the `TryStmt`/`RaiseStmt` deferred from
 TryStmt     = "try" StatementList ( ExceptPart | FinallyPart ) "end" ;
 FinallyPart = "finally" StatementList ;
 ExceptPart  = "except" ( StatementList
-                       | ExceptionHandler { ExceptionHandler } [ "else" StatementList ]
+                       | HandlerList [ "else" StatementList ]
                        | "else" StatementList ) ;
-ExceptionHandler = "on" [ Ident ":" ] TypeRef "do" Statement ";" ;
+HandlerList = ExceptionHandler { ";" ExceptionHandler } [ ";" ] ;
+ExceptionHandler = "on" [ Ident ":" ] TypeRef "do" Statement ;
 RaiseStmt   = "raise" [ Expression [ "at" Expression ] ] ;
 ```
+
+The `;` after the last handler is optional, before `end` and before `else`
+alike; between two handlers it is required (`on A do X on B do Y` is
+`E2066 Missing operator or semicolon`), and it is a single `;`, not a
+statement separator around empty statements (`on E: Exception do ; ; end` is
+`E2029 'END' expected but ';' found`). dcc64 37.0, 2026-10-30 (spec audit
+g6, local/probe-park/spec-audit/g6 X01.dpr, X08.dpr, X10.dpr, X11.dpr).
 
 ---
 
@@ -58,6 +66,13 @@ end;
   37.0, probed 2026-10-10).
 - ⚠️ `try` blocks **cannot** have both `except` and `finally` directly — nest them
   (`try try … finally … end except … end`). Reject a single `try` with both parts.
+  dcc reads the statement list after `except` up to `end` and fails at the
+  `finally`: `try S except T finally U end` is `E2029 'END' expected but
+  'FINALLY' found` (dcc64 37.0, 2026-10-30, spec audit g6, X09.dpr).
+- ⚠️ *Only the FIRST token decides the shape:* `except ; on E: Exception do
+  ... end` is a catch-all statement list whose second statement starts with
+  the identifier `on` - `E2003 Undeclared identifier: 'on'` (dcc64 37.0,
+  2026-10-30, spec audit g6, local/probe-park/spec-audit/g6 X08.dpr).
 - *AST:* `TryExceptStmt { body, handlers[], elseBody?, catchAll? }`.
 
 ### 18.1.2 `on E: EType do` exception filters
@@ -88,16 +103,30 @@ end;
 
 - ⚠️ *Handler order matters:* handlers are tried top-to-bottom; a base-class handler
   placed before a derived one shadows it. The resolver/analyzer may warn; semantics
-  follow source order.
+  follow source order. dcc itself gives no diagnostic: `on E: Exception do A;
+  on E: EAbort do B;` compiles clean and runs A for an EAbort (dcc64 37.0,
+  2026-10-30, spec audit g6, X04.dpr).
+- ⚠️ *The handler type must be a class type:* `on E: Integer`, an interface
+  (`on E: IFoo`), a record and a class reference (`on E: TClass`) are each
+  `E2021 Class type required`; any class is accepted, `TObject` included, and
+  the `TypeRef` may be unit-qualified (`on E: System.SysUtils.Exception`) or a
+  generic instance (`on E: EGen<Integer>`). dcc64 37.0, 2026-10-30 (spec
+  audit g6, local/probe-park/spec-audit/g6 X01.dpr, X08.dpr).
 - The bound identifier `E` is scoped to that handler's `Statement`; the instance is
   **freed automatically** when the handler exits (do **not** `Free` it).
+  `E` is an ordinary assignable variable: `E := nil` compiles (hint `H2077
+  Value assigned to 'E' never used`) and changes nothing the RTL does - a
+  bare `raise` after it still re-raises the original exception (dcc64 37.0,
+  2026-10-30, spec audit g6, X04.dpr).
 - `else` (no type) catches anything unmatched.
 - ⚠️ *except-`else` vs `if`-`else`:* an `else` right after a handler whose
   statement is an `if` without `else` is that `if`'s (5.3.1) -
   `on E: EAbort do if A then B else C` runs C for an EAbort when A is False
   and lets any other exception propagate; the except part gets the `else` only
   after a `;` or after the `if`'s own `else` branch (dcc64 37.0, probed
-  2026-09-26).
+  2026-09-26). After any other statement no `;` is needed: `on E: Exception
+  do G := 1 else G := 2; end` is a handler and the except part's `else`
+  (dcc64 37.0, 2026-10-30, spec audit g6, X08.dpr).
 - *AST:* `ExceptOn { varName?, excType, body }`.
 
 ---
@@ -131,6 +160,22 @@ end;
 - ⚠️ `finally` does **not** swallow the exception — it runs, then the exception
   continues propagating unless the block itself raises/exits. Distinguish from
   `except`.
+- ⚠️ *No `Exit`, `Break` or `Continue` may leave a `finally` part:* each is
+  `E2126 Cannot BREAK, CONTINUE or EXIT out of a FINALLY clause`, also when
+  conditional (`finally if C then Exit; end`) and also from a `try` nested
+  inside the `finally` part (`finally try Exit; finally end; end`, `finally
+  try Exit; except end; end`). Allowed: a `Break` of a loop that lies wholly
+  inside the `finally` part, an `Exit` in an anonymous method written there
+  or in a nested routine called from there, and all three in an `except`
+  part. ⚠️ A `try` whose
+  guarded part is empty (`try finally Exit; end`, `try ; finally ...`, `try
+  begin end; finally ...`) is NOT checked - dcc compiles it clean, so the rule
+  needs a non-empty guarded statement list. dcc stops at the first E2126 in a
+  compilation (one is reported however many there are). dcc64 37.0,
+  2026-10-30 (spec audit g6, local/probe-park/spec-audit/g6 F1-FI.dpr,
+  X06.dpr).
+- `goto` into or out of a `try` statement is E2127, reported at the label
+  (see 5.6.4; dcc64 37.0, 2026-10-30, spec audit g6, X05.dpr).
 - *AST:* `TryFinallyStmt { body, finallyBody }`.
 
 ---
@@ -215,7 +260,17 @@ raise E at ReturnAddress;           // raise at a specific address
   (a plain literal around one that declares a routine).
 - `raise` **transfers ownership** of the exception object to the RTL — do not free
   the raised instance.
-- `at Address` overrides the reported raise location (diagnostics).
+- ⚠️ *The raised expression must be a class INSTANCE:* `raise 5`, an
+  interface, a record, a class reference (the common slip `raise Exception;`)
+  and `raise nil` are each `E2021 Class type required`; any object is
+  accepted, a `TObject` variable or `raise TObject.Create` included (18.4.1).
+- `at Address` overrides the reported raise location (diagnostics). The
+  address must be of a pointer type (`at 5` is `E2017 Pointer type
+  required`; `at P`, `at @P`, `at ReturnAddress` compile). `at` is a clause
+  word only after an exception expression: in `raise at P;` it is read as the
+  operand, an identifier (`E2003 Undeclared identifier: 'at'`). dcc64 37.0,
+  2026-10-30 (spec audit g6, local/probe-park/spec-audit/g6 X02.dpr, X12.dpr,
+  X07.dpr).
 - *AST:* `RaiseStmt { exception?, atAddr? }` (no `exception` ⇒ re-raise).
 
 ---
@@ -237,7 +292,10 @@ the broadest meaningful set.
 
 - A language-contract class (like `TObject`): the `on` filter type is normally an
   `Exception` descendant. Non-`Exception` objects can technically be raised but are
-  outside normal handling.
+  outside normal handling: `raise TObject.Create` compiles, is not caught by
+  `on E: Exception`, and is caught by `on E: TObject` and by the except
+  part's `else` (dcc64 37.0, 2026-10-30, spec audit g6,
+  local/probe-park/spec-audit/g6 X02.dpr, X04.dpr).
 - *Not parsing* — informs the type-checker's expectations for `on … do` types.
 
 ---

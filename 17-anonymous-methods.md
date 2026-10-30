@@ -66,6 +66,23 @@ type
   well). A resolver must track `reference to` types as their own nominal kind —
   never unify them with a structurally-matching user interface just because both
   lower to "interface with one method called Invoke".
+  - *...yet a CLASS may list it as an interface.* `TMy = class(TInterfacedObject,
+    TProc)` with a `procedure Invoke;` compiles, an instance assigns to a `TProc`
+    variable, and `P()` (or bare `P;`) runs `TMy.Invoke`. Assign through a
+    typed variable: `P := TMy.Create;` is `E2010 Incompatible types:
+    'System.SysUtils.TProc' and 'TObject.Create'` - against a procedural
+    target, `TMy.Create` is read as the constructor itself (a method
+    reference), not called. dcc64 37.0, 2026-10-30 (spec audit g5,
+    local/probe-park/spec-audit/g5 A03.dpr).
+- ⚠️ *What else converts to a `reference to` type, and what does not* (dcc64
+  37.0, 2026-10-30, spec audit g5, local/probe-park/spec-audit/g5 A02.dpr):
+  with `R: TProc<Integer>`, a global procedure `R := Glob`, an instance method
+  `R := C.M`, a class method `R := TC.CM`, a static class method `R :=
+  TC.SM`, and an `of object` variable `R := MP` all compile (signatures
+  matching). The reverse, `MP := R`, is `E2010 Incompatible types: 'TMeth'
+  and 'TProc<Integer>'`. A routine NESTED in the current one is refused with
+  the capture error, `R := Nested` - `E2555 Cannot capture symbol 'Nested'`
+  (17.3.1).
 - *AST:* `AnonMethodType { kind: proc|func, params[], resultType?,
   directives[] }` - `reference to procedure stdcall` keeps its convention,
   and only written into the type: no run after a `;` (6.6.1).
@@ -219,6 +236,20 @@ end;
   ref count.
 - ⚠️ *Loop-variable capture gotcha:* capturing a `for`-loop counter captures the
   single shared variable — a frequent bug. A semantic-analysis warning candidate.
+  dcc gives no warning: three literals `function: Integer begin Result := I;
+  end` stored in `for I := 0 to 2` print `3 3 3` (dcc64 37.0, 2026-10-30,
+  spec audit g5, local/probe-park/spec-audit/g5 A04.dpr).
+- ⚠️ *What cannot be captured - `E2555 Cannot capture symbol 'X'`* (dcc64
+  37.0, 2026-10-30, spec audit g5, local/probe-park/spec-audit/g5
+  A01p1.dpr-A01p10.dpr): every parameter passed by reference - `var` (also a
+  `var S: string`, and when only its address `@V` is taken), `out`, an
+  untyped `const U`, `const [ref] C`, and an open array `const A: array of
+  Integer` - and a routine nested in the enclosing one (17.1.1). Value
+  parameters and plain `const` parameters (`const C: Integer`, `const S:
+  string`) are captured like locals, and a value parameter may be assigned in
+  the literal. A NESTED routine (not a literal) uses the same `var`
+  parameter freely; the restriction is the literal's, because its frame may
+  outlive the call.
 - ⚠️ *Own scope, own `Result`:* an anonymous method body owns its locals and its
   OWN implicit `Result` (typed by the literal's result type). Two sibling
   literals may declare the same local name (dcc-verified:

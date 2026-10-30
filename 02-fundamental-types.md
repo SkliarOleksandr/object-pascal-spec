@@ -69,7 +69,8 @@ Object Pascal types divide into: **simple** (ordinal, real), **string**,
 
 Ordinal types have a discrete, ordered set of values with `Ord`, `Pred`, `Succ`,
 `Low`, `High`, `Inc`, `Dec` defined. They are the only types allowed as set
-bases, array indices, `case` selectors, and `for` counters.
+bases, array indices and `for` counters, and - but for a `Variant` - as `case`
+selectors; the per-position codes and exceptions are in the 2.1.1 table.
 
 ### 2.2.1 Integer types
 
@@ -137,7 +138,8 @@ var
   width. Treat it as a Windows-interop alias requiring an explicit `uses`,
   not as a `System`-level integer type name.
 - *Literal typing:* an integer literal takes the smallest predefined type holding
-  it (see B.5.1).
+  it (see B.5.1) - the ladder starts at `ShortInt` for the constant's own type
+  (3.2.1) and at `Integer` for what `var X := 5` infers (3.1.3).
 
 ### 2.2.2 Boolean types
 
@@ -167,6 +169,25 @@ BoolType = "Boolean" | "ByteBool" | "WordBool" | "LongBool" ;
   guessable: a `Variant`, and a `record` with an `Implicit` operator to `Boolean`
   (the same record with `Implicit` to `Integer` is `E2012`). See the
   position table in §2.1.1.
+- ⚠️ *`True` in a `*Bool` is ALL bits set, and a cast never normalizes a
+  `Boolean`* (dcc64 37.0, run): after `BB := True`, `Byte(BB)` is 255,
+  `Word(WB)` 65535, `Integer(LB)` -1, and so is the constant
+  `Ord(LongBool(True))`; `Ord(ByteBool(5))` folds to 255. `Ord(BB)` is a
+  `Byte` (4.11.4) holding 255, yet `I := Ord(BB)` into an Integer gives -1 -
+  the value is sign-extended. `Boolean(5)` keeps 5: `Ord` prints 5 and
+  `Bo = True` is FALSE, while `Writeln(Bo)` prints TRUE - a constant folder
+  must not normalize a `Boolean` cast. `BB = True` with `BB := ByteBool(5)` is
+  TRUE (a `*Bool` compares as nonzero).
+- ⚠️ *Every Boolean operator yields `Boolean`, whatever `*Bool` operands it
+  has*: `BB and BB`, `Bo and LB`, `LB xor LB`, `not WB`, `BB = Bo` infer
+  `Boolean` (`GetTypeName` and `SizeOf` 1, dcc32 and dcc64). But as an
+  overload argument a Boolean EXPRESSION - an operator result, a comparison,
+  `not Bo`, the constant `True` - is no exact match for `Boolean`: with
+  overloads for `Boolean`, `ByteBool`, `WordBool` and `LongBool`,
+  `P(Bo and Bo2)`, `P(I > 0)`, `P(True)` are `E2251 Ambiguous overloaded call
+  to 'P'`; only a VARIABLE (`P(Bo)`, `P(BB)`) picks its own overload.
+  dcc64 37.0, 2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2
+  A3.dpr, C3.dpr, C4.dpr).
 
 ### 2.2.3 Character types
 
@@ -399,11 +420,11 @@ type
   integer one, exactly as literals do. Overload resolution sees it -
   `P(W)` with `W: TWork` takes `P(X: TDay)` beside `P(X: Integer)`,
   `Q(V)` with `V: TNeg` takes `Q(X: Int64)` beside `Q(X: string)` -
-  and so does a condition: `if W then` is `E2012`. `Pred` / `Succ` of a
-  subrange value give its base type (`Succ(W)` is `TDay`, `Succ` of a
-  `'a'..'z'` value `Char`); `Low` / `High` of an enumeration subrange are
-  an anonymous enumeration (dcc's E2010 names it `Enumeration`), of a Char
-  subrange `Char`.
+  and so does a condition: `if W then` is `E2012`. `Pred` / `Succ` / `Low` /
+  `High` of an enumeration or Char subrange give the BASE type (`Succ(W)` is
+  `TDay`; dcc's E2010 prints `Enumeration`, but `P(High(TES))` takes
+  `P(X: TE)` - dcc64 37.0, 2026-10-30, spec audit g2 D1.dpr); of an integer
+  subrange `Integer` - the step rule of 4.11.4, which owns these result types.
 - *AST:* `Subrange { lo, hi, baseType }`.
 
 ---
@@ -455,7 +476,10 @@ RealType = "Real" | "Single" | "Double" | "Extended" | "Comp" | "Currency" | "Re
   16-byte type (OSX64: 16 aligned to 16, it IS `Extended`) and on OSXARM64,
   where its 10 bytes align to 16 (the record is 32). It is a real type of its
   own on Win64 - `E := D` of an `Extended` (`Double`) compiles.
-- Real literals (B.5.2) default to `Extended`/`Double`.
+- Real literals (B.5.2) default to `Extended`/`Double` - except that one
+  written like a Currency (no exponent, at most four fractional digits) is a
+  `Currency` constant on both compilers and infers `Currency` on Win64 (3.1.3,
+  3.2.1).
 
 ---
 
@@ -639,14 +663,31 @@ Three distinct relations the semantic layer must implement: **type identity**
   - Two named types are identical only if they originate from the **same
     declaration** (structural equivalence is *not* used for named types). This is
     why `type T = type Integer` differs from `Integer`.
-  - Subrange types are compatible with their base and with overlapping subranges.
+  - Subrange types are compatible with their base and with every other
+    subrange of the same base - overlap is not required: with `TA = 1..5`
+    and `TB = 10..20`, `A := B` of two variables compiles with no diagnostic
+    (spec audit g2 A4.dpr).
   - ⚠️ *Numeric narrowing needs NO cast* (dcc-verified, dcc32 37.0): assigning a
     wider ordinal to a narrower one (`SmallInt := Int64Var`) is plain assignment-
     compatible, not a type error. A *variable* source silently truncates (or
-    raises `ERangeError` under `{$RANGECHECKS ON}`); a *compile-time-constant*
-    source that overflows the target's range instead gets
-    `W1012 Constant expression violates subrange bounds` — a warning, compile
-    still succeeds either way. ch.04's `TypeName(Expr)` cast exists for explicit
-    intent / reference reinterpretation, never as a requirement for a narrowing
-    assignment to compile.
+    raises `ERangeError` under `{$RANGECHECKS ON}`). ch.04's `TypeName(Expr)`
+    cast exists for explicit intent / reference reinterpretation, never as a
+    requirement for a narrowing assignment to compile. Real to integer is no
+    narrowing: `I := D` is `E2010 Incompatible types: 'Integer' and 'Double'`
+    (`Trunc`/`Round`).
+  - ⚠️ *A CONSTANT source out of the target's range is an ERROR unless the
+    target is a 32- or 64-bit integer.* (This note used to call it a warning
+    throughout.) `E1012 Constant expression violates subrange bounds`: `B :=
+    300` (Byte), `Sh := 200`, `W := 70000`, `W := -1`, `B := 255 + 1`, a
+    user subrange (`A := 0`, `A := 10` for `1..5`, an enumeration subrange's
+    `E := e3`), a constant argument (`PB(300)` for `X: Byte`), and any
+    NEGATIVE constant into an unsigned 32/64-bit (`C := -1`, `U64 := -1`).
+    Only a too-large or too-small value into `Integer`, `Cardinal` or `Int64`
+    is `W1012` and compiles: `I := 3000000000`, `I := $FFFFFFFF`, `I :=
+    -2147483649`, `I := 5000000000`, `C := 5000000000`, `I64 :=
+    18446744073709551615`, a named `const KC = 3000000000` alike. A cast
+    silences both (`B := Byte(300)` compiles, truncating), and a non-constant
+    operand anywhere does too (`B := A + 300`). dcc64 and dcc32 37.0,
+    2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2 A5.dpr, A6.dpr,
+    A9.dpr).
 - *AST:* no node; this drives the type-checker pass.

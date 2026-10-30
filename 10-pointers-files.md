@@ -50,6 +50,13 @@ type
 - ⚠️ *Forward type reference allowed:* `PNode = ^TNode` may reference `TNode`
   **before** it is declared, within the same `type` section. The resolver must do
   a two-pass / deferred binding for pointer targets in a type block.
+  The window is that ONE `type` section: a target declared in a later
+  `type` section of the same block is `E2003 Undeclared identifier:
+  'TNode'` at the pointer, and dcc then also reports the later declaration
+  as `E2004 Identifier redeclared: 'TNode'`. A target that is never declared
+  is `E2003` as well. The target may be any type, a class included (`PFoo =
+  ^TFoo; TFoo = class ... end;`). dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 PFwd.dpr, PFwd2.dpr).
 - ⚠️ *Indexing a pointer to an array works WITHOUT the `^`* — `P: ^TSomeArray;
   ... P[I]` is legal and means `P^[I]`, dcc-verified both as an expression and
   as a `with` target, no `{$POINTERMATH}` required (that directive only
@@ -85,11 +92,32 @@ type
 
 **Semantics & parsing notes**
 
-- `Pointer` is assignment-compatible with any typed pointer (one direction freely;
-  the other needs a cast). `nil` (reserved word, §B.4.1) is a literal valid for any
-  pointer/class/interface/procedural type.
-- Predefined typed-pointer aliases (`PByte`, `PChar`, `PAnsiChar`, …) additionally
-  enable `{$POINTERMATH}` semantics (ch.04 §4.8).
+- `Pointer` is assignment-compatible with any typed pointer in BOTH
+  directions, no cast needed (`G := C` and `F := G` with `G: Pointer`, `C:
+  PInteger`, `F: ^Byte` compile). `nil` (reserved word, §B.4.1) is a literal
+  valid for any pointer/class/interface/procedural type.
+- ⚠️ *Typed pointers are NOMINAL under the default `{$T-}`* (like arrays,
+  8.1.1): every `^T` written in the source is its own type. `PInt2 = ^Integer`
+  and System's `PInteger` are `E2010 Incompatible types: 'PInteger' and
+  'PInt2'` in assignment and in `=` alike; two variables declared on
+  separate lines as `A: ^Integer; X: ^Integer;` are `E2008 Incompatible
+  types` (`A, B: ^Integer;` in ONE list share the type and do assign); an
+  alias `PInt3 = PInteger` is the same type. dcc names an inline pointer
+  type `Pointer` in messages (`E2010 Incompatible types: 'Pointer' and
+  'PInteger'` for `A := C`). Under `{$T+}` (`{$TYPEDADDRESS ON}`) pointer
+  types to the SAME base type become assignment-compatible and comparable
+  (all the above compile), while pointers to different bases stay apart
+  (`C := @B` with `B: Byte` is E2010) and a `var` parameter still needs the
+  identical type (`E2033 Types of actual and formal var parameters must be
+  identical: PInteger and PInt2`). dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 PCompat.dpr, PCompat2.dpr, PCompat3.dpr,
+  PCompat4.dpr).
+- Of the predefined typed pointers only `PByte` and the character pointers
+  (`PChar`, `PWideChar`, `PAnsiChar`) carry `{$POINTERMATH}` semantics on their
+  own (ch.04 §4.8); `PWord`, `PShortInt`, `PInteger`, `PCardinal`,
+  `PUInt64`, `PNativeInt`, `PDouble` do not (`W + 1` is `E2015`; dcc64 37.0,
+  2026-10-30, spec audit g4, local/probe-park/spec-audit/g4 PArith6.dpr).
+  See 10.1.4.
 
 ### 10.1.3 Manual allocation intrinsics
 
@@ -121,6 +149,39 @@ end;
 - These are compiler intrinsics (ch.04 §4.11) taking the pointer **by reference**
   (the argument must be an lvalue). `New`/`Dispose` also init/finalize managed
   fields of the pointed-to type. Detailed memory model → [ch.20](20-memory-management.md).
+
+### 10.1.4 What each pointer kind supports (comparison, `Inc`/`Dec`, arithmetic)
+
+| | |
+|---|---|
+| **Introduced** | Pascal; `{$POINTERMATH}` Delphi 2009 |
+| **Deprecated** | - |
+| **Status** | ✅ Current |
+
+The operator rules of §4.8 split by pointer kind; a type checker needs the
+whole matrix, since the same expression is legal on one pointer and E2015 on
+the next.
+
+**Semantics & parsing notes**
+
+- `=` and `<>` work on every pointer (typed, untyped, `nil`), subject to the
+  identity rule of 10.1.2.
+- `Inc(P)` / `Dec(P)` / `Inc(P, N)` work on EVERY typed pointer with no
+  directive, stepping by `SizeOf` of the pointee (`Inc(P)` on a `PInteger`
+  advances 4 bytes, `Inc(P, 2); Dec(P)` a further 4). On an untyped
+  `Pointer` they are `E2001 Ordinal type required`.
+- `<`, `<=`, `>`, `>=`, `P + N`, `N + P`, `P - N` and `P - Q` need a pointer
+  with pointer math: `PByte`, `PChar`/`PAnsiChar`/`PWideChar` always, any
+  other typed pointer only under `{$POINTERMATH ON}`. Elsewhere each is
+  `E2015 Operator not applicable to this operand type` (`P < Q` and `P - Q`
+  over two `PInteger` with the directive off). With it, `P - Q` is the
+  distance in ELEMENTS (3 for `@A[3] - @A[0]` over Integers; `B2 - B1` over
+  `PByte` 4 bytes apart is 4) and `P + 2` advances `2 * SizeOf(pointee)`.
+  An untyped `Pointer` never has pointer math: under `{$POINTERMATH ON}`
+  too, `U < V` and `U + 1` are `E2015`.
+- dcc64 37.0, 2026-10-30 (spec audit g4, local/probe-park/spec-audit/g4
+  PArith.dpr - PArith5.dpr, PMath.dpr; run-time
+  output for the step sizes).
 
 ---
 
@@ -159,5 +220,16 @@ var
 - File variables cannot be assigned/copied and have special parameter rules (passed
   by `var`). Operated on by the classic `Assign`/`Reset`/`Rewrite`/`Read`/`Write`
   intrinsics.
+- ⚠️ *The exact restrictions and their codes:* `A := B` between two
+  `TextFile`s or two `file of Integer` is `E2015 Operator not applicable to
+  this operand type`; a by-value file parameter (`procedure P(F:
+  TextFile)`) is `E2002 File type not allowed here`, while `var` and
+  `const` parameters compile; a file function result is `E2024 Invalid
+  function result type`; `file of file` is E2002. The element type of `file
+  of T` must need no finalization: `file of string`, `file of Variant` and
+  `file of TR` (a record holding a `string`) are `E2155 Type 'string' needs
+  finalization - not allowed in file type`, while `file of ShortString` and
+  `file of TObject` compile. dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 FFile.dpr).
 - Listed for completeness; modern code uses `TStream` (RTL, out of scope).
 - *AST:* `FileType { elementType? }`.

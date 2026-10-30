@@ -100,6 +100,16 @@ type
   dropped item is still the GUID: `[GT, S]` is W1074 for GT and S's GUID.
 - Interfaces have **no fields, no visibility sections, no method bodies**. All
   members are implicitly public. Properties list only accessor method names.
+  A visibility word is `E2210 'private' directive not allowed in in interface
+  type` (sic), a field `E2209 Field declarations not allowed in interface
+  type`. dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 I04.dpr).
+- ⚠️ *What needs the GUID:* `Intf as INoGuid` and `Supports(X, INoGuid)` are
+  `E2232 Interface 'INoGuid' has no interface identification` - a GUID-less
+  interface can be reached only statically (assignment from an implementing
+  class or a descendant interface) or by a hard cast `INoGuid(I)`, which
+  compiles. dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 I01.dpr, I01b.dpr).
 - Default ancestor is `IInterface` (≡ `IUnknown`).
 - *AST:* `InterfaceType { ancestor, guid?, members[] }`.
 
@@ -151,6 +161,28 @@ type
   method to a class method by name+signature.
 - Implementing class usually descends from `TInterfacedObject` (provides
   ref-counted `IInterface`).
+- ⚠️ *How a method is matched* (dcc64 37.0, 2026-10-30, spec audit g5,
+  local/probe-park/spec-audit/g5 I08.dpr, I09.dpr): by name and an exactly
+  equal parameter list - `procedure B(S: string)` does not implement `B(const
+  S: string)`. Visibility does not matter (a `strict private` method
+  implements, and runs through the interface); a public method INHERITED from
+  an ancestor that lists no interface counts; a `class` method does not. Any
+  interface method left unmatched is `E2291 Missing implementation of
+  interface method IFoo.A`, one error per method, reported at the class.
+  - *The mapping is fixed per class that LISTS the interface.* With
+    `TBase = class(TInterfacedObject, IFoo)` and a non-virtual `A`, a
+    descendant declaring its own `A` but not listing IFoo still answers
+    `TBase.A` through the interface; `TRelist = class(TBase, IFoo)` with its
+    own `A` answers `TRelist.A`. Re-listing re-runs the matching.
+- ⚠️ *An interface's ANCESTOR is not implemented unless it is listed too.*
+  With `IDer = interface(IBase)` and `TOnlyDer = class(TInterfacedObject,
+  IDer)`, a `TOnlyDer` value is not assignable to `IBase` (`E2010
+  Incompatible types: 'IBase' and 'TOnlyDer'`), and at run time
+  `Supports(D, IBase)` is False and `D as IBase` raises `EIntfCastError` even
+  though `D: IDer` assigns statically to an `IBase` (interface to ancestor
+  interface needs no QueryInterface). Listing `IDer, IBase` makes all three
+  work. dcc64 37.0, 2026-10-30 (spec audit g5,
+  local/probe-park/spec-audit/g5 I02.dpr).
 - *AST:* `interfaces[]` on the `ClassType`.
 
 ### 14.2.2 Method resolution clauses
@@ -204,6 +236,13 @@ type
   valid - and the interface may live in another unit than the class. dcc32 /
   dcc64 37.0, 2026-10-13 (PasTree audit B41: A4-04, E3-11; local/probe-b41
   mr).
+  The interface must be in the class's OWN interface list: `procedure
+  IBar.B = A1;` in a class listing only IFoo is `E2003 Undeclared
+  identifier: 'IBar'` although IBar is a declared type - and so is
+  `procedure IFoo.A = X;` in a descendant of a class that lists IFoo, when
+  the descendant does not list it again; an interface method that does not
+  exist is `E2003` on its name (`IFoo.Zzz`). dcc64 37.0, 2026-10-30 (spec
+  audit g5, local/probe-park/spec-audit/g5 I03.dpr, I03b.dpr).
 - ⚠️ *The class-method name is NOT always checked* (dcc-probed, dcc32 37.0,
   2026-09-16; UNDOCUMENTED): when an inherited member already satisfies the
   interface method AND that member is declared in an ancestor class which
@@ -266,8 +305,9 @@ object self-destructs when the count hits zero (when implemented via
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 
-`[weak]` and `[unsafe]` attributes mark interface (or object) fields that do not
-participate in (strong) reference counting — breaking reference cycles.
+`[weak]` and `[unsafe]` attributes mark interface fields that do not
+participate in (strong) reference counting - breaking reference cycles. (On
+object references they mattered only under mobile ARC, XE4 - 10.3; see below.)
 
 **Example**
 
@@ -281,8 +321,15 @@ type
 **Semantics & parsing notes**
 
 - ⚠️ These are **attributes** (`[weak]`/`[unsafe]`, ch.19 syntax) applied to a
-  field, not directives. `[weak]` nils the reference when the target dies and is
-  thread-safe; `[unsafe]` is a raw non-counted reference (faster, dangling-risk).
+  field, not directives. On an INTERFACE field `[weak]` nils the reference when
+  the target dies and is thread-safe; `[unsafe]` is a raw non-counted reference
+  (faster, dangling-risk). On an OBJECT reference `[weak]` zeroing existed only
+  under mobile ARC (XE4 - 10.3, removed in 10.4 Sydney, §20.5.1). Every
+  current compiler, the mobile ones included, accepts `[weak]` there but does
+  nothing with it: the field is not zeroed when the object is freed (`W.O =
+  nil` is FALSE after `O.Free`). The full rules - placement,
+  `E2584`, `HasWeakRef` - are owned by §20.6.1. dcc64 37.0, 2026-10-30 (spec
+  audit v, local/probe-park/spec-audit/v V1.dpr; g6 W01.dpr).
 - The parser treats them as attributes on the field; the semantic layer changes
   ref-count codegen.
 
@@ -334,6 +381,27 @@ type
   having no ref-count of its own, the outer class still frees the delegate
   itself in its destructor through a plain object field (never an interface
   field for the delegate).
+- ⚠️ *What an `implements` property must be* (dcc64 37.0, 2026-10-30, spec
+  audit g5, local/probe-park/spec-audit/g5 I06.dpr, I06b.dpr): the
+  interface must be in the class's list (`E2265 Interface 'IBar' not
+  mentioned in interface list`); the property must be readable (`write`
+  only: `E2261 Implements clause only allowed for readable property`); an
+  interface-typed property must be of that interface (`IBar` property
+  `implements IFoo`: `E2010 Incompatible types: 'IFoo' and 'IBar'`); one
+  interface takes one `implements` (`E2257 Duplicate implements clause for
+  interface 'IFoo'`). A CLASS-typed property need not implement the
+  interface: `property P: TPlain read FP implements IFoo` with `TPlain =
+  class procedure A; end` (no interface list) compiles, and `F.A` runs
+  `TPlain.A` - the methods are matched by name in the property's class.
+- ⚠️ *Class-typed and interface-typed delegation differ when the outer class
+  has a method of its own* (same date, I07.dpr): with IFoo = `A`, `B` and the
+  outer class declaring `B`, delegation through a CLASS-typed property
+  (`Inner: TInner ... implements IFoo`) answers `F.B` with the OUTER `B` and
+  `F.A` with the delegate's - the outer class's own methods win, the delegate
+  fills the rest; through an INTERFACE-typed property (`Inner: IFoo ...
+  implements IFoo`) every call goes to the delegate and the outer `B` is
+  ignored. A resolver mapping interface methods to bodies must apply the
+  outer class's own matches first only in the class-typed case.
 - *AST:* `PropertyDecl { …, implements: [IFace] }`.
 
 ---
@@ -355,16 +423,27 @@ across interface and class types (via `QueryInterface`).
 
 - `Obj as IFace` performs `QueryInterface` (may raise); `Supports(Obj, IFace)`
   (RTL) is the non-raising test.
-- ⚠️ *`is` cannot test interface-to-interface support — only object-to-interface
-  (and object/interface-to-object, next bullet)* — given `F: IFoo` backed by an
+- ⚠️ *`is` never takes an INTERFACE on its right* - only a class (the
+  object/interface-to-object forms, next bullet) - given `F: IFoo` backed by an
   object that also implements `IBar`, `F is IBar` is a **compile-time error**,
   not a runtime `False` (dcc-verified, dcc32 37.0: `E2015 Operator not
-  applicable to this operand type`). `F as IBar`, by contrast, DOES work
+  applicable to this operand type`). The same holds with an OBJECT on the
+  left: `X is IG` is E2015 for `X: TImplG` whose class lists IG, and for a
+  `TInterfacedObject` or `TObject` variable alike (a correction: this bullet
+  used to allow object-to-interface `is`; dcc64 37.0, 2026-10-30, spec audit
+  g5, local/probe-park/spec-audit/g5 I05.dpr, I01c.dpr). The test is
+  `Supports(X, IG)`.
+  `Obj as IG` compiles only when `Obj`'s STATIC class implements some
+  interface (it then has `QueryInterface`): `IO as IG` with `IO:
+  TInterfacedObject` and `C as IG` with `C: TComponent` compile, while a
+  `TObject` variable or a class with no interface in its chain is E2015 (same
+  probes, I01b.dpr). `F as IBar`, by contrast, DOES work
   interface-to-interface — it compiles and performs `QueryInterface` under the
   hood (dcc-verified: `(F as IBar).Bar` runs correctly), and so does
   `Supports(F, IBar, B)`, the RTL's recommended non-raising equivalent
-  (dcc-verified). A resolver must reject `is` when BOTH operands are interface
-  types while still allowing `as` (and `Supports`) for the identical pair.
+  (dcc-verified). A resolver must reject `is` whenever its right operand is an
+  interface type while still allowing `as` (and `Supports`) for the identical
+  pair.
 - ⚠️ *Interface references cast back to their underlying object* — for an
   interface backed by a genuine Object-Pascal object (never a COM server, which
   has no such object to recover), all three reverse-cast forms work and refer

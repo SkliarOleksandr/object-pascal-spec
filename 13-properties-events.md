@@ -54,7 +54,12 @@ type
   method (getter/setter). A read on a method-backed property lowers to a call; a
   write to a method lowers to a setter call; field-backed lowers to a field access.
   The resolver must classify each specifier and the parser must keep them.
-- Read-only (no `write`) and write-only (no `read`) are legal.
+- Read-only (no `write`) and write-only (no `read`) are legal. Using one the
+  wrong way is `E2129 Cannot assign to a read-only property` / `E2130 Cannot
+  read a write-only property` (dcc64 37.0, 2026-10-30, spec audit g4,
+  local/probe-park/spec-audit/g4 QArr.dpr).
+- A specifier names a member declared ABOVE the property or inherited; a
+  member declared below it is `E2168` (11.1.2).
 - `read`/`write`/`index`/`stored`/`default`/`nodefault`/`implements` are
   **directives** (B.4.2), keyword only inside a property declaration — elsewhere
   valid identifiers.
@@ -91,7 +96,7 @@ type
   SAME property - dcc resolves the redeclaration against the nearest inherited
   property of that name, and the redeclared form inherits its type. A
   redeclaration **with a type** (`property X: string read FS;`) is a NEW property
-  that hides the inherited one, like an undecorated same-named method (12.3):
+  that hides the inherited one, like an undecorated same-named method (12.2.3):
   a bare `property X;` below it refers to the hiding one. dcc-verified (dcc64
   36.0, 2026-09-09) with a five-class chain. An editor treating the two forms
   alike either misses uses on rename (bare) or merges two unrelated properties
@@ -118,7 +123,14 @@ property Items[Index: Integer]: TItem read GetItem write SetItem;
 
 - ⚠️ The getter/setter take the index parameter(s); `Obj.Items[3]` lowers to
   `Obj.GetItem(3)` (read) / `Obj.SetItem(3, v)` (write). Array properties **cannot**
-  be field-backed — `read`/`write` must be methods.
+  be field-backed — `read`/`write` must be methods. dcc reports a field there
+  (`read FArr`, even an array field) the same way as an accessor whose
+  parameters do not match (`GetBad(I: string)` for `[I: Integer]`, a setter
+  whose value parameter is the wrong type): `E2008 Incompatible types` at the
+  property. An array property cannot be `published` (`E2188 Published
+  property 'Items' cannot be of type ARRAY`, 13.2.1). dcc64 37.0,
+  2026-10-30 (spec audit g4, local/probe-park/spec-audit/g4 QArr.dpr,
+  CPub.dpr).
 - The `[ ... ]` here is a parameter list in the *declaration*, but indexing at the
   *use* site (shares `Selector` `[ExprList]`, §B.8).
 - ⚠️ *The index parameter's NAME is a pure signature placeholder with no
@@ -156,8 +168,21 @@ property Top:    Integer index 1 read GetCoord write SetCoord;
 
 **Semantics & parsing notes**
 
-- The `index N` constant is prepended to the accessor call. The accessor signature
-  must accept the leading index parameter. Distinct from *array* properties.
+- The `index N` constant is passed as an extra Integer-compatible argument.
+  Distinct from *array* properties, but the two combine, and then its
+  position matters: the index goes AFTER the array parameters and BEFORE a
+  setter's value. With `property X[I: Integer]: Integer index 7 read Get
+  write SetIt`, `O.X[1] := O.X[2] + 40` calls `Get(2, 7)` and `SetIt(1, 7,
+  40)` - `function Get(I, Idx: Integer)`, `procedure SetIt(I, Idx, V:
+  Integer)`. For a plain indexed property this reduces to "index first":
+  `GetCoord(Index)`, `SetCoord(Index, Value)`.
+- The constant must fit the accessor's parameter type: `index 300` over
+  `GetP(Idx: Byte)` is `E2008 Incompatible types`.
+- An `index` on a FIELD-backed property is accepted and ignored: `property
+  P: Integer index 3 read FI write FI` compiles and reads/writes `FI`
+  plainly (`O.P := 9` then `O.P` and `O.FI` are both 9).
+- dcc64 37.0, 2026-10-30 (spec audit g4, local/probe-park/spec-audit/g4
+  QIdx.dpr, QIdx2.dpr, QIdx3.dpr; run-time output).
 
 ### 13.1.4 Default array property
 
@@ -182,7 +207,10 @@ property Items[I: Integer]: TItem read GetItem; default;
 - ⚠️ *Trailing `default`* (after the specifiers) marks the **default array
   property** — distinct from the `default ConstExpr` *value* specifier (13.1.5).
   Disambiguate by position/operand: bare `default;` = default array property;
-  `default 0;` = default value. The parser must not conflate them.
+  `default 0;` = default value. The parser must not conflate them. A bare
+  `default;` on a non-array property is `E2132 Default property must be an
+  array property` (dcc64 37.0, 2026-10-30, spec audit g4,
+  local/probe-park/spec-audit/g4 QArr.dpr).
 - `Obj[i]` on a class with a default array property lowers to the property access.
   ⚠️ *Including an INHERITED one* — the search walks the ancestor chain, so
   `Coll[I]` is legal on any `TCollection` descendant even though `Items` is
@@ -245,6 +273,10 @@ property Caption: string read FCaption write SetCaption stored FHasCaption;
 
 - ⚠️ `default ConstExpr` here is a **streaming hint** (don't store if equal to this
   value) — it does **not** initialize the field. Common misconception; note it.
+  It is limited to ordinal, pointer and small-set properties: `default 'x'`
+  on a `string` and `default 1` on a `Double` are `E2146 Default values must
+  be of ordinal, pointer or small set type` (dcc64 37.0, 2026-10-30, spec
+  audit g4, local/probe-park/spec-audit/g4 QArr.dpr).
 - `stored` takes a boolean constant/field/method controlling whether to persist.
 - Only meaningful for `published` properties with RTTI.
 - ⚠️ *A hint directive on a property sits BEFORE the semicolon, after the
@@ -341,8 +373,21 @@ Inspector / streaming system.
   (dcc-verified, dcc32 37.0: a `TObject`-descended class with a `published`
   property compiles clean-except-for-the-warning, and the property is genuinely
   reachable afterwards through old-style RTTI, e.g. `TypInfo.GetPropValue`).
-  Published property types are still restricted (ordinal, string, set, class,
-  method-pointer); the resolver enforces the allowed-type set.
+  Published property types are still restricted; the resolver enforces the
+  allowed-type set.
+- ⚠️ *The restriction is narrower than the classic "ordinal, string, set,
+  class, method pointer" list.* dcc64 37.0 publishes properties of every
+  ordinal and real type (`Int64`, `Char`, `Double`, `Currency`, `Extended`),
+  every string type (`ShortString` too), sets, classes, class references,
+  interfaces (a `reference to` type too), method pointers, `Variant`,
+  RECORDS and DYNAMIC arrays. It refuses, with `E2188 Published property
+  'PP' cannot be of type POINTER`, a pointer (`Pointer`, `^Integer`), a
+  plain procedural type (`... of type PROCEDURE`), a static array and an
+  array property (`... of type ARRAY`). A published FIELD is narrower
+  still: only a class or interface type, else `E2217 Published field 'F1'
+  not a class or interface type`. Methods (class methods too) may be
+  published. dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 CPub.dpr, CPub2.dpr).
 - ⚠️ *`{$M+}` (or a `TPersistent`/RTTI-bearing ancestor, ch.11 §11.2.1) changes
   the DEFAULT visibility of undecorated members* — a member with no explicit
   visibility keyword, positioned in the section right after the class header
@@ -352,9 +397,9 @@ Inspector / streaming system.
   `TypInfo.GetPropInfo` — i.e. is published — when the enclosing class is
   compiled under `{$M+}`, and is *not* found — i.e. is public — with the exact
   same source under a class with no `{$M+}`/`TPersistent` ancestry). This is the
-  same default-visibility mechanism as ch.11 §11.2.1's ordinary
-  `private`/`public` default, just with a different default keyword selected by
-  the `{$M+}` state.
+  default-visibility rule of ch.11 §11.2.1 (`public`, or `published` under
+  `{$M+}`), where the compile-time evidence (`E2217` on an undecorated
+  `Integer` field) is given.
 - Full RTTI model → [ch.19](19-rtti-attributes.md).
 
 ---

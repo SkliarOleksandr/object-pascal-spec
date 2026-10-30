@@ -17,7 +17,8 @@ ClassType   = "class" [ Abstract ] [ "(" Ancestor [ "," InterfaceList ] ")" ]
               "end"
             | "class" [ "(" Ancestor ")" ] ;          (* forward / no body *)
 ClassSection = Visibility { ClassMember } ;
-Visibility   = [ "strict" ] ( "private" | "protected" | "public" | "published" ) ;
+Visibility   = [ "strict" ] ( "private" | "protected" ) | "public" | "published"
+             | "automated" ;   (* "strict public"/"strict published": E2375, 11.2.1 *)
 ClassMember  = FieldDecl | MethodDecl | PropertyDecl
              | ConstDecl | TypeDecl | ClassVarDecl ;
 MethodDecl   = ( "procedure" | "function" | "constructor" | "destructor" )
@@ -84,6 +85,12 @@ type
   redeclared` - as is a second complete declaration of any type in one scope
   (`TX = Integer; TX = string;`) and a forward completed twice. dcc32 / dcc64
   37.0, 2026-10-13 (PasTree audit B43, B4-19; local/probe-b43 F1-F3).
+  The completion must come in the SAME `type` section: a forward left open
+  at the end of its section (a class or an interface alike) is `E2086 Type
+  'TC' is not yet completely defined` at the forward, and a completion in a
+  following `type` section is then a second declaration, `E2004 Identifier
+  redeclared: 'TA'`. dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 CFwd.dpr).
 - ⚠️ *A heritage clause cannot name a type declared LATER in the same `type`
   section* — like an ordinary type or const reference (`TA = record X: TB;
   end; TB = Integer;` is `E2003` too: there is no free forward reference
@@ -135,9 +142,21 @@ initialized on construction.
 
 **Semantics & parsing notes**
 
-- ⚠️ *Ordering rule (modern Delphi):* fields should precede methods within a
-  visibility section; the compiler is lenient but the canonical grammar lists
-  `FieldList` first. Class fields (`class var`) → ch.15.
+- ⚠️ *Ordering rule:* within one visibility section, fields precede methods
+  and properties - the compiler enforces it. A field after a method or a
+  property is `E2169 Field definition not allowed after methods or
+  properties`, in a class, a record (9.2) and an `object` (11.5) alike. A
+  new visibility section (`public`, even repeating the current one) or an
+  explicit `var` / `class var` starts a new field list, so `procedure M;
+  var F3: Integer;` and `procedure M; public F2: Integer;` compile. Class
+  fields (`class var`) → ch.15. dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 CFieldOrd.dpr, CFieldOrd2.dpr).
+- ⚠️ *A property specifier sees only what is declared ABOVE it* (or
+  inherited): `property P: Integer read GetP;` followed by `function GetP:
+  Integer;`, or `property Q read FQ` above a later `private FQ: Integer`, is
+  `E2168 Field or method identifier expected` - unlike a method BODY, which
+  sees every member of its class. dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 QFwd.dpr, CFieldOrd.dpr).
 - *AST:* `FieldDecl { names[], type, visibility }`.
 
 ### 11.1.3 Methods
@@ -251,11 +270,23 @@ type
   `{PV4}TG<System.Integer>.FG`, `{PV4}TG<System.string>.FG`, and a type
   nested in one `{PV4}TH<System.Byte>.TN.FN`. dcc64 37.0, 2026-10-29
   (PasTree audit E3-46, local/probe-m-b/e346 PV4.dpr).
-- ⚠️ *`published` requires RTTI:* `published` members generate runtime type info and
-  are restricted to classes compiled with `{$M+}` (or descending from `TPersistent`).
-  Allowed member types are constrained (e.g. method pointers for events, ordinal/
-  string/class properties). See ch.13/19.
-- `strict` is a **directive** (B.4.2) preceding `private`/`protected`.
+- ⚠️ *`published` generates RTTI:* on a class neither compiled with `{$M+}`
+  nor descended from one, a `published` section is NOT an error - dcc adds
+  `{$M+}` itself and warns `W1055` (13.2.1). Which member types may be
+  published (a published FIELD must be a class or interface, `E2217`; a
+  property must not be a pointer, a plain procedural type or an array,
+  `E2188`) → 13.2.1. See also ch.19.
+- ⚠️ *Default visibility.* Members before the first section word are
+  `public` - or `published` when the class is compiled under `{$M+}` or
+  descends from a class that was. The second is observable at compile time:
+  `{$M+} TP = class F: Integer; end` is `E2217 Published field 'F' not a
+  class or interface type`, and so is `TQ = class(TP) G: Integer; end`
+  declared after `{$M-}`. dcc64 37.0, 2026-10-30 (spec audit g4,
+  local/probe-park/spec-audit/g4 CDefVis.dpr). Run-time evidence: 13.2.1.
+- `strict` is a **directive** (B.4.2) preceding `private`/`protected` - only
+  those: `strict public` and `strict published` are `E2375 PRIVATE or
+  PROTECTED expected` (dcc64 37.0, 2026-10-30, spec audit g4,
+  local/probe-park/spec-audit/g4 RVis2.dpr).
 - ⚠️ *The "protected hack" is a direct consequence of the same-unit rule
   above* (dcc-verified, dcc32 37.0). Given `TTest` declared in unit `UTest`
   with a `protected` field, code in a *different* unit cannot reach that
@@ -529,7 +560,7 @@ var C: TGrid.TCell;     // qualified access
 - ⚠️ *A member — including an INHERITED one — outranks a compiler-PREDEFINED
   name.* The implicit System scope is the outermost one, so a class member of
   the same name shadows it throughout the method body, in **every** position.
-  dcc32 37.0-probed with `Text`, which is a predefined file type (ch.10 §10.3):
+  dcc32 37.0-probed with `Text`, which is a predefined file type (ch.10 §10.2.1):
 
   ```pascal
   TBase = class
@@ -592,10 +623,10 @@ ObjectType = "object" [ "(" Ancestor ")" ] { ClassSection } "end" ;
   does **not** get a second one (that one, plus `C: Byte`, is 20). Fields of a
   derived object start where the ancestor's storage ended. An `object end` is
   0 bytes.
-- ⚠️ *Two syntax restrictions dcc enforces here but not on records:* fields must
-  precede methods (`E2169 Field definition not allowed after methods or
-  properties`), and a **variant part is not allowed at all** — `case … of`
-  inside an `object` is a syntax error.
+- ⚠️ *Two syntax restrictions:* fields must precede methods (`E2169 Field
+  definition not allowed after methods or properties` - the same rule as a
+  class's and a record's, 11.1.2), and, unlike a record, a **variant part is
+  not allowed at all** — `case … of` inside an `object` is a syntax error.
 - ⚠️ *No implicit root.* An `object` with no `( Ancestor )` has no ancestor
   at all - not `TObject`, which a `class` gets (12.1.1): with `TO1 = object
   A: Integer; end`, `O.ClassName` and `O.Free` are `E2003 Undeclared

@@ -67,13 +67,9 @@ PNode^.Value := 1;
   call/field-store named by its `write` clause — the AST should record that the
   target is a property so later passes can expand it.
 - ⚠️ *This "assignable" class is NOT the same set that qualifies as a `var`-parameter
-  argument* (ch.06 §6.2.2) — a property with a `write` specifier is a valid `:=`
-  LHS (it lowers to a setter call) but is **rejected** when passed to a `var`
-  parameter, because there is no addressable storage to hand the callee.
-  (dcc-verified, dcc32 37.0: `Foo.Val := 10` compiles, but passing that same
-  `Foo.Val` to `procedure P(var X: Integer)` is `E2197 Constant object cannot be
-  passed as var parameter`.) Do not reuse one "assignable designator" check for
-  both contexts.
+  argument*: a property with a `write` specifier is a valid `:=` LHS but is
+  `E2197` as a `var` argument. The rule and its probe live in 6.2.2; do not
+  reuse one "assignable designator" check for both contexts.
 - *Type rule:* RHS must be assignment-compatible with the LHS type (implicit
   conversions per ch.04; otherwise error).
 - *AST:* `Assign { target: Designator, value: Expression }`.
@@ -112,8 +108,10 @@ Obj.Method;
   (assignment to a `procedure of object` var, `@`-free event hookup) it is a
   *reference*; otherwise it is a *call*. The parser must defer this to semantic
   analysis with the operand type known.
-- *`@` operator:* `@Foo` / `Foo` distinctions interact with `{$M}`/typed-`@`
-  modes — note for ch.04.
+- *`@` operator:* `@Foo` / `Foo` distinctions interact with the typed-`@` mode
+  `{$T}` / `{$TYPEDADDRESS}` (under `{$T+}`, `PB := @I` with `PB: ^Byte`, `I:
+  Integer` is `E2008 Incompatible types`) - note for ch.04. dcc64 37.0,
+  2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 TypedAt.dpr).
 - *AST:* `Call { callee, args[] }` used in statement position
   (`ExprStmt`). Record whether parentheses were present (empty arg list vs.
   no arg list) — relevant for the reference-vs-call decision.
@@ -155,7 +153,8 @@ end;
   used after the block it is E2003 (undeclared); two sibling blocks may each
   declare the same name; a nested block may not redeclare a name an enclosing
   block of the routine declared (E2004) (see also 5.5.1; dcc64 37.0, probed
-  2026-09-26).
+  2026-09-26). The full rule - what a body holds and what an inline
+  declaration may hide - is 3.1.3's; this is its statement-side summary.
 - *Finalization:* a managed inline variable is finalized at the end of its
   block. So is the temporary holding a call statement's DISCARDED managed
   result (`S;` for a function returning a string, an interface, a dynamic array
@@ -214,7 +213,12 @@ else
   `;` immediately before `else` as an error (common mistake worth a clear
   diagnostic).
 - *Type rule:* the condition must be `Boolean` (Object Pascal does not coerce
-  integers to Boolean here).
+  integers to Boolean here): `E2012 Type of expression must be BOOLEAN`. The
+  same rule holds for `while`, `until` and an inline `if`'s condition; what is
+  accepted besides Boolean (any `ByteBool`/`WordBool`/`LongBool`, a
+  `Variant`, a record with `Implicit` to Boolean) is stated once in 2.1.1 /
+  2.2.2. dcc64 37.0, 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3
+  CondTy.dpr).
 - *AST:* `IfStmt { cond, thenStmt, elseStmt? }`. Distinct node from the inline-`if`
   *expression* (5.4.1).
 
@@ -256,9 +260,33 @@ end;
 - ⚠️ *Selector type:* must be an **ordinal** type (integer, `Char`, enumerated,
   `Boolean`). **Strings and floats are NOT allowed** — do not parse string case
   labels (unlike C#/Pascal dialects that allow them). Enforce in semantic check.
+  A string or real selector is `E2001 Ordinal type required`; a `Variant`
+  selector is accepted (2.1.1's position table) and matches `V := '2'`
+  against the label `2` at run time.
 - *Labels:* each `CaseLabel` must be a **compile-time constant** (or constant
   range `a..b`); ranges and label sets must not overlap and must fit the selector
-  type. Overlap is a compile error.
+  type. Overlap is a compile error. The codes (dcc64 37.0):
+  - a repeated value or an overlapping range (`1: ; 1:` or `1..5: ; 3..7:`)
+    is `E2030 Duplicate case label`;
+  - a reversed range `5..1` is `E2011 Low bound exceeds high bound`;
+  - a typed constant (`const TC: Integer = 3`) is `E2026 Constant expression
+    expected`;
+  - a label of another type is `E2010` (`case E of 1:` over an enumeration:
+    `'TE' and 'Integer'`; `case C of 'ab':` over a Char: `'Char' and
+    'string'`);
+  - a label outside the selector's range is `E1012 Constant expression
+    violates subrange bounds` (`case B of 300:` over a Byte, `case W of -1:`
+    over a Word) - an ERROR, except over an `Int64` / `UInt64` selector,
+    where a label beyond 32 bits is only `W1012` (next bullet).
+- ⚠️ *A 64-bit selector is compared on its low 32 bits only.* `case I64 of
+  5000000000: ...` warns `W1012 Constant expression violates subrange
+  bounds`, and at run time the label matches both `I64 = 5000000000` and
+  `I64 = 705032704` (its low 32 bits); `case I64 of 3:` matches `I64 =
+  4294967299`. A Cardinal selector with a label `4000000000` is exact and
+  silent. Same on dcc32. A constant folder must truncate the selector and
+  the labels to 32 bits for an Int64 / UInt64 case, not compare full values.
+  dcc64 / dcc32 37.0, 2026-10-30 (spec audit g3,
+  local/probe-park/spec-audit/g3 CaseLbl.dpr, CaseI64.dpr, CaseI64b.dpr).
 - *`else` vs `otherwise`:* the standard keyword is `else`; some dialects accept
   `otherwise` — Delphi uses `else`.
 - ⚠️ *case-`else` vs `if`-`else`:* an `else` right after a branch whose
@@ -389,11 +417,33 @@ for var J := High(A) downto Low(A) do   // inline counter, 10.3+
   `MI to MI` (`type Integer`) Integer. A Char, enumeration or Boolean counter
   is its bounds' type (`Ch to 'z'` Char, `e0 to e2` the enumeration) - dcc32
   and dcc64 37.0, probed 2026-10-12.
+- ⚠️ *What may be the counter* (dcc64 37.0): a local variable of the routine,
+  or a VALUE parameter (`procedure P(N: Integer); begin for N := ...` compiles).
+  dcc parses a full designator after `for` and rejects the wrong ones
+  semantically, so `for R.F := ...` is not a syntax error:
+  - `E1019 For loop control variable must be simple local variable` for a
+    field (`R.F`, a method's own field `FI`), an array element (`A[0]`), a
+    `var` parameter and an enclosing routine's local used from a nested
+    routine;
+  - `E2064 Left side cannot be assigned to` for a `const` parameter;
+  - `E2032 For loop control variable must have ordinal type` for a real
+    counter;
+  - a unit/program-level variable is only `W1019` (same text) inside a
+    routine, and silent as the counter of a loop in the main program block.
+  The bounds must be assignment-compatible with the counter: `for L := 0 to
+  300` over a Byte `L` is `E1012`, `for L := 0 to 'a'` over an Integer
+  `E2010`. The same location rules hold for a `for ... in` element variable
+  (5.5.2). dcc64 37.0, 2026-10-30 (spec audit g3,
+  local/probe-park/spec-audit/g3 ForCtr.dpr).
 - *Bounds evaluated once:* both bounds are computed **before** the first
   iteration and not re-evaluated — model this in lowering (don't re-emit the
   limit expression per iteration).
 - ⚠️ *Counter is read-only in the body:* assigning to the loop variable inside the
   body is a compile error; its value **after** normal completion is undefined.
+  Reading it after the loop warns `W1037 FOR-Loop variable 'I' may be
+  undefined after loop` - but not when the loop body contains a `Break`
+  (`for I := 0 to 3 do if I = 2 then Break; Writeln(I)` is silent). dcc64 37.0, 2026-10-30
+  (spec audit g3, local/probe-park/spec-audit/g3 ForAfter.dpr).
   - *What counts as a write* - each `E2081 Assignment to FOR-Loop variable
     'I'`: `I := ...`; `Inc(I)` / `Dec(I, 2)`, bare or `System.Inc(I)`; a
     nested `for I := ...` (`to` or `downto`) or `for I in ...` on the same
@@ -444,6 +494,39 @@ for var Item in MyList do Process(Item);
   The loop element type = the type of `Current`. The parser emits a `ForInStmt`;
   **semantic analysis** resolves `GetEnumerator` (including via class/record
   helpers) and the element type.
+- ⚠️ *The pattern is checked member by member, and stricter than "has these
+  names"* (dcc64 37.0). Each failure is `E2431 for-in statement cannot
+  operate on collection type 'X' because 'Y' does not contain a member for
+  'M', or it is inaccessible`:
+  - `Current` must be a PROPERTY: an enumerator with a function `Current`
+    (and a `GetCurrent`), or a record with a FIELD `Current`, fails for
+    `'Current'`;
+  - `MoveNext` must be a function returning `Boolean`: one returning Integer
+    fails for `'MoveNext'`, as does an enumerator without it;
+  - ⚠️ the members must be PUBLIC, whatever the loop's position - NOT
+    "accessible" in the ordinary 11.x sense: a `private`, `strict private` or
+    `protected` `GetEnumerator` fails for `'GetEnumerator'` in the declaring
+    unit too, and even in the class's own method (`for X in Self do`), while
+    a direct `H.GetEnumerator` call of the protected one in the same unit
+    compiles; a `private`
+    `MoveNext` of the enumerator fails for `'MoveNext'`. A type with no
+    `GetEnumerator` (`TObject`) fails the same way.
+  A collection that is no candidate at all - an `Integer`, `nil` (typed
+  `Pointer`) - is `E2430 for-in statement cannot operate on collection type
+  'Integer'`; a TYPE written as the collection (`for X in TArray<Integer>
+  do`) is `E2029 '(' expected but 'DO' found`. A `GetEnumerator` that is a
+  PROCEDURE crashes dcc (`F2084 Internal Error: AV...`) - code that compiles
+  never has one.
+- *The element variable* follows the 5.5.1 counter's location rules (`E1019`
+  for a field or a `var` parameter, `W1019` for a global in a routine) and is
+  read-only in the body (`X := 5` and `Inc(X)` are `E2081`). `Current` need
+  only be ASSIGNMENT-compatible with it: a Byte or Int64 variable over a
+  `TArray<Integer>`, a `string` variable over a string's Chars and a Byte
+  over a `set of Byte` all compile; a `string` over a `TArray<Integer>` is
+  `E2010 Incompatible types: 'string' and 'Integer'`. A dereferenced pointer
+  (`for X in P^`) is an ordinary collection expression. dcc64 37.0,
+  2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 ForInEn.dpr,
+  ForInPriv.dpr, ForInPriv2.dpr, ForInPriv3.dpr, ForInVar.dpr, Flow.dpr).
 - A string walks its character type (7.2.1): `Char` over `string`,
   `UnicodeString` and `WideString`, `AnsiChar` over `AnsiString`,
   `ShortString`, `string[N]` (named or inline), `RawByteString`, `UTF8String`
@@ -539,7 +622,21 @@ until Succeeded or (Tries >= MaxTries);
 > They parse as ordinary `CallStatement`s. Their loop/routine-control meaning is
 > applied during semantic analysis, which also rejects `Break`/`Continue` outside
 > a loop. Consequence: they can be shadowed by a user identifier, and the lexer
-> must **not** tokenise them as keywords.
+> must **not** tokenise them as keywords. Verified at run time: with a program's
+> own `procedure Break;` a `Break` in a `for` body calls it and the loop runs
+> on; with `procedure Exit(N: Integer)` `Exit(5)` in a function calls it and
+> the function goes on; `System.Break` / `System.Exit` reach the intrinsics
+> past such a declaration (and past a variable named `Break`). dcc64 37.0,
+> 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 Shadow.dpr,
+> ShadowL.dpr).
+>
+> Codes and limits (dcc64 37.0, 2026-10-30, Flow.dpr): `Break` / `Continue`
+> outside a loop is `E2097 BREAK or CONTINUE outside of loop` - and an
+> anonymous method's body is outside the loop it is written in
+> (`for ... do P := procedure begin Break end` is E2097). Leaving a
+> `finally` part with any of the three is `E2126` - the rule, and its
+> empty-guarded-part exception, are 18's; from an `except` part all three
+> are allowed (FinBrk.dpr).
 
 ### 5.6.1 `Break`
 
@@ -632,7 +729,11 @@ end;
 **Semantics & parsing notes**
 
 - *`Exit(value)`* is only legal inside a **function** and assigns `Result` before
-  returning; in a procedure the parenthesised form is an error.
+  returning; in a procedure the parenthesised form is an error: `Exit(1)`
+  there is `E2025 Procedure cannot have a result type` - but an EMPTY `Exit()`
+  compiles in a procedure, as a plain `Exit`. `Exit(1, 2)` is `E2029 ')'
+  expected but ',' found`; a bare `Exit` in a function is fine. dcc64 37.0,
+  2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 Flow.dpr).
 - Intrinsic, not a keyword (see the 5.6 note).
 - *AST:* `ExitStmt { value? }`.
 
@@ -721,15 +822,21 @@ Writeln('never reached');
   the plain-flow intrinsic family).
 - `Halt` optionally takes one `Integer` argument used as the process exit code
   (defaults to 0 when omitted).
-- ⚠️ *`Halt` bypasses `finally` blocks and unit finalization* — it ends the
-  process directly and does **not** unwind the call stack the way a raised
-  exception or a normal return would. (dcc-verified, dcc32 37.0: `Halt(3)` called
+- ⚠️ *`Halt` bypasses `finally` blocks but NOT unit finalization* - it does
+  **not** unwind the call stack the way a raised exception or a normal return
+  would, but it does shut the program down in order: every used unit's
+  `finalization` section still runs. (dcc-verified, dcc32 37.0: `Halt(3)` called
   inside a `try…finally` prints the text before the call, but neither the
   `finally` block's `Writeln` nor any statement after the call executes; the
-  spawned process's exit code was observed to be exactly `3`.)
+  spawned process's exit code was observed to be exactly `3`. dcc64 37.0,
+  2026-10-30: the same program using a unit whose `finalization` writes a
+  line prints that line after `before Halt`, and nothing from the `finally`
+  part - spec audit g3, local/probe-park/spec-audit/g3 HaltFin.dpr,
+  HaltFinU.pas.)
 - *Distinguish from `Exit`:* `Exit` leaves only the current routine and still runs
-  enclosing `finally` blocks on the way out; `Halt` leaves the whole program and
-  runs none of them.
+  enclosing `finally` blocks on the way out; `Halt` leaves the whole program,
+  runs none of the pending `finally` blocks, and runs the units'
+  finalization.
 - *AST:* may stay `Call("Halt")` until a lowering pass rewrites it to
   `HaltStmt { exitCode? }`.
 
@@ -970,21 +1077,13 @@ end;
   bare overloaded name selects the arity-0 overload, parentheses demote the
   target to a value, the implicit pointer dereference does not apply. Those
   are rules about the position; the typing itself is the ordinary one.
-- A target may be any designator, not just a variable — and a resolver must
-  type every form, or the whole body reads as undeclared (each was a real
-  false-E2003 source in the D13 RTL):
-  - a field: `with Rec.Field do`;
-  - a parameterless function call: `with GetRecord do` — the routine's
-    RESULT type;
-  - a **typecast**: `with TVarData(ParamValues[I]) do VType := ...`
-    (`System.ObjAuto.pas`) — the cast's TYPE itself, not the callee's
-    declared type (syntactically identical to a call; disambiguate by what
-    the name resolves to);
-  - a **pointer dereference**: `with LVarData^ do` (`System.Variants.pas`) —
-    the POINTEE type, chasing pointer-type aliases (`PAlias = PVarData =
-    ^TVarData`);
-  - and compositions: `with FindVarData(V)^ do` (call → pointer result →
-    dereference), also `System.Variants.pas`.
+- The target forms are the table above (each was a real false-E2003 source in
+  the D13 RTL: the typecast `with TVarData(ParamValues[I]) do` in
+  `System.ObjAuto.pas` - a cast and a call look alike, decide by what the name
+  resolves to - and the dereference `with LVarData^ do` through `PAlias =
+  PVarData = ^TVarData` in `System.Variants.pas`). The forms compose: `with
+  FindVarData(V)^ do` is call, pointer result, dereference
+  (`System.Variants.pas`).
 - ⚠️ *The with scope carries the target type's HELPER members too.* dcc-verified:
   with `TRecHelper = record helper for TRec`, `with R do Bump` calls the
   HELPER's method unqualified, and 15.3.3's rules apply unchanged (a helper

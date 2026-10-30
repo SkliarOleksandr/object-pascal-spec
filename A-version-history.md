@@ -53,7 +53,12 @@ compiler* milestones — not RTL/VCL/IDE.
   fully **removed in 10.4**. Treat all ARC-specific syntax as historical.
 - **Delphi 13.1**: **confirmed no new language syntax** — Arm64EC is a new
   target/toolchain; the compiler changes are fixes (AnsiChar/ShortString
-  overloads, ternary-`if` type compatibility) plus warning W1080.
+  overloads, ternary-`if` type compatibility) plus warning W1080. A point
+  release keeps the version number: the installed build (dcc64
+  37.0.57242) is `CompilerVersion = 37.0`, `RTLVersion = 37.0` and `VER370`
+  and declares no `RTLVersion13x` constant (the kind FMX.Skia.Canvas tests
+  for 11.x, `DECLARED(RTLVersion112)`), so `{$IF}` cannot tell the point release (1.3.5; dcc64 37.0,
+  2026-10-30, spec audit g1, local/probe-park/spec-audit/g1 VerSym.dpr).
 - **`constref` is NOT Delphi** — it is FreePascal's equivalent of Delphi's
   `const [Ref]`. Confirmed: D13 sources use it only in `{$IFDEF FPC…}` branches.
 - **XE8 ARM64/iOS, Delphi 11 macOS ARM64/M1, XE2 macOS compiler — book-stated,

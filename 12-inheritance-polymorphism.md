@@ -167,7 +167,11 @@ end;
   how a helper "patches" a method and still calls the original.
 - ⚠️ *In a `message` method* (12.3.1) a bare `inherited` calls the ancestor's
   handler for the **same message id**, whatever its name, and DefaultHandler
-  when there is none - the name rule above does not apply there.
+  when there is none - the name rule above does not apply there. The id is
+  compared by VALUE: with `message MBase + 1` in TBase.WMFoo and in
+  TMid.MyFoo, MyFoo's bare `inherited` runs WMFoo, and TMid.MyBar's (`MBase +
+  2`, no ancestor handler) runs TBase.DefaultHandler (dcc64 37.0, 2026-10-30,
+  runtime output of local/probe-park/e244 MI.dpr; PasTree audit E2-44).
 - *Evidence:* dcc64 37.0, 2026-10-12, runtime output of PasTree's
   local/probe-b30 I1.dpr (the value, declared-arity and helper rules) and
   I2.dpr (the nested-routine rule); the message-id rule from the PasTree

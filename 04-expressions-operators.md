@@ -54,6 +54,17 @@ Q := A div B;   R := A mod B;   F := A / B;   // F is floating-point
 - ⚠️ `/` on two integers **still produces a real** result type — do not infer
   Integer. `div`/`mod` require integer operands: `D div 2` and `I mod D` are
   `E2015 Operator not applicable to this operand type`.
+- ⚠️ *Which code a scalar mismatch gets depends on the pair, not the
+  operator alone* (dcc64 37.0, 2026-10-30, PasTree audit E3-21,
+  local/probe-park/e321 O1-O12 - `+ - * / div mod and or xor shl` over
+  string, Integer, Boolean, Char, Double):
+  - a `string` with an Integer, Boolean or real operand is `E2010
+    Incompatible types: 'string' and 'Integer'` under every one of them, the
+    string's type named first whatever the order (`'ab' + 1`, `I xor S`,
+    `D * S`);
+  - any other mismatched pair - Integer with Boolean or Char, Char with a
+    real, Boolean with a real - is `E2008 Incompatible types` under `+` and
+    `E2015` under the rest (`I + True` E2008, `I - True` E2015).
 - ⚠️ *`div` truncates toward zero and `mod` takes the DIVIDEND's sign*, at run
   time and when folded alike: `-7 div 2` is -3, `-7 mod 2` -1, `7 mod -2` 1
   (`A = (A div B) * B + A mod B`). A constant divisor of zero is `E2098

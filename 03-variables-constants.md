@@ -11,13 +11,29 @@ B](B-lexical-grammar.md).
 
 ```ebnf
 VarSection = ( "var" | "threadvar" ) VarDecl { VarDecl } ;
-VarDecl    = IdentList ":" TypeRef [ VarInitOrAbsolute ] ";" [ HintDirectives ] ;
-VarInitOrAbsolute = "=" ConstExpr            (* initialized *)
-                  | "absolute" QualIdent ;   (* overlay - a variable, 3.1.4 *)
+VarDecl    = IdentList ":" TypeRef VarTail ";" ;
+VarTail    = [ HintDirectives ] [ "=" ConstExpr ]   (* hint before the value ...  *)
+           | "=" ConstExpr HintDirectives           (* ... or after it, not both *)
+           | "absolute" QualIdent ;                 (* overlay - a variable, 3.1.4; no hint *)
 
 ConstSection = ( "const" | "resourcestring" ) ConstDecl { ConstDecl } ;
-ConstDecl    = Ident [ ":" TypeRef ] "=" ConstExpr ";" [ HintDirectives ] ;
+ConstDecl    = Ident [ ":" TypeRef ] "=" ConstExpr [ HintDirectives ] ";" ;
 ```
+
+A hint directive on a variable or a constant comes BEFORE the declaration's
+`;`. These compile: `W: Integer = 5 deprecated;`, `W2: Integer deprecated =
+6;`, `W3: Integer deprecated;`, `K = 5 platform;`, `K2: Integer = 5
+deprecated 'y';` and a resourcestring `S1 = 'a' deprecated;`. After the
+`;` a hint word starts the next declaration: `var W: Integer = 5;
+deprecated;` is `E2029 ',' or ':' expected but ';' found`, `const K = 5;
+platform;` is `E2029 '=' expected but ';' found`. Refused too: a hint both
+before and after a variable's value (`Integer deprecated = 6 deprecated` -
+`E1030 Invalid compiler directive: 'DEPRECATED'`), a hint before `absolute`
+(`E1030 Invalid compiler directive: 'absolute'`) or after `absolute X`
+(`E2029 ';' expected but identifier 'deprecated' found`), and a hint
+between a typed constant's type and its `=` (`E2029 '=' expected but
+identifier 'deprecated' found`) - unlike a variable's. dcc64 37.0,
+2026-10-31 (PasTree audit E1-04, local/probe-park/specfu/E1-04 U3-U9).
 
 ---
 

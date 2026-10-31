@@ -332,10 +332,17 @@ Caption := if Connected then 'Online' else 'Offline';
   statement position parse `IfStmt`.
 - *Mandatory `else`:* unlike the statement form, `else` is **required** (an
   expression must always produce a value) → no dangling-`else` problem here.
-- *Type rule:* both branch expressions must be assignment-compatible to a common
-  result type; that common type is the type of the whole expression. What
-  the common type is (dcc32 / dcc64 37.0, probed 2026-10-12 through `var X
-  := if ...`): one type stays itself, a distinct one too (`if C then MI else
+- *Type rule:* the branches must meet in a common type by the concrete rules
+  below - NOT merely be assignable to one: both `1` and `2.5` are assignable
+  to Double, yet `D := if C then 1 else 2.5` is `E2010 Incompatible types:
+  'Integer' and 'Double'` and `D := if C then 2.5 else 1` `E2010 ... 'Double'
+  and 'Integer'` - the refusal is symmetric and the Double target does not
+  help; the same for variables (`if C then I else D`, `if C then D else I`)
+  and for an integer with a Char or string (`if C then 1 else 'x'`, `if C
+  then Ch else 1`). dcc64 37.0, 2026-10-31 (PasTree audit E1-42,
+  local/probe-park/specfu/E1-42 E5.dpr). The common type is the type of the
+  whole expression. What it is (dcc32 / dcc64 37.0, probed 2026-10-12
+  through `var X := if ...`): one type stays itself, a distinct one too (`if C then MI else
   MI` is `TMyI`); integers meet in the narrowest type covering both, a
   constant adapting as in 4.2.1 - `if C then B else W` Word, `B else Sh`
   SmallInt, `C else I` and `C else Sh` Int64, `1 else C` Cardinal, `1 else
@@ -488,12 +495,29 @@ for var Item in MyList do Process(Item);
 **Semantics & parsing notes**
 
 - *Iterable resolution (the important bit):* the `in`-expression is valid if it is
-  a string, static/dynamic array, or set — **or** any type satisfying the
-  **enumerator pattern**: it (or a helper on it) exposes `function GetEnumerator`
-  returning a type with `function MoveNext: Boolean` and a `property Current`.
-  The loop element type = the type of `Current`. The parser emits a `ForInStmt`;
-  **semantic analysis** resolves `GetEnumerator` (including via class/record
-  helpers) and the element type.
+  a string, static/dynamic array, or set — **or** a class, record or
+  interface satisfying the **enumerator pattern**: it exposes `function
+  GetEnumerator` returning a type with `function MoveNext: Boolean` and a
+  `property Current`. The loop element type = the type of `Current`. The
+  parser emits a `ForInStmt`; **semantic analysis** resolves `GetEnumerator`
+  and the element type.
+- ⚠️ *A helper's `GetEnumerator` counts for a class or a record only*
+  (Delphi has no interface helpers):
+  - a class helper's hides the class's own (15.3.3) - over `TList0` with its
+    own Integer enumerator, `for var E in L do E.OnlyFoo` walks the helper's
+    `TFoo`; a record helper serves a record that has none;
+  - a string, an array or a set iterates natively and the helper is ignored:
+    with a helper GetEnumerator on `string`, `TArray<Integer>` and `set of
+    TEn`, the elements are still Char (`E.OnlyFoo` is `E2018`), Integer and
+    TEn (`E2003 Undeclared identifier: 'OnlyFoo'`);
+  - anything else is `E2430` even with a helper whose GetEnumerator fits:
+    `Integer`, `Double`, an enum, a typed pointer - though the helper itself
+    is active (`N.GetEnumerator.Current.OnlyFoo` compiles);
+  - a record with BOTH its own GetEnumerator and a record helper's stops
+    dcc64 with `F2084 Internal Error: AV00B366C3(009F0000)-R0000000C-0` -
+    code that compiles never has one.
+  dcc64 37.0, 2026-10-31 (PasTree audit E1-43,
+  local/probe-park/specfu/E1-43 C1-C11).
 - ⚠️ *The pattern is checked member by member, and stricter than "has these
   names"* (dcc64 37.0). Each failure is `E2431 for-in statement cannot
   operate on collection type 'X' because 'Y' does not contain a member for
@@ -785,7 +809,11 @@ end;
   outside it targets is code dcc cannot compile.
 - *A `goto` target is looked up as a label only:* inside `with R do goto Done`
   over a record with a field `Done`, the jump goes to the routine's label
-  `Done` (dcc32 / dcc64 37.0, 2026-10-13; PasTree audit B44, B4-17). A
+  `Done` (dcc32 / dcc64 37.0, 2026-10-13; PasTree audit B44, B4-17), and
+  with no label `Done` declared the same `goto Done` is `E2003 Undeclared
+  identifier: 'Done'` - the field is never a candidate (dcc64 37.0,
+  2026-10-31, PasTree audit E1-30, local/probe-park/specfu/E1-30 L1.dpr
+  prints `at label 5`, L2.dpr). A
   labeled STATEMENT `Done:` in such a body is different - dcc reads the name
   through the with scope there and fails.
 - *AST:* `LabelDecl`, `LabeledStmt { label, stmt }`, `GotoStmt { label }`.
@@ -904,7 +932,17 @@ end;
     type never comes back to this one. dcc-verified: the line compiles, `Name`
     is `TControl.Name`, in a plain body, a `with R, C do` mixed with a same-unit
     record, and inside an anonymous method declared in the body. A record has no
-    such tier: its member set is complete where it is declared.
+    inherited tier, but it is not closed either: a record helper declared in
+    ANOTHER unit adds members, and they outrank a same-unit declaration of the
+    same name - with `UHelp`'s `record helper for TRec` declaring `function
+    Bump: string` and a unit-level `function Bump: Integer` beside the body,
+    `with R do S := Bump` compiles and prints `helper` (the control `S :=
+    Tag` is `E2010`). A pass that sees only the same unit binds Bump to the
+    local function. dcc64 37.0, 2026-10-31 (PasTree audit E1-30,
+    local/probe-park/specfu/E1-30 W8.dpr, `-DCTRL`; W4.dpr re-confirms the
+    nested-declaration list below: a nested block's inline var, a `for var`
+    counter, an anonymous method's parameter and its own `var` local, and an
+    `on X: Exception do` variable all lose to the member, E2010).
   - *The member outranks a declaration NESTED in the body as well*, not only
     the body's own inline var: a nested block's inline var, an anonymous
     method's parameter or local, an `on E: T do` variable, a `for var`

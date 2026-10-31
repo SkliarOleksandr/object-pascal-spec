@@ -701,6 +701,23 @@ function Area(C: TCircle): Double; overload;
     section's (the IMPLEMENTATION bullet above): a call written in the implementation, bound
     to the nearer implementation-only `Pick(const S: string; B: Integer =
     0)`, still calls the interface's `Pick(A: Integer)` for `Pick(1)`.
+- ⚠️ *An overload set does not cross an enclosing ROUTINE or CLASS scope.*
+  The search-on of the bullet above runs over unit-level sets only. A method
+  of the class the body belongs to, or a routine nested in the caller's
+  routine, hides a same-named unit-level set even when every declaration
+  carries `overload`: with a global `procedure M(const S: string);
+  overload;` and `TC = class procedure M(A: Integer); overload; procedure
+  Go; end`, `M('x')` in `TC.Go` is `E2250 There is no overloaded version of
+  'M' that can be called with these arguments`; a nested `procedure N(A:
+  Integer); overload;` makes `N('x')` the same E2250 beside the global
+  `N(const S: string); overload` (and `N(1)` there calls the nested one). At
+  unit level the two merge: the program's own `Q(A: Integer); overload;`
+  with a used unit's `Q(const S: string); overload;` takes `Q(1)` and
+  `Q('x')` one each, and so do two used units' `R`; a used unit's `T`
+  without `overload` stays out (`T('x')` E2250). A candidate set found in a
+  method or a nested routine is closed. dcc64 37.0, 2026-10-31 (PasTree
+  audit E1-32, local/probe-park/specfu/E1-32 H.dpr with `-DH1` / `-DH2`,
+  U.dpr with `-DT2`, which prints `own.Q UA.Q UB.R UA.R own.T`).
 - ⚠️ *An ordinal, float, Char or Boolean value never converts to an array,
   and a static array never to a dynamic one,* so such a candidate is OUT:
   `Q2(B[0], 1)` for a `B: TBytes` calls `Q2(const A; N: Integer)` beside
@@ -1170,8 +1187,8 @@ begin Inner; end;
 | **Deprecated** | — |
 | **Status** | ✅ Current (Intel targets only) |
 
-Embeds assembler instructions, either as a **statement** inside a normal body or
-as the **entire routine body** (replacing `begin…end`).
+Embeds assembler instructions, either as a **statement** inside a normal body
+(Win32 only) or as the **entire routine body** (replacing `begin…end`).
 
 **Grammar**
 
@@ -1192,7 +1209,7 @@ end;
 
 procedure P;
 begin
-  asm                     // asm as a statement
+  asm                     // asm as a statement - Win32 only
     NOP
   end;
 end;
@@ -1229,4 +1246,12 @@ end;
 - Platform-gated: x86/x64 only; ARM/ARM64 compilers reject `asm` (RTL guards these
   blocks with `{$IFDEF}`s — 53 uses in RTL 13 sources). The old `assembler`
   directive on headings is accepted and ignored (legacy).
+- ⚠️ *Win64 takes asm only as a whole routine body:* `procedure P; begin asm
+  NOP end; end;` is `E1025 Unsupported language feature: 'ASM'` and then
+  `E2029 ';' expected but 'ASM' found` under dcc64, which compiles
+  `procedure P; asm NOP end;`; dcc32 compiles both. A parser may accept the
+  statement form everywhere (it is Win32 code), but a Win64 analysis that
+  reports nothing for it is more lenient than the compiler. dcc32 / dcc64
+  37.0, 2026-10-31 (PasTree audit E1-09, local/probe-park/specfu/E1-09
+  A1.dpr, A2.dpr).
 - *AST:* `AsmStmt { rawTokens / sourceRange }` as a statement node or routine body.

@@ -110,7 +110,8 @@ type
   class or a descendant interface) or by a hard cast `INoGuid(I)`, which
   compiles. dcc64 37.0, 2026-10-30 (spec audit g5,
   local/probe-park/spec-audit/g5 I01.dpr, I01b.dpr).
-- Default ancestor is `IInterface` (≡ `IUnknown`).
+- Default ancestor of an `interface` is `IInterface` (≡ `IUnknown`); a
+  `dispinterface` has `IDispatch` instead (14.1.2).
 - *AST:* `InterfaceType { ancestor, guid?, members[] }`.
 
 ### 14.1.2 `dispinterface` (COM automation)
@@ -126,7 +127,17 @@ A dispatch interface for OLE Automation; members are dispatched by `dispid`.
 **Semantics & parsing notes**
 
 - `dispinterface` is a **reserved word**. Members carry `dispid ConstExpr`
-  directives. Windows/COM only.
+  directives. Windows/COM only. A property's specifiers are `readonly`,
+  `writeonly` and `dispid`, in that order (13 grammar umbrella).
+- ⚠️ *Its implicit ancestor is `IDispatch`, and it can name no other:*
+  `dispinterface(IDispatch)` is `E2228 A dispinterface type cannot have an
+  ancestor interface`, yet its members include System's `IDispatch`'s and so
+  `IInterface`'s - `D.GetTypeInfoCount(I)`, `D.GetIDsOfNames(...)` and
+  `D._AddRef` compile on `D: IDisp` with only `procedure Bar; dispid 2;`
+  declared, while `D.NoSuchMember` is `E2003`. A member lookup on a
+  dispinterface climbs to System.IDispatch (11.1.1, "the implicit root is
+  System's declaration"). dcc64 37.0, 2026-10-31 (PasTree audit E1-36,
+  local/probe-park/specfu/E1-36 D1.dpr, `-DCTRL` for the E2003, D3.dpr).
 
 ---
 

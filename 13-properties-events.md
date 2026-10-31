@@ -15,10 +15,23 @@ PropertyDecl = "property" Ident [ PropArray ] [ ":" TypeRef ]
                [ "stored" ( Ident | ConstExpr ) ]
                [ "default" ConstExpr | "nodefault" ]
                [ "implements" IdentList ]
-               [ "default" ] ";"                         (* trailing 'default' = default array prop *)
-               { PropDirective } ;
+               { DispSpec } ";"
+               [ "default" ";" ] ;                       (* default array property, 13.1.4 *)
 PropArray    = "[" FormalParams "]" ;
+DispSpec     = "readonly" | "writeonly" | "dispid" ConstExpr ;  (* dispinterface only, 14.1.2 *)
 ```
+
+The order is enforced, not a reading aid: `property Items[I: Integer]:
+Integer write S read G; default;` is `E2029 ';' expected but identifier
+'read' found`, and in a dispinterface `dispid 1 readonly` is `E2029 ';'
+expected but identifier 'readonly' found` while `readonly dispid 1`
+compiles. The array-default `default` comes after the declaration's own `;`:
+`read G default;` reads `default` as the value specifier with its expression
+missing - `E2029 Expression expected but ';' found`, and `A[0]` then is
+`E2149 Class does not have a default property` - while `read G; default;`
+compiles. No hint directive can follow a property (13.1.5). dcc64 37.0,
+2026-10-31 (PasTree audit B1-44, local/probe-park/specfu/B1-44 G1-G5,
+D1-D2).
 
 ---
 
@@ -249,6 +262,15 @@ property Items[I: Integer]: TItem read GetItem; default;
   array; `A[0][1]` is the form, the second bracket the property's. The same
   one level down: `G[0, 1, 2]` over `array[0..3, 0..3] of TCells` is E2016
   (dcc-verified 2026-09-30).
+- ⚠️ *An `object` may declare one, but not be indexed by it:* an old-style
+  `object` with `property Items[I: Integer]: Integer read G; default;`
+  compiles and `B.Items[0]` works, but `B[0]` on the object, or on a
+  descendant object, is `E2016 Array type required`. A record's default
+  array property does serve `R[0]`.
+- *A class default property is reached through the class name:* `class
+  property Items[I: Integer]: TReg read G; default;` with a static `G` makes
+  `TReg[0].Foo` compile. dcc64 37.0, 2026-10-31 (PasTree audit E1-37,
+  local/probe-park/specfu/E1-37 O.dpr, `-DOBJIDX` for the E2016 lines).
 - *AST:* `isDefaultArrayProp: true`.
 
 ### 13.1.5 Streaming specifiers: `default`, `nodefault`, `stored`
@@ -279,12 +301,17 @@ property Caption: string read FCaption write SetCaption stored FHasCaption;
   audit g4, local/probe-park/spec-audit/g4 QArr.dpr).
 - `stored` takes a boolean constant/field/method controlling whether to persist.
 - Only meaningful for `published` properties with RTTI.
-- ⚠️ *A hint directive on a property sits BEFORE the semicolon, after the
-  last specifier:* `property P: Integer read FP deprecated;` compiles, while
-  `property P: Integer read FP; deprecated;` is an error (dcc 37.0 probed
-  2026-09-17 - the second `deprecated` is read as a field name). A parser
-  must accept `deprecated ['msg'] | platform | library | experimental` as a
-  terminator of the specifier list.
+- ⚠️ *A property takes no hint directive, before or after its semicolon:*
+  `property P: Integer read FP deprecated;` is `E2029 ';' expected but
+  identifier 'deprecated' found` at the hint word, and so are `deprecated
+  'm'`, `platform`, `experimental` and `read FP write FP deprecated;`;
+  `library` is `E2029 ';' expected but 'LIBRARY' found`. After the
+  semicolon, `property P: Integer read FP; deprecated;` reads `deprecated`
+  as a field name: `E2169 Field definition not allowed after methods or
+  properties`. The same in a class, a record and an interface. dcc64 37.0,
+  2026-10-31 (PasTree audit B1-43, local/probe-park/specfu/B1-43 H1-H9;
+  this corrects a 2026-09-17 note that the first form compiles). A parser
+  that accepts a hint there is tolerating invalid code.
 
 ### 13.1.6 Put-by-reference setters (`{$VARPROPSETTER}`)
 

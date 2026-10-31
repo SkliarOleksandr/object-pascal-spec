@@ -40,7 +40,8 @@ Four precedence levels, all binary operators left-associative. Full table in
 | **Deprecated** | — |
 | **Status** | ✅ Current |
 
-`+ - *` (numeric), `/` (real division, **always** yields a float), `div`
+`+ - *` (numeric), `/` (real division, never an integer result - a real
+type, or on dcc64 Currency when a Currency operand is involved, 4.2.1), `div`
 (integer division), `mod` (integer remainder), unary `+`/`-`.
 
 **Example**
@@ -52,7 +53,13 @@ Q := A div B;   R := A mod B;   F := A / B;   // F is floating-point
 **Semantics & parsing notes**
 
 - ⚠️ `/` on two integers **still produces a real** result type — do not infer
-  Integer. `div`/`mod` require integer operands: `D div 2` and `I mod D` are
+  Integer. With a Currency operand, dcc64 types it Currency, not a float:
+  `Cu / 2`, `Cu / I`, `Cu / D` and `I / Cu` are Currency there, while `D /
+  Cu` and `Cu / Cu` are Extended; dcc32 answers Extended for all six
+  (dcc32 / dcc64 37.0, 2026-10-31, PasTree audit E1-39,
+  local/probe-park/specfu/E1-39 P.dpr, which also re-confirms the 4.2.1
+  rows for constants, shifts, bitwise operators, distinct types, real and
+  string literals and sets). `div`/`mod` require integer operands: `D div 2` and `I mod D` are
   `E2015 Operator not applicable to this operand type`.
 - ⚠️ *Which code a scalar mismatch gets depends on the pair, not the
   operator alone* (dcc64 37.0, 2026-10-30, PasTree audit E3-21,
@@ -580,7 +587,13 @@ Btn := TButton(Sender);     // unchecked reference cast
   otherwise a **call**. The parser cannot tell syntactically — defer to symbol
   resolution.
 - *Variable (hard) casts* reinterpret storage and can appear as an lvalue
-  (`Byte(I) := 1`); *value casts* produce an rvalue. The kind depends on operand.
+  (`Cardinal(I) := 1`); *value casts* produce an rvalue. The kind depends on
+  operand. ⚠️ An lvalue cast needs a type of the SAME size as the variable:
+  `Cardinal(I)`, `Integer(C)`, `SmallInt(W)`, `Byte(Bo)` (a Boolean) compile
+  on the left of `:=`, while `Byte(I) := 1`, `Word(I) := 1`, `Integer(I64)
+  := 1` and `Int64(I) := 1` are `E2064 Left side cannot be assigned to`;
+  `Int64(D) := 1` over a Double is `E2089 Invalid typecast`. dcc64 37.0,
+  2026-10-31 (PasTree audit E1-46, local/probe-park/specfu/E1-46 H.dpr).
 - *Numeric casts go one way:* an integer to a real type converts (`Double(I)`
   compiles), a real to an integer type is `E2089 Invalid typecast`
   (`Integer(D)` - use `Trunc`/`Round`). An integer cast of an out-of-range

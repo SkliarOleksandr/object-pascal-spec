@@ -324,13 +324,23 @@ P := TPair<string, Integer>.Create('a', 1);
 - ⚠️ **THE core parser ambiguity.** `<` after an identifier may begin a generic
   argument list **or** be the less-than operator. Object Pascal resolves it largely
   by **context plus bounded lookahead**:
-  - In a **type position** (after `:` in a declaration, in `uses`-free type refs,
-    after `class of`), `Id<…>` is always generic args.
-  - In an **expression position**, the compiler scans ahead: if the tokens between
-    `<` and a matching `>` parse as a comma-separated **type list** *and* the token
-    after `>` is `(` , `.` , or another expected continuation, treat it as a generic
-    instantiation; otherwise treat `<` as comparison.
-  - The construct `TList<Integer>.Create` works because `>` is followed by `.`.
+  - In a **type position** (after `:` in a declaration, in `uses`-free type refs),
+    `Id<…>` is always generic args.
+  - ⚠️ *Not after `class of`:* dcc accepts no instantiation there at all.
+    `TMeta = class of TG<Integer>;` is `E2029 ';' expected but '<' found`,
+    and so is `type TM = class of TH<T>;` nested in `TH<T>` itself (a bare
+    `class of TH` there is `E2003 Undeclared identifier: 'TH'`); through an
+    alias, `TGI = TG<Integer>; TMeta2 = class of TGI;` is `E2021 Class type
+    required`. What works is a non-generic class derived from the
+    instantiation: `TGI = class(TG<Integer>) end; TMeta3 = class of TGI;`.
+    dcc64 37.0, 2026-10-31 (PasTree audit E1-08,
+    local/probe-park/specfu/E1-08 A1-A5).
+  - In an **expression position**, dcc does not scan the tokens: it decides
+    by what the head NAMES (next bullet) - `TList<Integer>.Create` is an
+    instantiation because `TList` names a generic type, not because `>` is
+    followed by `.`. Only a parser without that knowledge falls back on a
+    bounded lookahead over the followers of `>`, which is an approximation
+    (PasTree's, two bullets down).
   - ⚠️ *dcc decides by what the head NAMES, not by syntax* (dcc64 37.0,
     probed 2026-10-13): after a generic routine the list is type arguments
     whatever follows - `N.GetData<PRec>^.X`, `V.AsType<Integer> + 1`,
@@ -709,11 +719,20 @@ var X := Max(3, 7);          // T inferred as Integer, X inferred as Integer
   saying plainly because the argument-driven half of this rule is the one
   everybody implements first.
 - ⚠️ *A call written `Name<...>` cannot mean a NON-generic routine of that name*
-  — §16.1.2's arity rule, on the method side. A binding stops at the first
-  declaration, so a derived class that declares a plain `GetValue(const AName:
-  string)` in front of an ancestor's `GetValue<T>(const APath: string)` takes
-  the call unless the arity is checked; the RTL's own JSON types are shaped
-  exactly like that.
+  — §16.1.2's arity rule, on the method side - but the arity filter works
+  only WITHIN one overload set. When a derived class declares a plain
+  `GetValue(const AName: string): TBaseJ; overload;` in front of an
+  ancestor's `GetValue<T>(const APath: string): T`, the inherited generic
+  joins the candidate set and the written arity picks it:
+  `D.GetValue<TItem>('x').Site := 1` compiles (System.JSON's
+  `TJSONObject.GetValue` is shaped exactly like that). WITHOUT `overload`
+  on the derived declaration, ordinary hiding applies: the plain method is
+  the only candidate, and `Name<...>(...)` reads as two comparisons -
+  `E2035 Not enough actual parameters` and `E2018 Record, object or class
+  type required` - whether the call is qualified (`D.GetValue<TItem>('x')`),
+  through `Self`, or unqualified inside a method. dcc64 37.0, 2026-10-31
+  (PasTree audit E1-33, local/probe-park/specfu/E1-33 H1.dpr, H2.dpr prints
+  `ok`).
 
   The same rule decides between OVERLOADS in one type. A plain and a generic
   method may share a name and a parameter list, differing only in the type

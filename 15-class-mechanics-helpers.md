@@ -695,8 +695,20 @@ end.
   inside a type declared in) the **implementation** section stays unit-local,
   and a cross-unit use of its members is a genuine `E2003`.
 - Consequently the "active helper" set at a source position is: every helper
-  for that type declared in this unit, plus every interface-section helper of
-  every used unit — resolved down to ONE by §15.3.3's last-in-scope rule.
+  for that type declared in this unit BEFORE that position, plus every
+  interface-section helper of every used unit — resolved down to ONE by
+  §15.3.3's last-in-scope rule. "The whole enclosing scope" above is the
+  scope from the helper's declaration on, not backwards: with `TH1 = class
+  helper for T` (XA) in the interface, `Test`'s body, and then `TH2 = class
+  helper for T` (XB) in the implementation, `O.XA` compiles in Test and
+  `O.XB` there is `E2003`, while after TH2 (`Test2`) `O.XB` compiles and
+  `O.XA` is `E2003` - TH2 is the one active helper there. A unit's own
+  helper beats one brought by its implementation `uses`, even when the own
+  one sits in the interface: with UP2's interface `TH1` (XA) and UHX's
+  `THX` (XX) used in UP2's implementation, `O.XA` compiles in UP2's body
+  and `O.XX` is `E2003`. dcc64 37.0, 2026-10-31 (PasTree audit E1-24,
+  local/probe-park/specfu/E1-24 P.dpr / UP.pas with `-DCTRL` / `-DCTRL2`,
+  P2.dpr / UP2.pas with `-DOWN`).
 - ⚠️ *When that set is empty, a variable or field carries the helper of the unit declaring it* (below) -
   used unit or not: with unit UT declaring `TE` and `TEH = record helper for
   TE` (`IsA`), a program using only UM2 (which uses UT and declares `var GE:

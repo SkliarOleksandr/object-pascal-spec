@@ -199,13 +199,19 @@ P(42);
     list" as a **second, independent call** on the intermediate result — not
     reinterpret it as one call with the wrong arity.
   - ⚠️ By contrast, a *plain variable* of a parameterless `reference to
-    procedure` type (not a function call) **does** invoke correctly when
-    referenced bare in statement position — `P;` calls the closure exactly
-    like `P();` in dcc32 37.0. Older guidance describing a bare parameterless
-    `reference to` *variable* as requiring explicit `()` to avoid being
-    mistaken for "getting its address" was not reproduced here; the
-    ambiguity is real only for the bare-call-of-a-function-with-a-procedural-
-    result-type case documented above.
+    procedure` type (not a function call) **does** invoke when referenced
+    bare in statement position — `P;` calls the closure exactly like `P();`
+    in dcc32 37.0 - but only a variable declared in a `var` SECTION (a
+    routine local or a global) or a parameter. Bare, an INLINE variable
+    (3.1.3) of that type is `E2014 Statement expected, but expression of
+    type 'TProc' found` however it is declared - `var M: TProc := L; M;`,
+    `var N: TProc; N := L; N;`, the inferred `var Q := L; Q;` - and so is a
+    FIELD (`O.F;` with `F: TProc`); both need `()` (`M2();`, `O.F();`
+    compile). dcc64 37.0, 2026-10-31 (PasTree audit E1-11,
+    local/probe-park/specfu/E1-11 PC.dpr prints `L L L L L`; `-DINL` and
+    `-DFLD` for the E2014 lines). The ambiguity of a bare call is otherwise
+    real only for the bare-call-of-a-function-with-a-procedural-result-type
+    case documented above.
 
 ---
 

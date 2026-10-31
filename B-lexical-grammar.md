@@ -534,10 +534,11 @@ RealLiteral = Digit { "_" | Digit }
 **Grammar**
 
 ```ebnf
-StringLiteral = StringElement { StringElement } ;      (* adjacency = concatenation *)
-StringElement = QuotedString | ControlChar | MultilineString ;
+StringLiteral = StringElement { StringElement }        (* adjacency = concatenation *)
+              | MultilineString ;                      (* stands alone, B.6.3 *)
+StringElement = QuotedString | ControlChar ;
 QuotedString  = "'" { ?any char except "'"? | "''" } "'" ;
-ControlChar   = "#" IntLiteral | CaretChar ;           (* e.g. #13  #$0A  ^M *)
+ControlChar   = "#" ( DecLiteral | HexLiteral ) | CaretChar ;  (* e.g. #13  #$0A  ^M *)
 ```
 
 **Example**
@@ -553,8 +554,15 @@ C := 'A';                   // a 1-char string literal; Char if context demands
 - *Escaping:* the only in-string escape is `''` → a single `'`. There are no
   backslash escapes.
 - *Concatenation by adjacency:* consecutive string elements (`'..'`, `#n`,
-  multiline) with no operator between them form **one** literal — the lexer/parser
-  must fold them.
+  `^X`) that TOUCH form **one** literal — the lexer/parser must fold them.
+  Nothing may stand between them, not even whitespace, a line break or a
+  comment: `'a' #10`, `'a' 'b'`, `^M 'a'`, `'a'{x}'b'`, `#10 'a' {x} #13`
+  and `'a'` newline `#10` are `E2066 Missing operator or semicolon`, while
+  `'a'^M`, `#10^M` and `^M#10` are 2 characters and `'a'#10'b'` is 3. A
+  caret separated from a preceding element is a dereference (B.6.2). A
+  multiline literal (B.6.3) is not an element and joins nothing. dcc64
+  37.0, 2026-10-31 (PasTree audit E1-19, local/probe-park/specfu/E1-19
+  Q1-Q14).
 - ⚠️ *Char vs. string:* a single-character literal `'A'` has an ambiguous type
   resolved by context — `Char` where a `Char` is expected, otherwise a 1-length
   `string`. Carry this as a "char-or-string literal" until typing. Where the
@@ -562,8 +570,11 @@ C := 'A';                   // a 1-char string literal; Char if context demands
   3.1.3/3.2.1) it is `Char` exactly when the folded literal is one UTF-16
   unit — `'A'`, `''''`, `#65`, `#$41`, `^M` — and `string` otherwise: `''`,
   `'ab'`, `'a'#0`, and `#$1F600`, which is a surrogate pair (dcc 37.0).
-- `#n` gives the character with ordinal `n` (decimal or `$hex`). `^X` caret
-  notation (e.g. `^M` = `#13`) is a third string element, B.6.2.
+- `#n` gives the character with ordinal `n` (decimal or `$hex`, digit
+  separators allowed: `#1_0`). A binary value is not accepted: `#%1000001`
+  and `'a'#%1` are `E2026 Constant expression expected` (dcc64 37.0,
+  2026-10-31, PasTree audit E1-17, local/probe-park/specfu/E1-17 N3.dpr).
+  `^X` caret notation (e.g. `^M` = `#13`) is the other string element, B.6.2.
 - *AST:* `StrLit { segments[] }` or a folded constant value.
 
 ### B.6.2 Caret control characters
@@ -575,8 +586,8 @@ C := 'A';                   // a 1-char string literal; Char if context demands
 | **Status** | ✅ Current (Turbo Pascal legacy; still accepted by dcc 35.0-36.0) |
 
 `^X` is a one-character string element: the caret followed by **exactly one**
-source character, with nothing between them. It is the third `StringElement`
-of B.6.1 and folds with adjacent `'..'` and `#n` elements into one literal.
+source character, with nothing between them. It is a `StringElement` of
+B.6.1 and folds with touching `'..'` and `#n` elements into one literal.
 
 **Grammar**
 
@@ -639,7 +650,12 @@ end;
     `[`, `,`, `:=`, a `case` label, a set element) a caret is a CaretChar;
   - **after** an operand (`P^`, `P^^A`) it is the postfix dereference (ch.10) -
     `P^^A` is `(P^)^` then `A`, hence E2017 when `P^` is not a pointer, and
-    `X^M` with an integer `X` is the same error, not a concatenation;
+    `X^M` with an integer `X` is the same error, not a concatenation. A string
+    element counts as that operand once whitespace or a comment separates the
+    caret from it: `'a' ^M`, `#10 ^M`, `^M ^J` and `^M{x}^J` are `E2017
+    Pointer type required`, while the touching `'a'^M` is one literal (B.6.1;
+    dcc64 37.0, 2026-10-31, PasTree audit E1-19,
+    local/probe-park/specfu/E1-19 Q6-Q12);
   - in a **type** position (`PM = ^M`, ch.10) it is the pointer-type
     constructor even when `M` is a single letter that would otherwise be `^M`.
 
@@ -689,7 +705,18 @@ const SQL =
 
 - *Opening:* the opening `'''` must be **followed by a line break**; content
   starts on the next line.
-- *Closing:* the closing `'''` must be on a **line of its own**.
+- *Closing:* the closing `'''` must be on a **line of its own**. dcc finds a
+  run of the opening length anywhere in a content line, and one with text
+  before it is `E2658 There should be no non-whitespace characters before
+  the closing quotes of the text block` (content line `    ab'''`, then
+  `E2052 Unterminated string` for the real closing line).
+- ⚠️ *It joins nothing by adjacency* - it is a `StringLiteral` of its own,
+  not a B.6.1 element: `'''`...`'''#65` and `'x' '''`...`'''` are `E2066
+  Missing operator or semicolon` at the closing line, and a `'''` touching a
+  preceding element (`#65'''`, `'x''''`) opens no multiline literal at all
+  (`E2052 Unterminated string`). `'''`...`''' + #65` compiles (`3abA`).
+  dcc64 37.0, 2026-10-31 (PasTree audit E1-18,
+  local/probe-park/specfu/E1-18 M4-M9).
 - ⚠️ *Indentation base:* the indentation (leading whitespace) of the **closing**
   `'''` defines the "ignored indentation". From every content line, that many
   leading whitespace columns are removed; extra indentation beyond it is kept.
@@ -785,10 +812,20 @@ Selector       = "." MemberName [ GenericArgs ]         (* member access; args �
                | "[" ExprList "]"                       (* index / array prop *)
                | "(" [ ExprList ] ")"                   (* call *)
                | "^" ;                                  (* pointer dereference *)
-MemberName     = Ident | ?any reserved word? ;
-(* ⚠️ Member position is unambiguous, so dcc accepts RESERVED WORDS as
-   member names: FMX declares `TAnimationType = (&In, ...)` but call sites
-   write `TAnimationType.In` — no &-escape needed after '.'. The same holds
+MemberName     = Ident                                  (* "&"-escaped words included, B.3 *)
+               | ?any reserved word? ;                  (* only after a TYPE, below *)
+(* ⚠️ After a TYPE name dcc accepts RESERVED WORDS as member names: FMX
+   declares `TAnimationType = (&In, ...)` but call sites write
+   `TAnimationType.In` — no &-escape needed after '.'. Only after a type:
+   with SCOPEDENUMS ON, `TE.In`, `TE.Type` (scoped-enum values),
+   `TC.Array := 1` (a class var) and `TC.Type` (a static class function)
+   compile, and `TC.Begin` on an instance method gets past the parser to
+   `E2076 This form of method call only allowed for class methods or
+   constructor`; after a VALUE - a record or an instance - the word is
+   `E2029 Identifier expected but 'IN' found`: `R.In`, `R.Type`, `R.End`,
+   `C.Type`, `C.Do`, `C.Array`, `C.Begin`. The `&` escape works after a
+   value (`R.&In`, `C.&Do`, `C.&Type`). dcc64 37.0, 2026-10-31 (PasTree
+   audit E1-10, local/probe-park/specfu/E1-10 P1-P10). The same holds
    for a dotted name in a TYPE position (dcc64 37.0, probed 2026-10-13):
    `TS = TE.In..TE.Mid`, `array[TE.Begin..TE.Case] of Integer`, `V:
    TE.In..TE.Mid` and `TArray<TC.Type>` (a nested `&Type`) compile.
@@ -811,7 +848,11 @@ ExprList       = Expression { "," Expression } ;
 ## B.9 Expressions
 
 ```ebnf
-Expression   = SimpleExpr [ RelOp SimpleExpr ] ;
+Expression   = SimpleExpr { RelOp SimpleExpr } ;        (* left-associative chain *)
+(* Comparisons chain left to right, like every binary operator (B.7):
+   `1 = 1 = True`, `I > 1 = True` and `2 > 1 in [True]` print TRUE, and
+   `1 < 2 < True` prints FALSE - it is `(1 < 2) < True`. dcc64 37.0,
+   2026-10-31 (PasTree audit E1-03, local/probe-park/specfu/E1-03 Y1.dpr). *)
 RelOp        = "=" | "<>" | "<" | ">" | "<=" | ">=" | "in" | "is"
              | "is" "not" | "not" "in" ;                (* compound forms 13.0 *)
 SimpleExpr   = Term { AddOp Term } ;

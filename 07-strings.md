@@ -8,7 +8,7 @@ indexing rules (a version-sensitive trap), and string literals (defined in
 
 ```ebnf
 StringType = "string" [ "[" ConstExpr "]" ]      (* generic string / ShortString *)
-           | "AnsiString" [ "(" ConstExpr ")" ]  (* with explicit codepage *)
+           | "AnsiString"                        (* a code page only via `type AnsiString(N)`, 7.1.2 *)
            | "WideString" | "UnicodeString" | "RawByteString" | "UTF8String"
            | "ShortString" ;
 PCharType  = "PChar" | "PAnsiChar" | "PWideChar" ;
@@ -57,14 +57,23 @@ A managed 1-byte-per-element string carrying a code page.
 **Grammar**
 
 ```ebnf
-AnsiStringType = "AnsiString" [ "(" ConstExpr ")" ] ;   (* code page, e.g. AnsiString(1251) *)
+AnsiStringType     = "AnsiString" ;
+CodePageStringType = "type" "AnsiString" "(" ConstExpr ")" ;  (* only as a TypeDecl's right side *)
 ```
 
 **Semantics & parsing notes**
 
-- ⚠️ The `AnsiString(N)` form takes a **code-page constant in parentheses** as part
-  of the *type* — do not mis-parse it as a type-cast call. Context (declaration
-  position) disambiguates.
+- ⚠️ The code-page clause exists only in a NEW distinct type: `type T = type
+  AnsiString(1251);` (and `type AnsiString(CP_UTF8 + 0)`, any constant
+  expression), which is how System declares `UTF8String` and
+  `RawByteString`. Everywhere else `AnsiString(` is a cast, and as a type it
+  is an error: `type T = AnsiString(1251);`, a field `F: AnsiString(1251)`
+  and `var V: AnsiString(1251);` are `E2029 ';' expected but '(' found`, a
+  parameter `const S: AnsiString(1251)` `E2029 ';', ')' or '=' expected but
+  '(' found`, and `var V: type AnsiString(1251);` `E2029 Type expected but
+  'TYPE' found`. A variable takes the code page through the named type
+  (`StringCodePage(V)` is 1251). dcc64 37.0, 2026-10-31 (PasTree audit
+  E1-07, local/probe-park/specfu/E1-07 Q1-Q8).
 - `RawByteString` (7.1.5) is the code-page-agnostic variant.
 
 ### 7.1.3 `ShortString` / `string[N]`

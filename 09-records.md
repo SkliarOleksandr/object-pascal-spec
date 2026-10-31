@@ -138,7 +138,21 @@ type
      alignment it contains;
   3. the record's `SizeOf` is the running offset rounded **up** to that own
      alignment — so trailing padding is real
-     (`record A: Integer; B: Byte; end` is 8, not 5).
+     (`record A: Integer; B: Byte; end` is 8, not 5);
+  4. an `end align N` clause REPLACES the own alignment of step 2 with N,
+     raising or lowering it, before step 3 rounds - unless the record is
+     `packed`, which wins (its own alignment stays 1). N is one of 1, 2, 4,
+     8 or 16: `end align 32` is `E2573 Illegal value for the ALIGN directive
+     (valid for one of 1, 2, 4, 8 or 16)`. Under `{$A8}` on Win64: `record
+     A: Byte; end align 16` is 16, three Bytes `end align 2` are 4, `record
+     A: Int64; end align 4` and `end align 1` stay 8 (no field is cut), and
+     `packed record A: Byte; end align 8` is 1. Nested, such a record is
+     placed by step 1 like any field, at `Min(N, the outer cap)`: the align-4
+     Int64 record after a Byte sits at offset 4 (the outer record is 12),
+     the align-16 Byte record after a Byte at offset 8 (the outer record is
+     24). dcc64 37.0, 2026-10-31 (PasTree audit E1-47,
+     local/probe-park/specfu/E1-47 Al.dpr prints `16 8 24 1 4 12 4 8 8`,
+     A32.dpr).
 
   A scalar's alignment is `Min(its size, 8)`. `Extended` is the one type where
   size and alignment differ: 10 bytes on Win32, aligned to 8, so
@@ -165,7 +179,11 @@ type
   nothing - `record A: Byte; {$A1} B: Integer; end` is 8, and `record
   {$A1} procedure M; {$A8} var A: Byte; B: Integer; end` is 5: such a
   directive takes effect for the declarations after the record (dcc64 37.0,
-  2026-10-14, PasTree local/probe-b60 P1).
+  2026-10-14, PasTree local/probe-b60 P1). Re-probed: `record procedure M;
+  {$A1} var A: Byte; B: Integer; end` is 8, and `{$A1} record {$A8} A:
+  Byte; B: Integer; end` is 8 - a directive between `record` and the first
+  member decides, in either direction (dcc64 37.0, 2026-10-31, PasTree audit
+  E1-47, local/probe-park/specfu/E1-47 A5.dpr prints `5 8 8 8`).
 
   Because no builtin's natural alignment exceeds 8, `{$ALIGN 16}` produces
   layouts identical to `{$ALIGN 8}` — it raises a ceiling nothing reaches.

@@ -554,7 +554,7 @@ C := 'A';                   // a 1-char string literal; Char if context demands
 - *Escaping:* the only in-string escape is `''` → a single `'`. There are no
   backslash escapes.
 - *Concatenation by adjacency:* consecutive string elements (`'..'`, `#n`,
-  `^X`) that TOUCH form **one** literal — the lexer/parser must fold them.
+  `^X`) that TOUCH form **one** literal - the lexer/parser must fold them.
   Nothing may stand between them, not even whitespace, a line break or a
   comment: `'a' #10`, `'a' 'b'`, `^M 'a'`, `'a'{x}'b'`, `#10 'a' {x} #13`
   and `'a'` newline `#10` are `E2066 Missing operator or semicolon`, while
@@ -816,7 +816,7 @@ MemberName     = Ident                                  (* "&"-escaped words inc
                | ?any reserved word? ;                  (* only after a TYPE, below *)
 (* ⚠️ After a TYPE name dcc accepts RESERVED WORDS as member names: FMX
    declares `TAnimationType = (&In, ...)` but call sites write
-   `TAnimationType.In` — no &-escape needed after '.'. Only after a type:
+   `TAnimationType.In` - no &-escape needed after '.'. Only after a type:
    with SCOPEDENUMS ON, `TE.In`, `TE.Type` (scoped-enum values),
    `TC.Array := 1` (a class var) and `TC.Type` (a static class function)
    compile, and `TC.Begin` on an instance method gets past the parser to

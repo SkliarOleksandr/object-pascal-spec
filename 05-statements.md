@@ -495,7 +495,7 @@ for var Item in MyList do Process(Item);
 **Semantics & parsing notes**
 
 - *Iterable resolution (the important bit):* the `in`-expression is valid if it is
-  a string, static/dynamic array, or set — **or** a class, record or
+  a string, static/dynamic array, or set - **or** a class, record or
   interface satisfying the **enumerator pattern**: it exposes `function
   GetEnumerator` returning a type with `function MoveNext: Boolean` and a
   `property Current`. The loop element type = the type of `Current`. The

@@ -718,8 +718,8 @@ var X := Max(3, 7);          // T inferred as Integer, X inferred as Integer
   typed as the OPEN parameter, and loses every member after the dot. Worth
   saying plainly because the argument-driven half of this rule is the one
   everybody implements first.
-- ⚠️ *A call written `Name<...>` cannot mean a NON-generic routine of that name*
-  — §16.1.2's arity rule, on the method side - but the arity filter works
+- ⚠️ *A call written `Name<...>` cannot mean a NON-generic routine of that
+  name:* §16.1.2's arity rule, on the method side - but the arity filter works
   only WITHIN one overload set. When a derived class declares a plain
   `GetValue(const AName: string): TBaseJ; overload;` in front of an
   ancestor's `GetValue<T>(const APath: string): T`, the inherited generic

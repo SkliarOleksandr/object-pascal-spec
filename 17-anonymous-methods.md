@@ -200,7 +200,7 @@ P(42);
     reinterpret it as one call with the wrong arity.
   - ⚠️ By contrast, a *plain variable* of a parameterless `reference to
     procedure` type (not a function call) **does** invoke when referenced
-    bare in statement position — `P;` calls the closure exactly like `P();`
+    bare in statement position - `P;` calls the closure exactly like `P();`
     in dcc32 37.0 - but only a variable declared in a `var` SECTION (a
     routine local or a global) or a parameter. Bare, an INLINE variable
     (3.1.3) of that type is `E2014 Statement expected, but expression of

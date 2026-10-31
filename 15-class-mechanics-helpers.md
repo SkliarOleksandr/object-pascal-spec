@@ -696,7 +696,7 @@ end.
   and a cross-unit use of its members is a genuine `E2003`.
 - Consequently the "active helper" set at a source position is: every helper
   for that type declared in this unit BEFORE that position, plus every
-  interface-section helper of every used unit — resolved down to ONE by
+  interface-section helper of every used unit - resolved down to ONE by
   §15.3.3's last-in-scope rule. "The whole enclosing scope" above is the
   scope from the helper's declaration on, not backwards: with `TH1 = class
   helper for T` (XA) in the interface, `Test`'s body, and then `TH2 = class

@@ -149,6 +149,13 @@ end;
 - These are compiler intrinsics (ch.04 §4.11) taking the pointer **by reference**
   (the argument must be an lvalue). `New`/`Dispose` also init/finalize managed
   fields of the pointed-to type. Detailed memory model → [ch.20](20-memory-management.md).
+- For a pointer to a legacy `object` type, `New` and `Dispose` take a second
+  argument - a constructor or destructor of the POINTEE, looked up in its
+  members and not in the caller's scope - and `New` has a function form
+  whose first argument is a pointer type: `New(P, Init)`, `New(P,
+  Init(5))`, `B := New(PObj, Init)`, `Dispose(P, Done)`. The rules are in
+  [ch.11 §11.5](11-classes.md#115-legacy-object-types) (PasTree audit
+  E1-26).
 
 ### 10.1.4 What each pointer kind supports (comparison, `Inc`/`Dec`, arithmetic)
 

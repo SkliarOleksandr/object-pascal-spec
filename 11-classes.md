@@ -15,7 +15,8 @@ method bodies → [ch.06](06-routines.md).
 ClassType   = "class" [ Abstract ] [ "(" Ancestor [ "," InterfaceList ] ")" ]
                 { ClassSection }
               "end"
-            | "class" [ "(" Ancestor ")" ] ;          (* forward / no body *)
+            | "class" "(" Ancestor [ "," InterfaceList ] ")"   (* complete, no members of its own *)
+            | "class" ;                              (* forward, 11.1.1 *)
 ClassSection = Visibility { ClassMember } ;
 Visibility   = [ "strict" ] ( "private" | "protected" ) | "public" | "published"
              | "automated" ;   (* "strict public"/"strict published": E2375, 11.2.1 *)
@@ -80,7 +81,10 @@ type
 - A class declared `class;` with no member block is a **forward declaration**
   (completed later in the same type section) — used for mutually referencing
   classes. `class(TParent);` is NOT one: it is a complete class with no members
-  of its own (`TE = class(TObject);` alone compiles and `TE.Create` works), and
+  of its own (`TE = class(TObject);` alone compiles and `TE.Create` works,
+  and `TE = class(TBase, IFoo);` with an interface list is complete too -
+  dcc64 37.0, 2026-10-31, PasTree audit E1-05,
+  local/probe-park/specfu/E1-05 F1-F4), and
   a later `TE = class(TObject) X: Integer; end` is `E2004 Identifier
   redeclared` - as is a second complete declaration of any type in one scope
   (`TX = Integer; TX = string;`) and a forward completed twice. dcc32 / dcc64
@@ -97,10 +101,14 @@ type
   within one `type` block, §3.3.2 "position counts"; dcc64 37.0, 2026-10-15,
   PasTree local/probe-cc P10a-P10c) and unlike a pointer target (10.1.1, its
   own explicit exception), `class(X)` needs `X` already declared above it; the sole
-  way to name one below is the forward-class form just above (`TFoo = class;`
-  earlier, completed later — that forward declaration itself IS the earlier
-  declaration a later heritage clause sees, so `class(TFoo)` written between
-  the forward and its completion is fine). This matters most for a
+  way to name one below is to COMPLETE it first: a forward declaration
+  (`TFoo = class;`) makes the name visible below it for a field, a
+  parameter or a pointer, but a heritage clause needs the complete type -
+  `TBar = class(TFoo) end;` or `TBar = class(TFoo);` written between the
+  forward and its completion is `E2086 Type 'TFoo' is not yet completely
+  defined`, while `TBar = class F: TFoo; procedure P(A: TFoo); end;` there
+  compiles. dcc64 37.0, 2026-10-31 (PasTree audit E1-34,
+  local/probe-park/specfu/E1-34 F5-F7). This matters most for a
   compatibility-shim idiom real code uses on purpose:
 
   ```pascal
@@ -348,7 +356,15 @@ type
   in identifier-list **continuation** the same words are ordinary names:
   `on, protected, sealed, abstract: string;` compiles. Every NON-visibility
   directive word is a valid field name even at list start
-  (`default, index: Integer;` compiles). Disambiguation is purely positional.
+  (`default, index: Integer;` compiles) - except `strict`, which at member
+  start is always the visibility prefix and must be followed by `private`
+  or `protected`: `strict: Integer;` is `E2375 PRIVATE or PROTECTED
+  expected` at the start of a class body, after `public`, and in a record.
+  In a list continuation it is an ordinary name (`a1, strict: Integer;`
+  compiles), and a line break or a comment inside the marker changes
+  nothing (`strict` newline `private`, `strict {c} protected`). dcc64 37.0,
+  2026-10-31 (PasTree audit E1-06, local/probe-park/specfu/E1-06 S1-S7).
+  Disambiguation is purely positional.
 - *AST:* tag each member with `{ visibility, strict }`.
 
 ---
@@ -651,5 +667,15 @@ ObjectType = "object" [ "(" Ancestor ")" ] { ClassSection } "end" ;
   and never in the caller's scope. A name that is no constructor there is
   `E2601 Procedure NEW needs constructor identifier of 'TDerived', but
   undeclared identifier 'Nope1' found`. dcc32 / dcc64 37.0, 2026-10-13
-  (PasTree audit B45, E2-30; local/probe-b45).
+  (PasTree audit B45, E2-30; local/probe-b45). A global routine of the same
+  name does not take part: with a global `procedure Init` declared, `New(B,
+  Init)` still runs `TBaseObj.Init`. The function form takes a pointer TYPE
+  as its first argument, not an lvalue, and its value has that pointer
+  type (`SizeOf(New(PBaseObj, Init)^)` is the object's size); a descendant's
+  pointer type works there too (`B := New(PDerived, InitA(9))`). A second
+  argument to Dispose that is not a destructor is `E2080 Procedure DISPOSE
+  needs destructor`, and the two-argument form on a pointer to a record is
+  `E2601 Procedure NEW needs constructor identifier of 'TRec', but
+  undeclared identifier 'Init' found`. dcc64 37.0, 2026-10-31 (PasTree
+  audit E1-26, E3-44, local/probe-park/specfu/E1-26 PO, PO2, PO3).
 - *AST:* `ObjectType { … }` (value-type OOP node).

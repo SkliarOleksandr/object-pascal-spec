@@ -315,4 +315,14 @@ Low-level allocation for pointers — recap of [ch.10 §10.1.3](10-pointers-file
   managed types leaks/corrupts. The analyzer should pair allocs with frees and flag
   raw allocation of managed-field types.
 - These are by-reference intrinsics (ch.04 §4.11); first argument must be an lvalue
-  pointer.
+  pointer - except in `New`'s function form, `P := New(PObj, Init)`, whose
+  first argument is a pointer TYPE.
+- ⚠️ *A second argument names a member, not a variable in scope:* for a
+  pointer to a legacy `object`, `New(P, Init(1))`, `P := New(PObj,
+  Init(2))` and `Dispose(P, Done)` call a constructor or destructor of the
+  pointee type, and `Init` / `Done` are looked up in that type's members
+  (its ancestry included). A resolver that binds them as ordinary
+  expressions in the caller's scope reports a false `E2003`. The full rule,
+  with its errors (E2601, E2080), is in [ch.11
+  §11.5](11-classes.md#115-legacy-object-types). dcc64 37.0, 2026-10-31
+  (PasTree audit E3-44, local/probe-park/specfu/E1-26 PO.dpr).

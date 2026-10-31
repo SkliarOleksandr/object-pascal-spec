@@ -203,10 +203,17 @@ the 2009 Unicode migration.
 **Grammar**
 
 ```ebnf
-CharType = "Char" | "AnsiChar" | "WideChar" | "UCS2Char" | "UCS4Char" ;
+CharType = "Char" | "AnsiChar" | "WideChar" ;
 ```
 
 **Semantics & parsing notes**
+
+- `UCS2Char` and `UCS4Char` are System declarations, not compiler-provided
+  character types: `UCS2Char = WideChar;` is an ordinary alias, and
+  `UCS4Char = Cardinal;` is an INTEGER type (7.1.7). With `D: UCS2Char` and
+  `C: UCS4Char`, `D := 'a'` compiles and `C := 'a'` is `E2010 Incompatible
+  types: 'Cardinal' and 'Char'`. dcc64 37.0, 2026-10-31 (PasTree audit
+  E1-45, local/probe-park/specfu/E1-45 U4.dpr).
 
 - ⚠️ *Version-sensitive aliasing:* before Delphi 2009 `Char = AnsiChar` (1 byte);
   from 2009 `Char = WideChar` (2 bytes). A spec-accurate parser targeting multiple
@@ -342,12 +349,21 @@ type
   | 2 named elements, explicit value up to 300 (`spA = 0, spB = 300`) | `0..300` | **2 bytes** |
   | 1 element with an explicit `65535` | `0..65535` | **2 bytes** (boundary) |
   | 1 element with an explicit `65536` or `70000` | `0..65536` | **4 bytes** |
+  | `(z1 = -1, z2)`, `(u1 = -1, u2 = 127)`, `(s1 = -128, s2 = 127)` | signed, fits ShortInt | **1 byte** |
+  | `(w1 = -129, w2)`, `(v1 = -1, v2 = 200)`, `(r1 = -1, r2 = 32767)` | signed, fits SmallInt | **2 bytes** |
+  | `(t1 = -32769, t2)`, `(q1 = -1, q2 = 32768)` | signed, beyond SmallInt | **4 bytes** |
   | any of the above under `{$Z4}`/`{$MINENUMSIZE 4}` | — | **4 bytes** |
 
-  So the rule keys off the **highest ordinal in the type**, however it is
-  reached — by element count or by an explicit value: **1 byte** while that
-  maximum is `≤255`, **2 bytes** up to `65535`, **4 bytes** above it. The
-  lower bound does not matter (`(c1 = 5, c2 = 9)` is one byte). On top of
+  So the size is the smallest of 1, 2 or 4 bytes whose range holds the
+  type's `Low..High`, however those are reached - by element count or by
+  an explicit value. When `Low >= 0` that is the UNSIGNED range: **1 byte**
+  while the maximum is `≤255`, **2 bytes** up to `65535`, **4 bytes** above
+  it, and the lower bound itself does not matter (`(c1 = 5, c2 = 9)` and
+  `(o1 = 1, o2 = 256)` are 1 and 2 bytes). When `Low < 0` it is the SIGNED
+  range: ShortInt, SmallInt, then 4 bytes - `(v1 = -1, v2 = 200)` is 2 bytes
+  although 200 would fit a byte unsigned. dcc64 37.0, 2026-10-31 (PasTree
+  audit E1-50, local/probe-park/specfu/E1-50 BB.dpr prints `1222414 12412`).
+  On top of
   that, `{$Z2}`/`{$Z4}`/`{$MINENUMSIZE n}` (§1.3.1) raises the result to a
   floor — a directive-state fact the type-layout pass must consult per
   declaration site, the same positional tracking as `{$SCOPEDENUMS}` above.
@@ -451,12 +467,23 @@ RealType = "Real" | "Single" | "Double" | "Extended" | "Comp" | "Currency" | "Re
 
 - ⚠️ *`Extended` is platform-dependent:* 10 bytes on Win32, **16 bytes aligned to
   16 on OSX64** (macOS Intel; Linux64 the same by Embarcadero's table, not
-  probed), and **8 bytes (= `Double`) on Win64 and every ARM target** (OSXARM64,
+  probed), and **8 bytes (`Double`'s size, not `Double`) on Win64 and every ARM target** (OSXARM64,
   iOS, Android) - dcc32 / dcc64 / dccosx64 / dccosxarm64 / dcciosarm64 /
   dccaarm / dccaarm64 37.0, probed 2026-10-12 (`SizeOf(Extended)` and
   `record A: Byte; E: Extended end`: 10 / 24, 8 / 16, 16 / 32). System.pas
   and System.Math key on it (EXTENDEDIS16BYTES). Code relying on 80-bit precision is not portable —
   a semantic layer must resolve `Extended` per target.
+- ⚠️ *`Real` has `Double`'s representation but is a type of its own, and so
+  is `Extended` on Win64:* a `var D: Double` parameter refuses a Real
+  argument (`E2033 Types of actual and formal var parameters must be
+  identical: Double and Real`), a `var E: Extended` one refuses a Double
+  (`E2033 ... Extended and Double`), `R.ToString` finds no Double helper
+  (`E2018 Record, object or class type required`), and `O(X: Real)` and
+  `O(X: Double)` are two overloads, not a duplicate. This is unlike a true
+  alias: `LongInt` to a `var Integer` and `WideChar` to a `var Char`
+  compile. A type layer must not put Real into Double's identity group.
+  dcc64 37.0, 2026-10-31 (PasTree audit E1-44,
+  local/probe-park/specfu/E1-44 RL.dpr, `-DBAD` for the errors, RO.dpr).
 - `Currency` is a 64-bit integer scaled by 10 000 (4 decimal places) — exact
   decimal arithmetic for money; not a binary float.
 - `Comp` is a legacy 64-bit integer-valued float; avoid in new code.
@@ -594,19 +621,33 @@ type
   **RTTI** (distinct types get their own type info), and implicit conversions.
 - The leading `type` here is the reserved word `type` used as a *modifier*, not a
   section header — distinguish by position (inside a `TypeDecl` RHS).
-- ⚠️ *`X = X` is the RE-EXPORT idiom, and its right side means the OUTER `X`.*
-  A declaration cannot alias itself, so the name on the right means whatever it
-  meant before this declaration — which for a NESTED type is the enclosing
-  scope's. dcc32 37.0-probed: with a unit-level `TMode` enum, a class declaring
-  `public type TMode = TMode;` compiles, and `THost.TMode.AllLocal` is that
-  enum's value. FMX re-exports two types through classes this way
-  (`TOverlayMode = TOverlayMode deprecated ...` in FMX.MultiView.Types,
-  `TItemAppearanceObjectsClass = TItemAppearanceObjectsClass` in
-  FMX.ListView.Appearances).
+- ⚠️ *`X = X` is the RE-EXPORT idiom of a NESTED type over a same-unit `X`.*
+  Inside a class or record, the right side of `type X = X;` means the
+  enclosing unit's `X` declared earlier in the SAME unit. dcc32 37.0-probed:
+  with a unit-level `TMode` enum, a class declaring `public type TMode =
+  TMode;` compiles, and `THost.TMode.AllLocal` is that enum's value. FMX
+  re-exports two types through classes this way, each over a type of its
+  own unit (`TOverlayMode = TOverlayMode deprecated ...` in
+  FMX.MultiView.Types, `TItemAppearanceObjectsClass =
+  TItemAppearanceObjectsClass` in FMX.ListView.Appearances).
+
+  Everywhere else the right side finds the symbol being declared, and the
+  declaration is `E2086 Type 'X' is not yet completely defined`:
+  - at unit level, even when a used unit declares `X` - `uses ra; type TRec
+    = TRec; TMode = TMode;` is E2086 for the record and for the enum alike,
+    in the interface and in the implementation section;
+  - nested in a class, when the outer `X` comes from a USED unit - `public
+    type TMode = TMode;` over `ra`'s TMode is E2086, and dcc64 then stops
+    with `F2084 Internal Error: AV00A11FB3(009F0000)-R00000010-0`.
+  dcc64 37.0, 2026-10-31 (PasTree audit E1-35,
+  local/probe-park/specfu/E1-35: R.dpr / rb.pas and R3.dpr / rd.pas for the
+  unit level, R2, R4, R5 for the nested used-unit case, R6.dpr / rf.pas
+  for the same-unit case that compiles).
 
   A resolver that binds the right side AFTER declaring the left gets a type
   whose definition is itself: no error, and every member reached through it
-  silently missing. The lookup has to exclude the symbol being declared.
+  silently missing. In the re-export case the lookup has to exclude the
+  symbol being declared.
 - *AST:* `TypeAlias { name, baseType, distinct: bool }`.
 
 ### 2.5.2 Hint directives on type declarations

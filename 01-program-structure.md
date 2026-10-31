@@ -759,7 +759,14 @@ CondCompile = "{$IFDEF" Ident "}"  | "{$IFNDEF" Ident "}"
   ```
 
   the same directive in the *interface* over a constant in the *implementation*,
-  and a constant in an enclosing routine's scope. Only an **untyped** constant
+  and a routine's local constant read OUTSIDE that routine. The lookup uses
+  the scope in effect at the directive, as `Declared()` does: a routine's
+  `const LC = 5` IS resolved in the routine's own body and in a routine
+  nested in it (`{$IF LC < 3}` takes the `{$ELSE}` branch in both, `{$IF LC
+  = 5}` the true branch), and only an unrelated routine after it reads LC as
+  unresolved (the abort to True, like the control `{$IF NOPE < 3}`). dcc64
+  37.0, 2026-10-31 (PasTree audit E1-14, local/probe-park/specfu/E1-14
+  P6.dpr prints Q_ELSE P_ELSE P_EQ5 R_TRUE CTRL_TRUE). Only an **untyped** constant
   resolves: a `var`, a **typed** constant (`const C: Integer = 7`), a function
   and a type name all fail to resolve too. Qualified constants DO resolve
   normally (`{$IF UConst.QC > 1}`, `{$IF System.MaxInt > 1}`) — but a qualified

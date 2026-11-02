@@ -419,6 +419,16 @@ procedure Log(const Fmt: string; const Args: array of const);
     open array arguments` (`P(5)`, `PS('abc')`, also the range `P(1..3)`), any
     other expression `E2010 'array of Integer' and 'Integer'` (`P(I + 1)`);
   - NOT a `string` for `array of Char` (`E2010 'array of Char' and 'string'`).
+
+  "Exactly" holds for classes too, and for the single variable: a
+  `TArray<TComponent>` or an `array[0..1] of TComponent` for `array of
+  TObject` is `E2010 'array of TObject' and 'TArray<TComponent>'`, and so is
+  a TComponent VARIABLE (`'array of TObject' and 'TComponent'`), a Byte
+  variable for `array of Integer` (`'array of Integer' and 'Byte'`). A
+  variable of an array type `T` is the single element of `array of T`:
+  `Z(B)` for a `B: TBytes` and `Z(const A: array of TBytes)` gives
+  `Length(A) = 1`. dcc64 37.0, 2026-11-02 (PasTree
+  local/compl-c1c2-2026-11/fc, cases B1-B5, G1).
 - ⚠️ *Inside the callee an open array is no dynamic array:* `SetLength(A, 2)`
   is `E2008 Incompatible types`, `D := A` into a `TArray<Integer>` is `E2010
   'TArray<Integer>' and 'array of Integer'`, passing it to a dynamic-array
@@ -436,6 +446,15 @@ procedure Log(const Fmt: string; const Args: array of const);
   of string` overload, not the `array of const` one declared above it (nor
   the `IEnumerator<string>` / `IEnumerable<string>` ones). dcc64 37.0,
   2026-11-02 (PasTree local/compl-c1c2-2026-11/probe8, probe9).
+  - Precisely, `array of const` takes what an `array of TVarRec` takes,
+    and an open-array constructor of anything besides: a `TArray<TVarRec>`
+    (`Length(A)` its length), an `array[0..1] of TVarRec`, a single TVarRec
+    VARIABLE (one element) and an `array of const` parameter passed on
+    compile; a `TArray<Integer>`, a `TArray<Variant>`, an `array[0..1] of
+    string`, a string variable and an Integer variable are each `E2010
+    'array of TVarRec' and '...'`. A resolver may score `array of const` as
+    an open array of System.TVarRec for every argument but a `[...]`. dcc64
+    37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fc, cases A1-A10).
 
 ### 6.2.7 Untyped parameters
 
@@ -748,6 +767,35 @@ function Area(C: TCircle): Double; overload;
   untyped `Wr(const A; ...)` calls the untyped one, while `Wr(B, 1)` for a
   TBytes calls the TBytes one. dcc64 37.0, 2026-10-12 (local/probe-b33 O1,
   W2).
+- ⚠️ *Open-array parameters, observed* (dcc64 37.0, each pair in both
+  declaration orders with the same result, except the `Int64` / `Integer`
+  pair, tried with `Int64` first). What each accepts is 6.2.6 - of the
+  typed arguments below, `array of const` accepts the TVarRec array alone -
+  and among those that accept, a parameter of the argument's own type beats
+  the open array:
+
+  | overloads | argument | chosen |
+  |---|---|---|
+  | `array of const` / `array of string` | a `TArray<string>`, a `TStringDynArray`, an `array[0..1] of string`, a string variable | `array of string` |
+  | `array of const` / `array of string` | a `TArray<TVarRec>` | `array of const` |
+  | `array of const` / `array of string` | `['a', 'b']`, `['ab']`, `[S]` | `array of string` |
+  | `array of const` / `array of string` | `[1, 'b']` | `array of const` |
+  | `array of const` / `array of string` | `[]` | `E2251` |
+  | `array of string` / `TArray<string>` | a `TArray<string>`, a `TStringDynArray` | `TArray<string>` |
+  | `array of string` / `TArray<string>` | `['a', 'b']` | `array of string` |
+  | `array of string` / `string` | a string variable | `string` |
+  | `array of Int64` / `array of Integer` | a `TArray<Integer>` | `array of Integer` |
+  | `array of Int64` / `array of Integer` | a `TArray<Byte>` | `E2250` |
+  | `array of const` / `array of Variant` | a `TArray<Variant>` | `array of Variant` |
+  | `array of const` / `array of Variant` | a `TArray<string>` | `E2250` |
+  | `array of const` / `array of Variant` | `[1, 'b']` | `array of const` |
+
+  The open-array-constructor rows are not derived into a rule here - a
+  resolver should reproduce them, not guess: `['a', 'b']` takes `array of
+  string` over both `array of const` and `TArray<string>`, while `[1, 'b']`
+  takes `array of const` over `array of Variant`, whose elements it fits as
+  well. dcc64 37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fc,
+  fc-results.txt: cases C1-C9, D1-D3, E1, F1-F2, H1-H3).
 - ⚠️ *Return type is never part of overload resolution.* Two routines with
   identical parameter lists that differ only in result type are not distinct
   overloads — the second declaration collides with the first rather than

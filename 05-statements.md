@@ -1138,5 +1138,10 @@ end;
   open parameters: `FThreads: TThreadList<TWorker>` makes `LockList`'s declared
   `TList<T>` mean `TList<TWorker>`, so `with FThreads.LockList do` must
   substitute before looking anything up inside it. Skipping this finds the right
-  member NAMES with wrong element types.
+  member NAMES with wrong element types. A bare FIELD or PROPERTY of the target
+  is closed the same way as its methods: over `D: TGen<TRec>` with `First: T;
+  Data: TArray<T>`, `with D do X := First.Fld`, `with D do Y := Data[0].Fld`
+  and `with D do for var E in Data do` read TRec's members, the generic
+  declared in the same unit or in another (dcc64 37.0, 2026-11-02, PasTree
+  local/alias-audit-2026-11).
 - *AST:* `WithStmt { targets: Designator[], body }`.

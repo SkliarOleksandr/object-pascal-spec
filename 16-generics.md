@@ -449,7 +449,13 @@ P := TPair<string, Integer>.Create('a', 1);
     one hop leaves `T` open at the second;
   - it must be taken at the hop the member was FOUND at, not at the type the walk
     STARTED from — the starting type is frequently the one with no arguments at
-    all;
+    all. An ALIAS of an instantiation is such a starting type too, and the
+    member's type need not BE a parameter to be left open by the wrong frame:
+    with `TApiList<T: TObj> = class Data: TArray<T>; end` and `TCusts =
+    TApiList<TCust>`, `for var L in A.Data` over `A: TCusts` walks `TCust`
+    and `L.Created` is TCust's field, exactly as over `A: TApiList<TCust>`
+    (dcc64 37.0, 2026-11-02; PasTree typed `A.Data` as the open `TArray<T>`
+    and `L` as T's constraint, a false E2003);
   - it must travel with a NESTED type of the generic. Such a type has no
     arguments of its own — `TList<T>` declares `arrayofT = array of T` and
     returns it from `property List` — so there is nothing to substitute IN it
@@ -465,7 +471,17 @@ P := TPair<string, Integer>.Create('a', 1);
     TPair<string, TArray<F>>`; under `TObjCache<K; V: class> =
     class(TLoader<V>)`, `FKeys[0].Val.Free` is V's constraint's (dcc64 37.0,
     2026-10-29, PasTree audit B3-35, local/probe-park/b335 GA.dpr, GB.dpr,
-    GC.dpr - the ancestor in the same unit and in another);
+    GC.dpr - the ancestor in the same unit and in another). It travels just
+    the same when the nested type is WRITTEN, through the instance or an
+    alias of it: with `TGen<T: TObj>` declaring `TItems = array of T`, `PItems
+    = ^TItems`, an enumerable class `TValues` and `Items: TItems`, and `TGenA =
+    TGen<TRec>` - `IT: TGen<TRec>.TItems`, `IT2: TItemsA` with `TItemsA =
+    TGenA.TItems`, `V: TValuesA` with `TValuesA = TGen<TRec>.TValues`, `P:
+    TPItemsA` with `TPItemsA = TGen<TRec>.PItems` - `IT[0].Fld`, `for var E in
+    IT2`, `for var E in V`, `P^[0].Fld` are TRec's, in the generic's own unit
+    as in another; so are `A.Items[0].Fld` and `for var E in A.Items` over `A:
+    TGenA`. dcc64 37.0, 2026-11-02 (PasTree local/alias-audit-2026-11, probe,
+    probe2, probe3: PasTree had the open `T` or nothing in each);
   - and it must be recorded WITH the binding. A resolver that records only
     "which symbol does this name denote" and re-derives the type later has thrown
     away the only thing that closes it: nothing downstream can tell which hop the

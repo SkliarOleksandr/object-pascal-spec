@@ -447,14 +447,40 @@ procedure Log(const Fmt: string; const Args: array of const);
   the `IEnumerator<string>` / `IEnumerable<string>` ones). dcc64 37.0,
   2026-11-02 (PasTree local/compl-c1c2-2026-11/probe8, probe9).
   - Precisely, `array of const` takes what an `array of TVarRec` takes,
-    and an open-array constructor of anything besides: a `TArray<TVarRec>`
-    (`Length(A)` its length), an `array[0..1] of TVarRec`, a single TVarRec
-    VARIABLE (one element) and an `array of const` parameter passed on
-    compile; a `TArray<Integer>`, a `TArray<Variant>`, an `array[0..1] of
-    string`, a string variable and an Integer variable are each `E2010
-    'array of TVarRec' and '...'`. A resolver may score `array of const` as
-    an open array of System.TVarRec for every argument but a `[...]`. dcc64
-    37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fc, cases A1-A10).
+    and besides an open-array constructor of elements a TVarRec holds
+    (below): a `TArray<TVarRec>` (`Length(A)` its length), an
+    `array[0..1] of TVarRec`, a single TVarRec VARIABLE (one element) and
+    an `array of const` parameter passed on compile; a `TArray<Integer>`, a
+    `TArray<Variant>`, an `array[0..1] of string`, a string variable and an
+    Integer variable are each `E2010 'array of TVarRec' and '...'`. A
+    resolver may score `array of const` as an open array of System.TVarRec
+    for every argument but a `[...]`, which 6.3.1 ranks element by element.
+    dcc64 37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fc, cases
+    A1-A10).
+  - *What a constructor for `array of const` may hold:* an element of any
+    type a TVarRec has a slot for - an integer of any size, a Char or an
+    AnsiChar, a Boolean, a float, Comp or Currency, a string of any kind
+    (ShortString and WideString too), a PChar or a PAnsiChar, a pointer
+    (`@M` too), an object, a class reference (a class name), an interface,
+    a Variant, a dynamic array, `nil`. An enumeration (a variable or a
+    constant), a record, a set, a static array and a method (`O.Go`) are
+    `E2150 Bad argument type in variable type array constructor`. dcc64
+    37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fd, fd2 B5-B10, fd3
+    K1-K16).
+- ⚠️ *An array whose type is written INLINE* - a local or a field `A:
+  array of string`, an inline static `array[0..1] of string`, a typed
+  constant of such a type, an open-array parameter passed on - is an array
+  of its element for all of the above, though no type name stands for it:
+  it takes `array of string`, so beside `J(const A: array of const)`
+  declared first `J(A)` calls `J(const A: array of string)` for each of
+  them, and is `E2010` for `array of const` (`'array of TVarRec' and 'array
+  of string'`) and for a `TArray<string>` parameter (`'TArray<string>' and
+  'array of string'`: an inline array type is a type of its own, 8.1.1),
+  so beside `T(const A: TArray<string>)` declared first `T(A)` calls `T(const
+  A: array of string)`. An `array of const` parameter passed on, a local
+  `array of TVarRec` and a static TVarRec array take `array of const`.
+  dcc64 37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fd, fd2 G1-G15,
+  P1-P9).
 
 ### 6.2.7 Untyped parameters
 
@@ -790,12 +816,82 @@ function Area(C: TCircle): Double; overload;
   | `array of const` / `array of Variant` | a `TArray<string>` | `E2250` |
   | `array of const` / `array of Variant` | `[1, 'b']` | `array of const` |
 
-  The open-array-constructor rows are not derived into a rule here - a
-  resolver should reproduce them, not guess: `['a', 'b']` takes `array of
-  string` over both `array of const` and `TArray<string>`, while `[1, 'b']`
-  takes `array of const` over `array of Variant`, whose elements it fits as
-  well. dcc64 37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fc,
-  fc-results.txt: cases C1-C9, D1-D3, E1, F1-F2, H1-H3).
+  The open-array-constructor rows follow the rule of the next bullet. dcc64
+  37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/fc, fc-results.txt:
+  cases C1-C9, D1-D3, E1, F1-F2, H1-H3).
+- ⚠️ *An open-array constructor against open-array overloads, derived*
+  (dcc64 37.0; 42 overload pairs, each in both declaration orders, called
+  with 48 constructors - 4,032 calls, not one answered by the order):
+  - *Its WORST element decides.* Each element is ranked as it would be as a
+    value argument for the element type (the numeric table above, the
+    one-character rule), and the overload whose worst element ranks better
+    wins; how many elements fit better, and their order, do not count. Over
+    a Byte `B`, an Integer `I` and an Int64 `I64`, `[B, B, B, B, I]` takes
+    `array of Integer` over `array of Byte` and `[I, I, I, I64]` `array of
+    Int64` over `array of Integer`; `[C, ';']` takes `array of Char` over
+    `array of string`, `[',', 'ab']` and `[', ', ',']` `array of string`.
+    An element an overload's element type does not take leaves that
+    overload out (`[1, 'b']` for `array of string`; `E2250` when none is
+    left).
+  - *`array of const` ranks every element it takes just below an exact
+    match,* so `array of T` beats it only when EVERY element is exact for
+    T, and loses to it as soon as one element needs a conversion. Exact for
+    T: a value of type T itself, under any of its names (a LongInt for
+    Integer); a string constant for string; a Char value - a variable, a
+    constant, a one-character literal - for string as well as for Char; an
+    AnsiChar for AnsiString; `nil` or a Pointer for Pointer. A conversion:
+    an ordinal or float variable widened or narrowed (a Byte for Integer,
+    an Integer for Int64 or Cardinal, a Single for Double), an integer
+    constant for Int64 when it fits 32 bits, a real constant for any float
+    type, an AnsiString variable for string and a string for AnsiString, an
+    AnsiChar for Char and a Char for AnsiString, anything for Variant,
+    `nil` for a class. So `string.Join(',', ['a', S])` calls
+    TStringHelper's `array of string` overload, and `Join(',', [S, I])`,
+    `Join(',', [S, AS])` over an AnsiString `AS` and `Join(',', [S, V])`
+    over a Variant `V` its `array of const` one, declared first; `array of
+    Variant` takes nothing from `array of const` but a constructor of
+    Variants. `S.Split([','])`, `S.Split([C])` and `S.Split([Char(';'),
+    Char('&')])` call TStringHelper's `array of Char` overload,
+    `S.Split([', '])`, `S.Split([#13#10])` and `S.Split([sLineBreak])` its
+    `array of string` one.
+  - *Between the two the call is `E2251`:* the worst element is a constant
+    T holds without being of T exactly - an integer constant for an integer
+    type of at most 32 bits that holds it (`[1]`, `[300]` for Integer and
+    Cardinal, `[1]`, `[200]` for Byte), for Int64 one beyond 32 bits, `True`
+    for Boolean, an AnsiString constant for string (`sLineBreak`, which is
+    `_AnsiStr(#13#10)`), a string or char constant, `nil` or a Pointer for
+    PChar - or a PChar for string or Pointer, a Double for Extended, an
+    instance for its ancestor class (a TComponent for `array of TObject`).
+    `[]` too, between `array of const` and any typed one.
+  - *Against a dynamic-array parameter* the constructor ranks below the
+    open array of its element when every element fits that element exactly
+    or widened, and above it when one narrows or goes through Variant:
+    `array of Integer` takes `[1, 2]`, `[I]`, `[B]` and a Word over
+    `TArray<Integer>`, which takes `[I64]`, a Cardinal, a Variant and
+    `[5000000000]`; `array of string` takes `['a']`, an AnsiString and a
+    PChar over `TArray<string>`, which takes a Variant. Beside `array of
+    const`, `TArray<string>` takes `['a']`, `[C]`, `[S]` and loses an
+    AnsiString, a PChar and an AnsiChar; beside `array of Int64`,
+    `TArray<Integer>` takes `[I]` and the integer constants and loses a
+    Byte, Word, ShortInt, SmallInt or Cardinal variable. Observed, not
+    derived further.
+  - *A set parameter beside an open array* takes some constructors of
+    elements both fit: `set of Byte` over `array of Integer` a Byte or a
+    Cardinal variable, over `array of Byte` an Integer, a Word, a ShortInt
+    or a SmallInt one; `TSysCharSet` over `array of Char` an AnsiChar,
+    while `['a']` and `[C]` take `array of Char`. Observed, not derived
+    further.
+  - *In an argument the brackets are an open-array constructor:* a range in
+    them is `E2029 ']' expected but '..' found` for a routine with one
+    open-array parameter and fits no overload of a family (`Split(['a'..
+    'c'])` is `E2250`); in parentheses they are a set (8.2.2) and fit no
+    open array (`J((['a', 'b']))` is `E2250`); `['a'] + ['b']` as an
+    argument is `E2029 ')' expected but '+' found`.
+  - *Evidence:* dcc64 37.0, 2026-11-02, PasTree local/compl-c1c2-2026-11/fd:
+    the matrix (gen.ps1 and run.ps1 over families.txt and args.txt, giving
+    results.tsv and matrix.txt), fd2 (B1-B4; J1-J12 and S1-S18 against
+    copies of TStringHelper's Join and Split in the RTL's declaration order)
+    and fd3 (W1-W6, R1-R4, N1-N13).
 - ⚠️ *Return type is never part of overload resolution.* Two routines with
   identical parameter lists that differ only in result type are not distinct
   overloads — the second declaration collides with the first rather than

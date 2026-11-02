@@ -566,6 +566,15 @@ function Area(C: TCircle): Double; overload;
   with `TMyRc = TRc`, an argument of type TMyRc calls `R(const A: TRc)`
   beside `R(const A: TPt)`. An argument spelled with the alias, or a
   parameter spelled with it, is an exact match, not a merely assignable one.
+  An alias of an INSTANTIATION is that instantiation (16.3.1) and matches
+  the same way, whichever overload is declared first: with `TCustListC =
+  TList<TCust>` and `RPick(const S: string): TObj` declared before
+  `RPick(const L: TList<TCust>): TCust`, `RPick(LC)` for `LC: TCustListC`,
+  `RPick(TCustListC(nil))` and `RPick(LA)` for `LA` of a used unit's
+  `TCustList = TList<TCust>` each call the TList one, as `RPick(LD)` for
+  `LD: TList<TCust>` does; so does a used unit's family declared in that
+  order. dcc64 37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/probe4:
+  `.created`, a field of TCust that TObj lacks, compiles after each call).
 - ⚠️ *A procedural VALUE rejects a non-procedural parameter.* An
   anonymous-method literal and a procedure designator - `Noop`, a method
   `DoIt`, a generic method instantiated in place (`DoIt<Integer>`) - are

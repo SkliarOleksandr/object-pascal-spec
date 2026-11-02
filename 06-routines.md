@@ -428,6 +428,14 @@ procedure Log(const Fmt: string; const Args: array of const);
   open array's is (the callee's copy). Passing it on to another `array of
   T` parameter works. dcc64 37.0, 2026-10-30 (spec audit g3,
   local/probe-park/spec-audit/g3 OpenArr.dpr, OpenOne.dpr, OpenOne2.dpr).
+- ⚠️ *A dynamic array is no argument for `array of const`:* `K(A)` for `A:
+  TArray<string>` - or a `TStringDynArray`, its alias - is `E2010
+  Incompatible types: 'array of TVarRec' and 'TArray<string>'`. So beside
+  `J(const A: array of const)` declared first, `J(A)` calls `J(const A:
+  array of string)`, and `string.Join(',', A)` calls TStringHelper's `array
+  of string` overload, not the `array of const` one declared above it (nor
+  the `IEnumerator<string>` / `IEnumerable<string>` ones). dcc64 37.0,
+  2026-11-02 (PasTree local/compl-c1c2-2026-11/probe8, probe9).
 
 ### 6.2.7 Untyped parameters
 
@@ -575,6 +583,11 @@ function Area(C: TCircle): Double; overload;
   `LD: TList<TCust>` does; so does a used unit's family declared in that
   order. dcc64 37.0, 2026-11-02 (PasTree local/compl-c1c2-2026-11/probe4:
   `.created`, a field of TCust that TObj lacks, compiles after each call).
+  An alias that a generic declares of an instantiation over its own
+  parameter is closed over the instance it is read through: with `TItems =
+  TArray<T>` in `TFbGen<T>`, `FbArr(G.Items)` for `G: TFbGen<TFbCust>` calls
+  `FbArr(const A: TArray<TFbCust>)` beside `FbArr(const A: TArray<Integer>)`
+  declared first. dcc64 37.0, 2026-11-02 (local/compl-c1c2-2026-11/probe6).
 - ⚠️ *A procedural VALUE rejects a non-procedural parameter.* An
   anonymous-method literal and a procedure designator - `Noop`, a method
   `DoIt`, a generic method instantiated in place (`DoIt<Integer>`) - are

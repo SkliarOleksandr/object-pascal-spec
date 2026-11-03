@@ -908,11 +908,15 @@ ConstExpr = Expression ;   (* must be evaluable at compile time *)
 - Syntactically identical to `Expression`; the **constraint** (compile-time
   constant) is enforced semantically. Used for case labels, array bounds, enum
   values, default parameters, and `const` declarations.
-- What counts as constant is owned elsewhere: a typed constant is NOT one
-  (`E2026`, ch.03 §3.2.2); a folded expression is computed in its operator's
-  type without widening, so `MaxInt + 1` is `E2099` and `1 div 0` is `E2098`
-  (ch.04 §4.2, §4.2.1); a constant out of the target's range is `E1012` or
-  `W1012` (ch.02 §2.6.1).
+- What counts as constant is owned elsewhere: ch.03 §3.2.1 lists what folds
+  (the operators, the typecasts, the intrinsic calls - `High` and `Length`
+  by what their argument's type gives) and how a folded constant is read
+  (by its value, but a typecast, `Default`, `Ptr` and `nil` as a value of
+  their type); a typed constant is NOT one (`E2026`, ch.03 §3.2.2); a
+  folded expression is computed in its operator's type without widening,
+  so `MaxInt + 1` is `E2099` and `1 div 0` is `E2098` (ch.04 §4.2,
+  §4.2.1); a constant out of the target's range is `E1012` or `W1012`
+  (ch.02 §2.6.1).
 
 ## B.11 Type references
 

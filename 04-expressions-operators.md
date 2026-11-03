@@ -150,6 +150,17 @@ typed by its value instead (3.2.1).
   $FF` and `B and K` over a Byte Byte. One that does not fit keeps the
   type of its value (the ladder of 3.2.1) and mixes like a variable:
   `C + (-1)`, `C + KN` (`KN = -1`), `C + 5000000000` are Int64.
+  A folded expression over such constants adapts too, and so do `Succ` /
+  `Pred` of one and `SizeOf` (its anonymous subrange, 3.2.1): `C + (N +
+  1)`, `C + Succ(4)`, `C + SizeOf(Integer)` and `C + SizeOf(I)` are
+  Cardinal. A constant of a type of its own does NOT adapt - a typecast or
+  a typed intrinsic (3.2.1's list: `High(T)` is a T, `Length` an Integer,
+  `Ord` of an enumeration value a ShortInt): `C + Integer(5)`, `C +
+  ShortInt(5)`, `C + High(Integer)`, `C + High(ShortInt)`, `C +
+  Length('abc')`, `C + Ord(eB)`, `C + Abs(-5)` and `C + Low(Integer)` are
+  Int64 with W1024, `C + Trunc(1.5)` Int64, while `C + Byte(5)`, `C +
+  High(Byte)` and `C + Ord('A')` are Cardinal as an unsigned operand is.
+  dcc64 37.0, 2026-11-02 (PasTree local/const-intrinsics-2026-11 p6).
 - ⚠️ *A folded constant expression is computed IN that type and does not
   widen* - a result outside it is `E2099 Overflow in conversion or
   arithmetic operation`, not a wider constant. `2147483647 + 1`, `MaxInt +
@@ -600,6 +611,13 @@ Btn := TButton(Sender);     // unchecked reference cast
   CONSTANT truncates silently - `B := Byte(300)` compiles with no E1012
   (2.6.1). dcc64 and dcc32 37.0, 2026-10-30 (spec audit g2,
   local/probe-park/spec-audit/g2 A4.dpr, A6.dpr).
+- ⚠️ *A cast of a constant is a constant* (`const X = Byte(300)`,
+  `Pointer(0)`, `TObj(nil)` compile) - but a string or character constant
+  cast to a pointer type is an address, `PChar('abc')` and `PChar(KC)` are
+  E2026 - and it is a value of the cast's TYPE where a constant would be read
+  by its value: `F(Integer(5))` takes `F(X: Integer)` beside `F(X:
+  ShortInt)`, `[Integer(5)]` takes `TArray<Integer>` over `array of const`
+  (3.2.1; dcc64 37.0, 2026-11-02, PasTree local/const-intrinsics-2026-11).
 - *AST:* `TypeCastExpr { targetType, expr }`.
 
 ---
@@ -837,11 +855,23 @@ answers are given.
 true constant or an enumeration value are `Integer`: `Ord('A')`, `Ord(5)`,
 `Ord(e1)`, `Ord(True)`, `Ord(KC)` (`const KC = 'A'`), `Hi(KI)`, `Swap(KW)`
 (`const KW = Word(7)`) - a typed constant is a variable here (`Ord(KW)` of
-`const KW: Word = 5` is `Word`). `Succ` / `Pred` of one keep the argument's
-type (`Succ(KE)` the enumeration, `Succ('a')` `Char`). As an overload
-argument a constant result is a constant VALUE: `F(Ord(5))` and
-`F(High(Byte))` take the narrowest overload holding the value (3.1.3), as
-any constant does.
+`const KW: Word = 5` is `Word`). So are they of ANY argument that folds
+(3.2.1's list): an intrinsic over constants (`Ord(High(Char))`,
+`Ord(Chr(65))`, `Ord(Succ('a'))`, `Ord(Low(TE))`, `Hi(High(Word))`,
+`Lo(Length(KS))`, `Hi(Sqr(N))`, `Hi(Default(Word))`), a typecast
+(`Ord(Byte(5))`, `Swap(Byte(5))`), an operator (`Hi(N * 300)`), and `High`,
+`Low`, `SizeOf` or `Length` of a value its type alone gives (`Ord(High(Ch))`
+of a Char variable, `Hi(High(B))`, `Hi(High(SS))` of a ShortString,
+`Hi(SizeOf(I))`, `Hi(Length(SA))` of a static array, `Hi(Low(S))`) - while
+`Hi(Length(S))`, `Hi(High(S))` of a string, `Hi(Length(DA))` of a dynamic
+array and `Ord(Byte(I))` of a variable keep the argument's row (Word, Word,
+Word, Byte); `Ord(SizeOf(T))` is SizeOf's anonymous 32-bit subrange. dcc32
+and dcc64 37.0 alike, 2026-11-02 (PasTree local/const-intrinsics-2026-11
+p5). `Succ` / `Pred` of one keep the argument's type (`Succ(KE)` the
+enumeration, `Succ('a')` `Char`). As an overload argument a constant result
+is a constant VALUE: `F(Ord(5))` and `F(High(Byte))` take the narrowest
+overload holding the value (3.1.3), as any constant does - `Default(T)` and
+`Ptr(X)` excepted, which are values of their type (3.2.1).
 
 **Fixed result, whatever the argument**
 

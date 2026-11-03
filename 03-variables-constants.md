@@ -381,8 +381,77 @@ const
 
 **Semantics & parsing notes**
 
-- The RHS must be evaluable at compile time (B.10), which includes constant
-  folding of operators, `Ord`, `Length` of string consts, set constructors, etc.
+- The RHS must be a constant expression (B.10) - `E2026 Constant expression
+  expected` otherwise. What folds (dcc64 37.0, probed 2026-11-02, each as
+  `const X = <expr>;` - PasTree local/const-intrinsics-2026-11 p1, p7, p8,
+  p10: 272 expressions, then the rest of the intrinsic table):
+  - a literal, `nil`, `True` / `False`, an enumeration value, a true
+    constant; an operator over constants (`N + 1`, `not N`, `N shl 2`, `N =
+    5`, `N in [1..5]`, `KS + 'x'`, `KC + KC`, `KSet + [eC]`) and a set
+    constructor of constants (`[N, 1]`, `[1..N]`). Not a typed constant or a
+    variable (3.2.2), an address (`@I`, `@TC`, `Addr(I)`), an inline `if`
+    (5.4.1).
+  - a typecast of a constant, to any type: `Integer(5)`, `Byte(300)`,
+    `Word(-1)`, `Cardinal(-1)`, `TEn(1)`, `TSub(3)`, `Double(1.5)`,
+    `Currency(1)`, `string('a')`, `AnsiString('a')`, `Pointer(0)`,
+    `PChar(nil)`, `PChar(N)`, `TObj(nil)`, `TClass(nil)`, `Integer('A')`,
+    `Integer(eB)`, `Byte(SizeOf(TRec))` - but a string or character
+    constant cast to a pointer type, which is an address: `PChar('abc')`,
+    `PChar('a')`, `PChar(KS)`, `PChar(KC)`, `PAnsiChar('abc')` are E2026
+    (`Pointer('abc')` E2089). A cast of a variable is not one
+    (`Integer(B)`, `Integer(TC)`).
+  - a call of `Ord`, `Chr`, `Succ`, `Pred`, `Abs`, `Odd`, `Hi`, `Lo`,
+    `Swap`, `Trunc`, `Round`, `Concat`, `Ptr` or `MulDivInt64` whose
+    arguments are constants, nested as deep as written (`Ord(High(Char))`,
+    `Chr(Ord('a') + 1)`, `Ord(Succ('a'))`, `Round(Pi)`, `Ptr($1000)`); `Sqr`
+    of an INTEGER constant only (`Sqr(3)`, `Sqr(Integer(3))` - `Sqr(1.5)`
+    and `Sqr(KR)` are E2026). A variable or typed-constant argument is no
+    constant: `Ord(Ch)`, `Ord(TCC)`, `Succ(TC)`, `Trunc(D)`.
+  - the intrinsics that read a type: `SizeOf` of anything - a type, a
+    variable, a typed or true constant, a literal (`SizeOf(5)`) - but an
+    open-array parameter; `Low` of anything (`Low(S)`, `Low(KS)`, `Low(DA)`,
+    an open array's); `High` of a type (an ordinal, a static array,
+    `ShortString`, a `string[10]`, a dynamic-array TYPE - which is -1) or of
+    a value whose type alone gives it - an ordinal variable or typed
+    constant (`High(I)`, `High(E)`, `High(TC)`, `High(N)`), a static array,
+    a short string (`High(SS)`, a `string[10]` parameter) - but not of a
+    long string, a string constant included (`High(S)`, `High(KS)`,
+    `High(TCS)` are E2026), a dynamic array or an open array; `Length` of a
+    string constant (`'abc'`, `KS`, `KC`, `KS + 'x'`, `NameOf(I)`) or of a
+    static array (a variable, a typed constant, a record field) - not of a
+    string variable, a ShortString one included, a typed string constant, a
+    dynamic or an open array; `Pi`, `GetTypeKind(T)` and `GetTypeKind(I)`,
+    `IsManagedType`, `System.HasWeakRef`, `IsConstValue` (of a variable too:
+    `IsConstValue(I)` is a False constant), `NameOf`; `Default(T)` of an
+    ordinal, real, string, pointer, class, class reference, interface, set
+    or dynamic-array type - a record, a static array and a Variant are
+    E2026.
+  - never: `Copy`, `Assigned` (`Assigned(nil)` too), `TypeInfo`,
+    `TypeHandle`, `ReturnAddress`, `AddressOfReturnAddress`, and the System
+    routines that are no intrinsics - `UpCase`, `Int`, `Frac`, `Sqrt`,
+    `Exp`, `Ln`, `Sin`, `Cos`, `ArcTan`, `StringOfChar`, `Pos`.
+- ⚠️ *A folded constant is read by its VALUE - unless a type is written at
+  its top.* As an overload argument it takes the narrowest parameter that
+  holds the value, and as a `[...]` element it ranks below `array of const`
+  (6.3.1): among one overload per integer type `FI(Low(Byte))`,
+  `FI(SizeOf(I))`, `FI(Trunc(1.5))`, `FI(Ord('A'))` take the ShortInt one
+  and `FI(High(Word))` the Word one; `[Low(Integer)]`, `[High(Byte)]`,
+  `[SizeOf(I)]`, `[Length(KS)]`, `[Ord('A')]`, `[N + 1]`, `[Integer(5) *
+  2]`, `[True]`, `[1.5]` take `array of const` over every `TArray<T>`. A
+  typecast, `Default(T)`, `Ptr(X)` and `nil` are values of their type
+  instead, as a variable of that type is: `FI(Integer(5))` takes the
+  Integer overload and `FI(Byte(300))` the Byte one, `[Integer(5)]` and
+  `[Default(Integer)]` take `TArray<Integer>`, `[Double(1.5)]`
+  `TArray<Double>`, `[nil]`, `[Ptr(0)]` and `[Default(TObj)]`
+  `TArray<Pointer>`; parentheses change nothing (`[(Integer(5))]`), and an
+  operator over a cast is by value again (`[Integer(5) * 2]`). A true
+  constant is read as its value is: `const KTI = Integer(5)`, `KTB =
+  Byte(5)`, `KTD = Default(Integer)`, `KTP = Ptr(0)` and `KNil = nil` are
+  typed (`[KTI]` takes `TArray<Integer>`, `FI(KTB)` the Byte overload),
+  `KTH = High(Integer)` is by value (`[KTH]` takes `array of const`). dcc64
+  37.0, 2026-11-02 (local/const-intrinsics-2026-11 p2: 272 expressions
+  against 15 `array of const` / `TArray<T>` pairs in both declaration
+  orders, 8,160 calls, none decided by the order; p4, p9).
 - *Constant type:* inferred from the expression. What an inline `var X := C`
   gets from it follows the literal rules of 3.1.3: `100` ⇒ Integer,
   `5000000000` ⇒ Int64, `'a'` ⇒ Char, `'abc'` ⇒ string, `1.5` ⇒ Extended on

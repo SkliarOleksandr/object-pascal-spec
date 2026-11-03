@@ -154,13 +154,37 @@ typed by its value instead (3.2.1).
   `Pred` of one and `SizeOf` (its anonymous subrange, 3.2.1): `C + (N +
   1)`, `C + Succ(4)`, `C + SizeOf(Integer)` and `C + SizeOf(I)` are
   Cardinal. A constant of a type of its own does NOT adapt - a typecast or
-  a typed intrinsic (3.2.1's list: `High(T)` is a T, `Length` an Integer,
-  `Ord` of an enumeration value a ShortInt): `C + Integer(5)`, `C +
-  ShortInt(5)`, `C + High(Integer)`, `C + High(ShortInt)`, `C +
-  Length('abc')`, `C + Ord(eB)`, `C + Abs(-5)` and `C + Low(Integer)` are
-  Int64 with W1024, `C + Trunc(1.5)` Int64, while `C + Byte(5)`, `C +
-  High(Byte)` and `C + Ord('A')` are Cardinal as an unsigned operand is.
-  dcc64 37.0, 2026-11-02 (PasTree local/const-intrinsics-2026-11 p6).
+  a typed intrinsic (3.2.1's list: `High(T)` is a T, `Length` an Integer):
+  `C + Integer(5)`, `C + ShortInt(5)`, `C + High(Integer)`, `C +
+  High(ShortInt)`, `C + Length('abc')`, `C + Ord(eB)`, `C + Abs(-5)` and
+  `C + Low(Integer)` are Int64 with W1024, `C + Trunc(1.5)` Int64, while
+  `C + Byte(5)`, `C + High(Byte)` and `C + Ord('A')` are Cardinal as an
+  unsigned operand is. dcc64 37.0, 2026-11-02 (PasTree
+  local/const-intrinsics-2026-11 p6).
+  A folded intrinsic call mixes by a row of its own, NOT by the type it
+  infers: every one below is an Integer as `var V := X` and as an overload
+  argument reads by value (4.11.4: `S(Ord(eB))` and `S(Ord('A'))` both take
+  `S(ShortInt)`), yet mixed with a Cardinal:
+  - `Hi`, `Lo`, `Swap`, `Succ`, `Pred` of a constant adapt as a literal of
+    its value does, a typecast argument too: `C + Hi(5)`, `C + Lo(-5)`
+    (251), `C + Swap(ShortInt(5))`, `C + Swap(Integer(5))`, `C +
+    Succ(Integer(5))`, `C + Pred(Byte(5))`, `C + Lo(Length(KS))` are
+    Cardinal.
+  - `Ord` of a constant is Ord's row for the argument read as a VALUE
+    (4.11.4's table, not its constant line): `Ord('A')`, `Ord(High(Ch))`,
+    `Ord(Word(5))`, `Ord(KW)` (`KW = Word(7)`) Word, `Ord(Byte(5))` and
+    `Ord(b200)` of a `(b0 = 0, b200 = 200)` Byte - Cardinal; `Ord(eB)` of
+    a four-value enumeration, `Ord(Succ(eA))`, `Ord(High(TE))`, `Ord(True)`
+    ShortInt, `Ord(Integer(5))` Integer - Int64 with W1024. An integer the
+    argument is by value is the narrowest of ShortInt, Byte, SmallInt,
+    Word, Integer, Cardinal holding it: `C + Ord(200)` Cardinal (Byte),
+    `C + Ord(5)` and `C + Ord(-5)` Int64 (ShortInt).
+  - `High` / `Low` of an integer type is that type: `C + High(Byte)`, `C +
+    High(Word)`, `C + Low(Byte)` Cardinal, `C + High(ShortInt)`, `C +
+    Low(Integer)` Int64.
+  - `Length`, `Abs` keep their type (Integer): `C + Length('abc')`, `C +
+    Abs(-5)` Int64; `SizeOf` adapts (above).
+  dcc64 37.0, 2026-11-03 (W1024 read per line).
 - ⚠️ *A folded constant expression is computed IN that type and does not
   widen* - a result outside it is `E2099 Overflow in conversion or
   arithmetic operation`, not a wider constant. `2147483647 + 1`, `MaxInt +
@@ -871,7 +895,9 @@ p5). `Succ` / `Pred` of one keep the argument's type (`Succ(KE)` the
 enumeration, `Succ('a')` `Char`). As an overload argument a constant result
 is a constant VALUE: `F(Ord(5))` and `F(High(Byte))` take the narrowest
 overload holding the value (3.1.3), as any constant does - `Default(T)` and
-`Ptr(X)` excepted, which are values of their type (3.2.1).
+`Ptr(X)` excepted, which are values of their type (3.2.1). Beside another
+integer operand one mixes by a row of its own, not as an Integer (4.2.1:
+`C + Ord('A')` of a Cardinal is Cardinal, `C + Ord(eB)` Int64).
 
 **Fixed result, whatever the argument**
 

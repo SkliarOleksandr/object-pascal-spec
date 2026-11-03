@@ -652,7 +652,10 @@ resourcestring
   while one over a true string constant (`R4 = KS + 'z'`) compiles. A
   `resourcestring` section is legal in a routine's declaration part too.
   dcc64 37.0, 2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2
-  B1.dpr).
+  B1.dpr). Nor does it fold inside a constant expression (3.2.1): `var V
+  := Hi(Length(RS))` is a Word, as for a string variable, where `Hi(Length(
+  KS))` of a true string constant is an Integer (4.11.4) - dcc64 37.0,
+  2026-11-03 (PasTree review of 0.146.7-0.146.13).
 - *AST:* `ResourceStringDecl { name, value }`.
 
 ---

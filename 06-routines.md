@@ -924,8 +924,19 @@ function Area(C: TCircle): Double; overload;
     them is `E2029 ']' expected but '..' found` for a routine with one
     open-array parameter and fits no overload of a family (`Split(['a'..
     'c'])` is `E2250`); in parentheses they are a set (8.2.2) and fit no
-    open array (`J((['a', 'b']))` is `E2250`); `['a'] + ['b']` as an
-    argument is `E2029 ')' expected but '+' found`.
+    open array (`J((['a', 'b']))` is `E2250`), no `array of const` and no
+    dynamic array (`D(([1, 2]))` for `D(const A: TArray<Integer>)` is
+    `E2010 Incompatible types: 'TArray<Integer>' and 'Set'`) - beside a
+    `set of Byte` overload `R(([1, 2]))` takes the set one whichever is
+    declared first, while `R([1, 2])` takes `array of Integer`; the
+    parentheses of a generic method's argument list (`TG.G<Integer>([1,
+    2])`) are the call's own (dcc64 37.0, 2026-11-03, PasTree review of
+    0.146.7-0.146.13); `['a'] + ['b']` as an argument is `E2029 ')'
+    expected but '+' found`. The parameter's mode takes no part in the
+    ranking: beside `const A: array of const`, `[I]` takes `var A: array
+    of Integer` (or `out`) in either declaration order and is then `E2197
+    Constant object cannot be passed as var parameter` (dcc64 37.0,
+    2026-11-03).
   - *Evidence:* dcc64 37.0, 2026-11-02, PasTree local/compl-c1c2-2026-11/fd:
     the matrix (gen.ps1 and run.ps1 over families.txt and args.txt, giving
     results.tsv and matrix.txt), fd2 (B1-B4; J1-J12 and S1-S18 against

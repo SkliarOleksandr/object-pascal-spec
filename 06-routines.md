@@ -863,18 +863,57 @@ function Area(C: TCircle): Double; overload;
     PChar - or a PChar for string or Pointer, a Double for Extended, an
     instance for its ancestor class (a TComponent for `array of TObject`).
     `[]` too, between `array of const` and any typed one.
-  - *Against a dynamic-array parameter* the constructor ranks below the
-    open array of its element when every element fits that element exactly
-    or widened, and above it when one narrows or goes through Variant:
-    `array of Integer` takes `[1, 2]`, `[I]`, `[B]` and a Word over
-    `TArray<Integer>`, which takes `[I64]`, a Cardinal, a Variant and
-    `[5000000000]`; `array of string` takes `['a']`, an AnsiString and a
-    PChar over `TArray<string>`, which takes a Variant. Beside `array of
-    const`, `TArray<string>` takes `['a']`, `[C]`, `[S]` and loses an
-    AnsiString, a PChar and an AnsiChar; beside `array of Int64`,
-    `TArray<Integer>` takes `[I]` and the integer constants and loses a
-    Byte, Word, ShortInt, SmallInt or Cardinal variable. Observed, not
-    derived further.
+  - ⚠️ *Against a DYNAMIC-array parameter* - `TArray<T>`, a named `array
+    of T` (`TIntDyn = array of Integer`), `TStringDynArray` - the
+    constructor takes exactly the elements an open array of T takes (for 17
+    element types and all 48 constructors of the matrix: the same `E2250`,
+    `E1012` for `[300]` against Byte, `W1012` for `[5000000000]` against
+    Integer; `TArray<TVarRec>` takes none but `[]`, unlike `array of
+    const`), and is ranked by its worst element too, each element a step
+    BELOW the open array of T's match for it:
+    - *an exact element* - a variable of T (a typed constant is one), a
+      typecast to T even of a constant (`[Integer(5)]`, a typed value as
+      4.11.4 has it; PasTree local/const-intrinsics-2026-11), a string
+      constant for string, a Char value for Char and for string, `nil` or a
+      Pointer for Pointer, a nested constructor for a dynamic-array
+      element: above `array of const`, below the open array of T. `['a',
+      'b']`, `[C]`, `[S]` take `TArray<string>` over `array of const`, and
+      `array of string` over `TArray<string>`; `[C]` and
+      `['a']` take `TArray<Char>` over `array of string` (a Char value is
+      still better for Char) and `array of Char` over `TArray<Char>`; `[I]`
+      and `[TC]` for `TC: Integer = 5` take `TArray<Integer>` over `array
+      of const`, `[nil]` and `[P]` `TArray<Pointer>`;
+    - *an exact CONSTANT other than a string or a character* - an integer
+      constant T holds, `True`, a true constant (`[N]`, `[N + 1]`,
+      `[Low(Integer)]`), an enumeration value, a class name for a class
+      reference: below `array of const` - `[1, 2]`, `[N]`, `[N, I]` take
+      `array of const` over `TArray<Integer>`, `[True]` over
+      `TArray<Boolean>`, `[TObject]` over `TArray<TClass>` - and above any
+      conversion: `[1]` takes `TArray<Integer>` over `array of Int64` and
+      over `TArray<Int64>`, `[1.5]` `TArray<Extended>` over `array of
+      Double`;
+    - *a conversion* - below both, and among conversions by kind: an open
+      array's widening (a Byte for Integer or Int64, an Integer for Double,
+      an AnsiString for string, a descendant for its ancestor, `nil` or a
+      Pointer for a class) above a dynamic array's widening, then a
+      conversion TO Variant (the open array's, then the dynamic array's),
+      then a dynamic array's narrowing (an Int64 or a Cardinal for Integer,
+      a Variant for any type, an Extended constant for Double or Single, a
+      string for AnsiString), then an open array's narrowing. `[B]` takes
+      `array of Int64` over `TArray<Integer>`, `[CMP]` `array of TObject`
+      over `TArray<TObject>`; `[B]` takes `TArray<Integer>` over `array of
+      Variant`, `[I]` `array of Variant` over `TArray<Variant>`; `[I64]`
+      takes `array of Variant` over `TArray<Integer>` and `TArray<Variant>`
+      over `TArray<Integer>`; `[I64]`, `[CA]`, `[V]` take `TArray<Integer>`
+      over `array of Integer`, `[1.5]` `TArray<Double>` over `array of
+      Double`, `[V]` `TArray<string>` over `array of string`.
+    Two dynamic arrays rank on the same scale, and two of the same rank are
+    `E2251`: `TIntDyn` beside `TArray<Integer>` for every constructor they
+    take,
+    `[B]` for `TArray<Integer>` / `TArray<Int64>`, `[1]` and `[200]` for
+    `TArray<Integer>` / `TArray<Byte>`, `[I64]` for `TArray<Integer>` /
+    `TArray<Double>`. A range in the brackets fits no dynamic array
+    (`E2250`).
   - *A set parameter beside an open array* takes some constructors of
     elements both fit: `set of Byte` over `array of Integer` a Byte or a
     Cardinal variable, over `array of Byte` an Integer, a Word, a ShortInt
@@ -891,7 +930,13 @@ function Area(C: TCircle): Double; overload;
     the matrix (gen.ps1 and run.ps1 over families.txt and args.txt, giving
     results.tsv and matrix.txt), fd2 (B1-B4; J1-J12 and S1-S18 against
     copies of TStringHelper's Join and Split in the RTL's declaration order)
-    and fd3 (W1-W6, R1-R4, N1-N13).
+    and fd3 (W1-W6, R1-R4, N1-N13); the dynamic arrays,
+    local/compl-c1c2-2026-11/fe: single.txt (39 parameter types, each alone,
+    against the 48 constructors, single-results.tsv), families.txt (52
+    overload pairs with a dynamic array, both declaration orders, results.tsv
+    and matrix.txt) and families2.txt (true and typed constants, constant
+    expressions, enumerations, class names, records, ranges, nested
+    constructors, results2.tsv), 7,348 calls, not one answered by the order.
 - ⚠️ *Return type is never part of overload resolution.* Two routines with
   identical parameter lists that differ only in result type are not distinct
   overloads — the second declaration collides with the first rather than

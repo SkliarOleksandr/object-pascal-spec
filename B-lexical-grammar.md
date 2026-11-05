@@ -471,6 +471,11 @@ const
   `var` infers from the shorter ladder `Integer` upward instead (ch.03
   §3.1.3: `var X := 200` is 4 bytes). dcc64 37.0, 2026-10-30
   (spec audit g1, local/probe-park/spec-audit/g1 LitSize.dpr, LitSize2.dpr).
+- *Above `High(Int64)` in decimal or binary:* a `UInt64` constant as well -
+  `9223372036854775808`, `18446744073709551615` and a binary 2^63 infer
+  UInt64 (ch.03 sec. 3.1.3); one more, `18446744073709551616`, is `E2102
+  Integer constant too large`. dcc64 37.0 (the decimal ones dcc32 alike),
+  2026-11-05.
 - *Hex above `High(Int64)`:* as a constant `$FFFFFFFFFFFFFFFF` is a `UInt64`
   (`Writeln` prints 18446744073709551615, `SizeOf` is 8), but as a **subrange
   bound** the same literal is the `Int64` of the same bits:

@@ -222,9 +222,27 @@ end;
     `UInt64` that holds its value **after the sign is applied**: `2147483647`
     ⇒ Integer, `2147483648` and `$FFFFFFFF` ⇒ Cardinal, `4294967296` ⇒ Int64,
     `18446744073709551615` ⇒ UInt64; `-2147483648` ⇒ Integer,
-    `-2147483649` ⇒ Int64. A folded constant expression follows the same rule
-    (`5000000000 + 1` ⇒ Int64), and a named true constant carries the type it
-    was inferred with (`const CBig = 5000000000; var X := CBig` ⇒ Int64).
+    `-2147483649` ⇒ Int64. Anything above `High(Int64)` is UInt64 in every
+    radix: `9223372036854775808`, `$8000000000000000` and a binary 2^63 ⇒
+    UInt64, while `-9223372036854775808` ⇒ Int64 (the sign applies first).
+    Past the ends dcc rejects the literal: `18446744073709551616` is `E2102
+    Integer constant too large`, `-9223372036854775809` and
+    `-18446744073709551615` are `E2099 Overflow in conversion or arithmetic
+    operation`. A folded constant expression takes its OPERATOR's type
+    (4.2.1), not the narrowest type of its value: `5000000000 + 1` ⇒ Int64,
+    but `9223372036854775808 - 1` ⇒ UInt64 although its value fits Int64,
+    and `18446744073709551615 div 2` ⇒ UInt64. A named true constant carries
+    the type it was inferred with (`const CBig = 5000000000; var X := CBig`
+    ⇒ Int64; `const K = 18446744073709551615; var X := K` ⇒ UInt64).
+  - a UInt64 literal is a UInt64 VALUE to every operator and overload
+    choice - only UInt64 holds it, so no constant reading narrows it: `I +
+    18446744073709551615`, `I64 + 9223372036854775808` (both W1073), `B +
+    9223372036854775808` and `C + 18446744073709551615` ⇒ UInt64;
+    `F(18446744073709551615)` and `F(9223372036854775808)` take `F(X:
+    UInt64)` over `F(X: Integer)`, and with `C(X: Double)` declared before
+    `C(X: Int64)` the call `C(18446744073709551615)` takes `C(Double)` while
+    `C(5000000000)` takes `C(Int64)`. dcc64 37.0, 2026-11-05 (the inferred
+    types and both C calls dcc32 37.0 alike; PasTree 0.148.1, both typers).
   - a real literal is `Extended` on Win32. **On Win64 a real literal written
     without an exponent, with at most four fractional digits and inside
     Currency's range is `Currency`**: `1.5`, `0.1`, `2.0`, `1.50`, `-1.5`,

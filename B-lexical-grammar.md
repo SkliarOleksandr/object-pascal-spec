@@ -920,8 +920,12 @@ ConstExpr = Expression ;   (* must be evaluable at compile time *)
   their type); a typed constant is NOT one (`E2026`, ch.03 §3.2.2); a
   folded expression is computed in its operator's type without widening,
   so `MaxInt + 1` is `E2099` and `1 div 0` is `E2098` (ch.04 §4.2,
-  §4.2.1); a constant out of the target's range is `E1012` or `W1012`
-  (ch.02 §2.6.1).
+  §4.2.1), except `not` and the shifts, which wrap in their operand's type
+  (`2147483647 shl 1` is -2, `not $80000000` 2147483647; ch.04 §4.4), and
+  `and` / `or` / `xor`, which never overflow; a constant out of the
+  target's range is `E1012` or `W1012` (ch.02 §2.6.1). The folded VALUE is
+  what an operator's other operand, an overload and Hi / Lo / Swap / Succ
+  / Pred read (§4.2.1).
 
 ## B.11 Type references
 

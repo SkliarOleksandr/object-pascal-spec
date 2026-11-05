@@ -161,6 +161,28 @@ typed by its value instead (3.2.1).
   `C + Byte(5)`, `C + High(Byte)` and `C + Ord('A')` are Cardinal as an
   unsigned operand is. dcc64 37.0, 2026-11-02 (PasTree
   local/const-intrinsics-2026-11 p6).
+  The folded expression adapts by its VALUE, as dcc computes it (the
+  folding rules below and 4.4), and so does a true constant naming one -
+  an operator over a typed constant too: with `KB = 5`, `K2 = KB + 300`,
+  `K3 = KB - 300`, `KI = Integer(5)`, `C + (KB + 300)`, `C + K2`, `C +
+  (KB shl 2)`, `C + (-8 shr 1)` (2147483644), `C + (KI * 2)`, `C +
+  (High(Integer) - 1)`, `C + (High(Word) * 2)`, `C + (Byte(200) shl 1)`,
+  `C + (not KC)` (`KC = 4294967295`: 0) are Cardinal, while `C + (KB -
+  300)`, `C + K3`, `C + (not KB)` (-6), `C + (1 shl 31)` (-2147483648),
+  `C + (2147483647 shl 1)` (-2), `C + (Low(Integer) + 1)` are Int64 with
+  W1024. Only an expression whose operator type is 32 bits or narrower
+  adapts - a typed operand inside included (`I + (Cardinal(5) * 2)`
+  Integer, `B and (Cardinal(5) * 2)` and `B and (Integer(5) * 2)` Byte); a
+  64-bit one keeps its type whatever its value: `I * (Int64(5) * 2)`, `C +
+  (Int64(5) * 2)`, `B and (Int64(5) * 2)`, `I + (5000000000 -
+  4999999990)` and `Part * TicksPerSecond` (`TicksPerSecond = 1000 *
+  Int64(10000)`) are Int64, `I + (UInt64(5) * 2)` UInt64 (W1073).
+  Beside ANOTHER constant the folded expression is its operator's
+  type, not a ladder of its value: `(UInt64(1) shl 48) - 1` (and a
+  constant initialized by it) infers UInt64, `KS1 or KS4` (`KS1 = 1 shl
+  0`, `KS4 = 1 shl 4`) and `not (KS1 or KS4)` Integer, while `C + (KS1 or
+  KS4)` is Cardinal. dcc64 37.0, 2026-11-05 (PasTree
+  local/typer-const-fold-2026-11).
   A folded intrinsic call mixes by a row of its own, NOT by the type it
   infers: every one below is an Integer as `var V := X` and as an overload
   argument reads by value (4.11.4: `S(Ord(eB))` and `S(Ord('A'))` both take
@@ -169,16 +191,27 @@ typed by its value instead (3.2.1).
     its value does, a typecast argument too: `C + Hi(5)`, `C + Lo(-5)`
     (251), `C + Swap(ShortInt(5))`, `C + Swap(Integer(5))`, `C +
     Succ(Integer(5))`, `C + Pred(Byte(5))`, `C + Lo(Length(KS))` are
-    Cardinal.
+    Cardinal - of a folded operator too: `C + Hi(K2)`, `C + Lo(KB - 300)`
+    (217), `C + Swap(K3)` (55806), `C + Succ(KB + 300)`, `C +
+    Succ(High(ShortInt))` (128) Cardinal, `C + Succ(KB - 300)`, `C +
+    Pred(-KB)` Int64 (dcc64 37.0, 2026-11-05).
   - `Ord` of a constant is Ord's row for the argument read as a VALUE
     (4.11.4's table, not its constant line): `Ord('A')`, `Ord(High(Ch))`,
     `Ord(Word(5))`, `Ord(KW)` (`KW = Word(7)`) Word, `Ord(Byte(5))` and
     `Ord(b200)` of a `(b0 = 0, b200 = 200)` Byte - Cardinal; `Ord(eB)` of
     a four-value enumeration, `Ord(Succ(eA))`, `Ord(High(TE))`, `Ord(True)`
-    ShortInt, `Ord(Integer(5))` Integer - Int64 with W1024. An integer the
-    argument is by value is the narrowest of ShortInt, Byte, SmallInt,
-    Word, Integer, Cardinal holding it: `C + Ord(200)` Cardinal (Byte),
-    `C + Ord(5)` and `C + Ord(-5)` Int64 (ShortInt).
+    ShortInt, `Ord(Integer(5))` Integer - Int64 with W1024. An integer
+    constant the argument is by value - a literal, a true constant, an
+    operator over constants - is a ShortInt when the value is in -128..127
+    and otherwise adapts as a literal of its value (not "the narrowest type
+    holding it", as an earlier revision said: 300 would be a SmallInt and
+    Int64 here): `C + Ord(5)`, `C + Ord(-5)`, `C + Ord(KB + 0)`, `C +
+    Ord(-300)` Int64, `B and Ord(5)` SmallInt (ShortInt with Byte), while
+    `C + Ord(200)`, `C + Ord(300)`, `C + Ord(70000)`, `C + Ord(KB + 300)`,
+    `C + Ord(High(Integer) - 1)` are Cardinal, `I + Ord(70000)` Integer,
+    `W and Ord(300)` Word and `B and Ord(300)` the anonymous subrange `B
+    and 300` is. `High` / `Low` of an integer type are that type here as
+    below: `C + Ord(Low(Byte))` is Cardinal (dcc64 37.0, 2026-11-05).
   - `High` / `Low` of an integer type is that type: `C + High(Byte)`, `C +
     High(Word)`, `C + Low(Byte)` Cardinal, `C + High(ShortInt)`, `C +
     Low(Integer)` Int64.
@@ -200,6 +233,20 @@ typed by its value instead (3.2.1).
   constant evaluator that folds in 64 bits and types the result by its value
   accepts all of these. dcc64 and dcc32 37.0, 2026-10-30 (spec audit g2,
   local/probe-park/spec-audit/g2 A7.dpr, A8.dpr).
+  The same through named constants (`KB = 5`, `KC = 4294967295`, `KMin =
+  -2147483648`): `KC + KC`, `KC * 2`, `0 - KC`, `2147483647 + KB`, `KMin -
+  1`, `-KMin` and `KMin div -1` (Integer), `-Low(Int64)` and `High(Int64) *
+  2` are E2099, and `Byte(200) * Byte(200) * 100000` overflows its Integer
+  too; a constant divisor of zero, written or folded, is `E2098 Division
+  by zero` (`KB div 0`, `KB mod (KB - 5)`). `KMin * -1` stops dcc64 37.0
+  with `F2084 Internal Error` - code that compiles never holds it. `div` /
+  `mod` truncate (`KN div 3` -2, `KN mod 3` -2 for `KN = -8`). `and` /
+  `or` / `xor` of two constants never overflow: a negative one beside a
+  Cardinal-range one widens both to Int64 with W1024 and computes there -
+  `KN and KC` is 4294967288, `KN or $80000000` -8, `-1 xor KC`
+  -4294967296, `Cardinal(5) and KN` 0, `-1 and $FFFFFFFF` 4294967295. `not`
+  and the shifts are 4.4's. dcc64 37.0, 2026-11-05 (PasTree
+  local/typer-const-fold-2026-11).
 - ⚠️ *Signedness, not width, decides a 32-bit mix.* A Cardinal with a signed
   operand of ANY width is Int64 (`C + Sh`, `C + SI`, `C + I`), with an
   unsigned one Cardinal (`C + B`, `C + W`, `C - C`); `-C` is Int64,
@@ -307,6 +354,27 @@ Hi := Value shr 8;
   is 2 (`const KS = 1 shl 33` too), an Int64 `1 shl 65` 2, and `B shl 1`
   of a Byte 255 is 510. dcc64 and dcc32 37.0, 2026-10-30 (spec audit g2,
   local/probe-park/spec-audit/g2 A1.dpr).
+- ⚠️ *Folded, `not` and the shifts compute in the left operand's type and
+  WRAP - no E2099.* The type is the constant's (3.2.1: a literal or a
+  folded expression by its value, a typecast or a typed intrinsic its
+  own), below 32 bits Integer, and the count is masked to that width,
+  a negative count too (`1 shl -1` shifts by 31):
+  - `not`: `not KB` (`KB = 5`) and `not Byte(5)`, `not Word(5)`, `not
+    Integer(5)` are -6, `not 200` -201, `not 0` -1; a Cardinal one stays
+    unsigned - `not Cardinal(5)` 4294967290, `not $80000000` 2147483647,
+    `not 4294967295` 0; an Int64 one `not 5000000000` -5000000001. A folded
+    operator over a cast is by value again: `not (Cardinal(2) - 1)` is -2.
+  - `shl`: `1 shl 31` and `1 shl 63` are -2147483648, `2147483647 shl 1`
+    -2, `$7FFFFFFF shl 4` -16, `-1 shl 31` -2147483648, `1 shl 32` 1;
+    `Byte(200) shl 1` 400, `Byte(1) shl 40` 256, `Word(1) shl 20` 1048576
+    (Integer); `KC shl 4` 4294967280 and `KC shl 1` 4294967294 (`KC =
+    4294967295`, Cardinal); `Int64(1) shl 63` Low(Int64), `5000000000 shl
+    65` 10000000000.
+  - `shr`: `-8 shr 1` 2147483644, `-1 shr 28` 15, `ShortInt(-1) shr 1`
+    and `Integer(-1) shr 1` 2147483647, `Cardinal(-1) shr 1` 2147483647,
+    `Int64(-1) shr 1` High(Int64), `KB shr 33` 2, `5000000000 shr 64`
+    5000000000.
+  dcc64 37.0, 2026-11-05 (PasTree local/typer-const-fold-2026-11 P1).
 
 ---
 

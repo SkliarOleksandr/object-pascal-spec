@@ -344,6 +344,10 @@ the code page changes; the character and pointer types are stricter.
 
 - A `var` parameter takes none of these: `AnsiString` for `var S: string` is
   `E2033` (6.2.2).
+- Which of these conversions an overload set prefers - string over
+  WideString over Variant over the Ansi kinds for a Unicode value, the
+  Ansi kinds first for an Ansi one, PChar after WideString for a literal -
+  is ranked in 6.3.1 (*Numbers, Variant and strings*).
 - *For a checker:* the W1057/W1058 pair is the code-page change, so it is
   decided by the two types alone (never by the value); none of the
   string-to-string rows above is an error, while every character or pointer

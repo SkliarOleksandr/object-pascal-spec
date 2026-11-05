@@ -548,8 +548,8 @@ function Area(C: TCircle): Double; overload;
   `E2251`. dcc64 37.0, 2026-10-30 (spec audit g3,
   local/probe-park/spec-audit/g3 OvAmb.dpr, OvAmb2.dpr).
 - ⚠️ *Numeric ranking, observed* (dcc64 and dcc32 37.0, each pair tried in
-  both declaration orders with the same result; the rule behind it is not
-  derived here, so a resolver should reproduce the table, not a guess):
+  both declaration orders with the same result; the whole ranking, every
+  pair of the numeric and string types, is the next bullet):
 
   | overloads | argument | chosen |
   |---|---|---|
@@ -585,6 +585,88 @@ function Area(C: TCircle): Double; overload;
   dcc64 as on dcc32). dcc64 / dcc32 37.0, 2026-10-30
   (spec audit g3, local/probe-park/spec-audit/g3 OvRank.dpr, OvRank2.dpr,
   OvAmb2.dpr).
+- ⚠️ *Numbers, Variant and strings: the whole ranking, measured.* Every pair
+  of the 14 types ShortInt, Byte, SmallInt, Word, Integer, Cardinal, Int64,
+  UInt64, Single, Double, Extended, Currency, Comp, Variant and of the 11
+  kinds string, AnsiString, WideString, ShortString, RawByteString,
+  UTF8String, PChar, PAnsiChar, Char, AnsiChar, Variant, each pair declared
+  in both orders, called with variables, literals, true and typed
+  constants, casts and operators: no choice depends on the declaration
+  order, and each argument's choices form one ranking (a tie is E2251). The
+  rankings, best first (`=` a tie):
+  - *an integer variable of 32 bits or less:* its own type; the integers
+    that hold every value of it, and the 64-bit ones, by width, signed
+    first at one width; Single = Currency = Comp; Double; Extended;
+    Variant; then the integers that do not hold it, widest first, unsigned
+    first at one width. A Byte takes SmallInt over Word over Integer; a
+    ShortInt takes UInt64 over Single and Cardinal only after Variant; an
+    Integer takes Single over Double.
+  - *a 64-bit integer variable:* its own type; Comp; Variant; Extended =
+    Currency; Double; Single; the other integers, widest first.
+  - *a real variable:* its own type; the wider reals; Variant; the
+    narrower ones - Single: Double, Extended, Variant, Currency = Comp;
+    Double: Extended, Variant, Single = Currency = Comp; Extended: Variant,
+    Double = Currency = Comp, Single; Currency: Variant, Extended = Comp,
+    Double, Single; Comp: Variant, Extended = Currency, Double, Single.
+    Currency and Comp do not take part in a strict order with the IEEE
+    reals: for `5`, Single beats Double, yet Currency ties with both - no
+    single number per type reproduces that; code that compiles never meets
+    such a pair.
+  - *a Variant:* Extended = Currency = Comp, Double, Single, UInt64, Int64,
+    Cardinal, Integer, Word, SmallInt, Byte, ShortInt; WideString, string,
+    the Ansi kinds, ShortString. A numeric parameter beside a string one is
+    E2251 for a Variant argument.
+  - *an integer CONSTANT* (a literal, a true constant) has no type of its
+    own here: the integers holding its value in the order ShortInt, Byte,
+    SmallInt, Word, Integer, Cardinal, Int64, UInt64; then the reals and
+    Variant as for a 32-bit variable when the value lies in -2^31 ..
+    2^32 - 1, else as for a 64-bit one; then the integers that do not hold
+    it, widest first (Integer, Cardinal and Int64 compile with W1012, the
+    narrower ones are E1012). `F(5)` takes F(ShortInt) over F(Byte) over
+    F(Integer); `F(300)` F(SmallInt) over F(Word); `F(5000000000)`
+    F(Int64) over F(UInt64) over F(Comp) over F(Double).
+  - *a cast constant* (`Byte(5)`, `Int64(5)`): its type first, then the
+    other integers by the value, then the reals and Variant by the size of
+    the cast's type - `Int64(5)` takes ShortInt after Int64 and Comp
+    before Single.
+  - *a real literal* ranks as an Extended; a *true constant* whose value
+    Currency holds exactly (`const K = 1.5`, `0.1`, `-2.5`, `2.0`; not
+    `1.23456`, `1e30`) ranks as a Currency, on dcc32 as on dcc64 although
+    dcc32 infers an Extended for it (3.1.3): `F(K)` takes F(Currency) over
+    F(Extended), `F(1.5)` the reverse.
+  - *an operator over variables* is ranked by more than its type
+    (observed, not derived): `B + B` of two Bytes, an Integer, takes
+    Cardinal over Int64 where an Integer variable takes Int64; `CU * 2` of
+    a Currency takes Extended over Currency, though `var X := CU * 2`
+    infers a Currency and `F(CU * CU)` takes the Currency one.
+  - *a Unicode string value* (string, WideString): its own type; string
+    over WideString; Variant; AnsiString = UTF8String = RawByteString;
+    ShortString. *A Char variable:* Char; then as a string.
+  - *an Ansi string value:* AnsiString: UTF8String = RawByteString, string,
+    WideString, Variant, ShortString; UTF8String: AnsiString =
+    RawByteString, then the same; RawByteString: UTF8String, AnsiString,
+    then the same; ShortString: UTF8String = RawByteString, AnsiString,
+    string, WideString, Variant; AnsiChar: UTF8String = RawByteString,
+    AnsiString, ShortString, string, WideString, Variant.
+  - *PChar:* string, WideString, the Ansi kinds, ShortString; *PAnsiChar:*
+    UTF8String = RawByteString, AnsiString, string, WideString, ShortString.
+  - *a string literal or string constant* (`'abc'`, `''`, `#13#10`):
+    string, WideString, PChar, Variant, PAnsiChar, the Ansi kinds,
+    ShortString; *a one-character one* (`'a'`, `#0`): Char, string,
+    WideString, AnsiChar = PChar, Variant, PAnsiChar, the Ansi kinds,
+    ShortString.
+  - *refused:* a Char and an AnsiChar variable never convert into each
+    other; a PChar or PAnsiChar parameter takes no string variable; a
+    Variant takes no PChar or PAnsiChar. In an overload SET a ShortString
+    parameter refuses a PChar (E2250 beside AnsiChar, Char, Variant or
+    PAnsiChar), though a lone ShortString parameter takes one.
+  - *the target:* dcc32 ranks alike except where its 10-byte Extended
+    counts: a Currency or Comp takes Extended over Variant, and a Variant
+    or a 64-bit integer Extended over Currency.
+  - *Evidence:* dcc64 and dcc32 37.0, 2026-11-05, runtime output of PasTree's
+    local/type-conv-2026-11/n1 (N1Fam.pas): 12,194 numeric and 2,530 string
+    calls per compiler, 306 Variant calls across the two families, 2,366
+    named and literal real constants, 1,191 calls of a lone parameter.
 - ⚠️ Overload resolution interacts with **default parameters** and **distinct type
   aliases** (ch.02) — both can change which candidate wins.
 - ⚠️ *One type under two predefined names is an EXACT match, not a merely
@@ -668,6 +750,22 @@ function Area(C: TCircle): Double; overload;
   local/probe-b31 O1.dpr (the names, the native pair on both targets, the
   generic record across units), O2.dpr (the literal) and O3.dpr (the
   enumeration).
+- ⚠️ *A number, a Boolean, a character or an enumeration value never reaches
+  a record parameter but through the record's conversion operator*, so a
+  candidate wanting one is OUT however well its other parameters fit.
+  `TextToFloat(PChar(S), E, fvExtended)` against SysUtils' `(Buffer:
+  PWideChar; var Value; ValueType: TFloatValue)` and `(const S: string; var
+  Value: Extended; const AFormatSettings: TFormatSettings)` calls the first,
+  in either declaration order, although the second ranks the Extended
+  variable exact against an untyped `var` and the PChar's conversion to
+  string well. A string is not in the rule: a string constant converts to
+  TGUID. dcc64 37.0, 2026-11-05 (PasTree local/type-conv-2026-11/n1, the
+  corpus gate's TextToFloat call).
+- ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
+  the conversion ranking above has no say for it: with `V(var X: Double; D:
+  Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a
+  Single SG and a Double D calls the Single one, although the Double
+  argument's conversion to Single ranks low. dcc64 37.0, 2026-11-05.
 - ⚠️ *An overload declared only in the IMPLEMENTATION section joins the interface
   section's set for the same unit.* dcc-verified: a 3-parameter `Conv` in the
   interface and a 4-parameter `Conv` in the implementation, and both call shapes

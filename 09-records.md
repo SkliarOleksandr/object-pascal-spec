@@ -567,6 +567,40 @@ type
   ROpAr.dpr).
 - `Implicit`/`Explicit` define conversions to/from other types — they drive
   implicit/explicit cast resolution.
+- ⚠️ *`Implicit` converts by its SIGNATURE, through one operator; `Explicit`
+  never converts implicitly.* An `Implicit(A: Q): R` declared by the wanted
+  type or by the value's type converts a value that goes to Q by a BUILT-IN
+  conversion, and R to the wanted type by one:
+  - `Implicit(A: Integer): TRi` takes an Integer, a Byte, a Word, an Int64
+    (narrowing), `5`, `300` and a Variant - not a Single, a Double, `1.5`, a
+    string, a Char or nil; `Implicit(A: Byte)` takes the integers and a
+    Variant, and `300` is E1012; `Implicit(A: Double)` every integer, real
+    and Variant; `Implicit(const A: Variant)` every number and string, not
+    nil;
+    `Implicit(A: string)` a string, an AnsiString, a Char, a literal and a
+    Variant; `Implicit(A: Pointer)` nil, a pointer, `@I` and a class
+    instance; `Implicit(A: TStream)` a descendant and nil;
+  - on the result side `Implicit(A: R): Integer` reaches an Integer, Int64,
+    Byte, ShortInt, Double or Variant parameter, not a string one;
+  - never a CHAIN: TB's `Implicit(A: TA): TB` and TD's `Implicit(A: TB): TD`
+    leave `F(RA)` for F(TD) E2010, and so do a result side followed by a
+    parameter side (TA's `Implicit(A: TA): Integer`, TRd's `Implicit(A:
+    Double)`) and a generic record's two (a TNul<Byte> is no
+    TNul<Integer>, though Byte -> Integer is built in);
+  - a record with only `Explicit(A: Integer): TRe` takes no argument at all
+    (E2250 for every one), and `Explicit(A: TA): Integer` leaves `F(RA)` for
+    F(Integer) E2010;
+  - a generic record's operators work in its instance: `TNul<T>` with
+    `Implicit(A: T): TNul<T>` takes an Integer and a Byte for TNul<Integer>,
+    not a Double or `'x'`; F(TNul<Integer>) or F(TNul<string>) takes the
+    first for an Integer, the second for a string or a Char, and is E2251
+    for a Variant.
+  How such a conversion ranks against the built-in ones and against
+  another user conversion is 6.3.1. dcc64 37.0, 2026-11-05 (PasTree
+  local/type-conv-2026-11/n2, Sets X and Z).
+  *Implementation note (PasTree):* TPasSemaProject.UserConvX, and the unit
+  typer's UserConvSym, read the operators this way; `HasImplicitOperator`
+  counts `Implicit` only.
 - *`nil` reaches a record through `Implicit`:* with `class operator
   Implicit(Value: Pointer): TPtrRec` (or a class parameter - the RTL's
   TResourceValue has `Implicit(const Value: TStream)`), `Q := nil` compiles

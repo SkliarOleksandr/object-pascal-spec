@@ -760,7 +760,83 @@ function Area(C: TCircle): Double; overload;
   variable exact against an untyped `var` and the PChar's conversion to
   string well. A string is not in the rule: a string constant converts to
   TGUID. dcc64 37.0, 2026-11-05 (PasTree local/type-conv-2026-11/n1, the
-  corpus gate's TextToFloat call).
+  corpus gate's TextToFloat call). Nor does a class instance, a pointer, a
+  set or an interface VARIABLE reach a record without an `Implicit` that
+  takes it (E2010 for each as a lone parameter; beside an overload that
+  takes it, that one is chosen): `LBalloon.ShowHint(Self)` in a control
+  calls TBalloonHint's ShowHint(Control: TControl), not the TPoint or TRect
+  overload declared before it; `CalculatePopupWindowPosition(@P, @S, ...)`
+  the PPoint / PSize overload. An interface TYPE NAME is not in the rule
+  either: it converts to TGUID (`Supports(X, IFoo)`). dcc64 37.0,
+  2026-11-05 (local/type-conv-2026-11/n2, P2.dpr and the corpus gate).
+- ⚠️ *A user conversion (`class operator Implicit`, 9.3.1) ranks BETWEEN the
+  built-in ones, at the line Variant draws.* Every row of the ranking above
+  splits at Variant: what ranks above it keeps every value (an Integer to
+  Int64, UInt64 or a real; a Byte to any wider integer or real; a string to
+  WideString), what ranks below loses some (the narrower integers and
+  Cardinal for an Integer; every real but Comp for an Int64; Double for an
+  Extended or a real literal; the Ansi kinds for a Unicode string, a string
+  literal or a one-character one; for a PChar or PAnsiChar, which Variant
+  refuses, the kinds below WideString). Against that line, in this order:
+  1. a built-in conversion that loses nothing - and one the ranking does not
+     cover: a class to its ancestor, nil to a class or a pointer - wins over
+     any user conversion: an Integer takes F(Double), F(Int64) and
+     F(Variant) over F(TRi) with `Implicit(A: Integer): TRi`; a
+     TMemoryStream F(TStream) over F(TRo) with `Implicit(A: TObject)`;
+  2. a user conversion whose BUILT-IN PART loses nothing - the argument to
+     the operator's parameter, or on the result side the operator's result
+     to the parameter - wins over a lossy built-in one: an Integer takes
+     F(TRi) over F(Byte) and F(ShortInt); a Byte F(TRb) (`Implicit(A:
+     Byte)`) over F(ShortInt); an Int64 F(TRv) (`Implicit(const A:
+     Variant)`) over F(Double) and F(Integer); a Variant F(TRv) over
+     F(Double), F(Byte) and F(string); `'abc'` F(TRv) over F(AnsiString);
+     `300` F(TRi) over F(Byte);
+  3. a lossy built-in conversion wins over a user one through a lossy part:
+     an Integer takes F(ShortInt) over F(TRb), an Int64 F(Byte) over F(TRi).
+
+  Two user conversions through DIFFERENT operators compare by the level of
+  their built-in part alone: the argument's own type (an integer constant:
+  any integer of 32 bits or less that holds it); then the lossless
+  conversions - the integers and the reals one level, an Ansi string's
+  Ansi kinds above the Unicode ones, an AnsiChar's Ansi kinds, then
+  ShortString, then the Unicode ones, a one-character literal's string and
+  WideString above PChar and AnsiChar; then Variant; then every lossy one
+  alike. A Byte for F(TRb) or F(TRi) takes TRb, for F(TRi) or F(TRd)
+  (`Implicit(A: Double)`) is E2251; `5` for F(TRb) or F(TRi) is E2251, for
+  F(TRi) or F(TRd) takes TRi; an Int64 for F(TRi) or F(TRd) is E2251, for
+  F(TRv) or F(TRd) takes TRv; an AnsiString for F(TRs) (`string`) or
+  F(TRu) (`UTF8String`) takes TRu. Through ONE operator the result's
+  conversions rank as for a variable of the result's type: a record with
+  `Implicit(A: R): Integer` takes F(Byte) over F(ShortInt), F(Int64) over
+  F(Double), F(Integer) over F(Variant). With `Implicit(A: R): Integer`
+  and `Implicit(A: R): string` it takes F(string) over F(Int64) (the exact
+  result over a widened one), F(Integer) or F(string) is E2251, and a lone
+  F(Variant) is E2250 (both results reach it). Among one record's own
+  operators the argument picks as in a call: `Implicit(A: Integer)` and
+  `Implicit(A: Double)` take an Int64 and a Variant through the Double one,
+  a Byte through the Integer one. Two operators that both take the
+  argument exactly are E2251: TB's `Implicit(A: TA): TB` against TC's
+  `Implicit(A: TA): TC`, or TA's `Implicit(A: TA): TB` against TC's
+  `Implicit(A: TA): TC`, for F(TB) / F(TC). No choice depends on the
+  declaration order.
+  The line weighs across a call's arguments too, for built-in conversions
+  alone: a lossy conversion of one argument costs a candidate more than a
+  lossless conversion of another where its rival is exact. `EnsureRange(S,
+  -C.Height, 0)` for a Single S and a Single property (`-` makes it an
+  Extended) calls the Extended overload over the Single one; `Add(LDate,
+  0)` for an Int64 LDate calls `Add(const AArgument,
+  AValue: Variant; ...)` over `Add(const AArgument, AValue: Double)`
+  (dcc64 and dcc32 37.0, local/type-conv-2026-11/n2 P1.dpr, P4.dpr).
+  *Evidence:* dcc64 37.0, 2026-11-05, runtime output of PasTree's
+  local/type-conv-2026-11/n2: a record from the argument's own kind against
+  each of the 24 numeric and string kinds (Set U, 1,440 calls), two
+  records each from one kind (Set V, 16,560), a record from any kind
+  against a built-in parameter of any other (Set W, 33,120: all but 74 as
+  stated - those 74 the ShortString-refuses-PChar quirk above), and the
+  structural cases (Sets X, Z: 1,982).
+  *Implementation note (PasTree):* the line is `ConvThreshold`, the levels
+  `CConvUserLevels` (generated from Set V), the tiers `CRankLossless` /
+  `CRankUser` / `CRankLossy` (PasTree.Sema.Types).
 - ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
   the conversion ranking above has no say for it: with `V(var X: Double; D:
   Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a

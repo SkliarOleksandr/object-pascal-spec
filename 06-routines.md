@@ -722,8 +722,12 @@ function Area(C: TCircle): Double; overload;
   end)` and `Make(1, Noop)` call `Make(A: Integer; P: TMyProc)` beside
   `Make(A: Integer; B: Boolean = False)`, and `Take(DoIt<Integer>)` calls
   `Take(P: TProcM)` (`procedure of object`) beside `Take(A: Integer; B:
-  Boolean = False)`. A FUNCTION designator is different: in a value position
-  it may be called (6.6.1), so it rejects nothing by itself.
+  Boolean = False)`. A Variant parameter is no exception (`E2250` for `F(G0)`
+  and `F(procedure begin end)` against F(Variant); local/type-conv-2026-11/n5
+  Set A). A FUNCTION designator is different: in a value position it may be
+  called (6.6.1), so it rejects nothing by itself - unless it has a
+  parameter the caller must supply (`E2035`; the procedural-types bullet
+  below).
 - *A type qualifier does not filter the candidates - it judges the winner.*
   With a private `function Enter(Timeout: Integer)` and a public `class
   function Enter(Timeout: Int64)`, `TGen<Integer>.Enter(I)` for an Integer
@@ -1004,6 +1008,97 @@ function Area(C: TCircle): Double; overload;
   conversions' places against the arrays' conversions are not kept there -
   the open and dynamic arrays' conversions give no evidence in `CtorElemFit`,
   and a set's conversion gives none either.
+- ⚠️ *Procedural types: what converts, and the ranking.* What a procedural
+  parameter takes is decided by the signature (6.6.1): the same number of
+  parameters, each of the same mode (value, `const`, `var`, `out`) and the
+  same type, procedure or function alike with the same result type, and the
+  same calling convention - a difference in any is `E2250` in an overload
+  set (alone, `E2009 Incompatible types: 'Parameter lists differ'` /
+  `'Calling conventions differ'`, `E2010` for a parameter's type). Parameter
+  names and defaults do not count. Then the kinds:
+  - *a routine's name* - a unit-level routine, a static class method - goes
+    to a plain procedural type of its signature, every one alike (G1 for
+    `TP1` / `TP1d = type TP1` is E2251), then to a `reference to` type of
+    it, every one alike (`TR1` = `TProc<Integer>`); a method - an instance
+    method, a non-static class method, through an instance or the type
+    (`O.M1`, `TC.CM1`, `O.CM1`) - goes to an `of object` type of its
+    signature, then to a `reference to` one; never plain to `of object` or
+    the reverse (`E2009 'regular procedure and method pointer'`). A generic
+    method instantiated in place (`O.GM<Integer>`, `TC.GS<Integer>`) ranks
+    as any method. A routine's name reaches nothing else: not Pointer,
+    Variant, TObject, IInterface, a record, `TMethod` (`E2035 Not enough
+    actual parameters` for one with a parameter, `E2250` for one without).
+  - *an overloaded name* goes wherever one of its overloads fits: GO with
+    `GO(A: Integer)` and `GO(const S: string)` takes `TP1` and `TPs` alike
+    (E2251 between them), each over a `reference to` type. *Observed, not
+    derived:* a METHOD's set reaches a `reference to` type through its first
+    overload alone - `O.MO` with `MO(A: Integer)` declared before `MO(const
+    S: string)` goes to TR1 and TProc<Integer> but not to `reference to
+    procedure(const S: string)` (E2250), while it reaches both `of object`
+    types, and the unit-level GO reaches both `reference to` ones.
+  - *a parameterless function's name* is also a call (6.6.1): GF0 (`function:
+    Integer`) takes F(Integer) - its result's own type - over F(TF0) over
+    F(TRF0) = F(TFunc<Integer>) over every conversion of the result
+    (F(Int64), F(Byte), F(Double), F(Variant)): the result's exact type above
+    the routine as a value, the value above the result's conversions. A
+    function whose result is itself procedural is not called for a
+    procedural parameter: GFP (`function: TP1`) takes F(TFP) for `TFP =
+    function: TP1` and is `E2250` for F(TP1). A function with a parameter
+    the caller must supply is no value (GF1 for F(Integer), F(Variant):
+    `E2035`).
+  - *a procedural variable* (a field, a property, a call's result alike)
+    goes to its own type (a weak alias is it); then to a distinct plain or
+    `of object` type of its signature (a TP1 for `TP1d = type TP1`, a TP1d
+    for TP1, a TM1 for `TM1x = procedure(A: Integer) of object`); then to a
+    `reference to` type of it. A variable of a parameterless function type is
+    also a call: a TF0 takes F(TF0) over F(Integer) over F(TRF0) over F(Int64)
+    and F(Double); a `reference to function: Integer` variable F(TRF0) over
+    F(Integer) over F(Variant). One of a procedure type, or of one needing an
+    argument, reaches no other parameter (Pointer, Variant, TObject, a record
+    with an `Implicit` from its own type: E2035 / E2250).
+  - *a `reference to` value* (a variable of such a type) reaches its OWN type
+    alone in an overload set - even a lone overloaded parameter of another
+    `reference to` type of its signature is E2250 (a TProc<Integer> for
+    F(TR1), a TR1 for F(TProc<Integer>), TProc for TR0) - though an
+    assignment and a parameter of a routine that is not overloaded take one
+    (17.1.1).
+  - *an anonymous method* goes to the `reference to` types of its signature
+    alone, all alike (17.2.1), not to a distinct copy of a plain type
+    either, nor to Variant.
+  - *an untyped Pointer value* - a Pointer variable, and `@` of a routine, a
+    procedural variable (`@vP1`, `@vM1`, `@vR1`: the routine's address) or
+    an overloaded name under `{$T-}` - goes to Pointer, then a typed pointer
+    (PByte), then every plain procedural type alike, whatever its signature
+    or convention, then a class (TObject), then a record through an
+    `Implicit` from a plain procedural type; never to an `of object` or
+    `reference to` type, Variant, an interface, a number, TMethod. Under
+    `{$T+}` `@G1` is a typed pointer that reaches Pointer and neither PByte
+    nor TP1. `@O.M1` is `E2036 Variable required`.
+  - *nil* (the order of the classes bullet above): a plain and an `of object`
+    type tie (TP1 = TM1), both above TObject, above a `reference to` type,
+    above IInterface; a generic `reference to` instance ties with IInterface
+    (TProc<Integer> = IInterface, as an instance of a generic interface
+    does). nil reaches no `TMethod` (a record without `Implicit`).
+  - a `var` procedural parameter takes the identical type only, an alias
+    included (E2033 for a `type TP1` copy, for another `of object` type of
+    the signature, for another `reference to` type).
+  - a nested routine is no value: E2094 for a plain parameter, `E2555
+    Cannot capture symbol` for a `reference to` one.
+  No choice depends on the declaration order. *Evidence:* dcc64 37.0,
+  2026-11-06, runtime output of PasTree's local/type-conv-2026-11/n5: 48
+  arguments (routine names, overloaded and generic ones, methods through an
+  instance and a type, static and class methods, parameterless functions,
+  anonymous methods, plain, method and reference variables, `@` forms, a
+  Pointer variable, nil) against 33 parameter types alone (Set A, 1,584
+  calls), every pair of the types each takes in both orders (Set B, 3,042),
+  called results, distinct copies, `{$T+}`, nested and generic routines,
+  `var` parameters and non-overloaded calls (Set C, 143).
+  *Implementation note (PasTree):* `TSemaProcConv`, `ProcConvRank`,
+  `ProcKindsMeet`, `ParamModeOf`, `DirectiveConvOf`, `RoutineProcKind`
+  (PasTree.Sema.Types) are the rule both scorers read; a `reference to`
+  value for another `reference to` type ranks there as the weakest
+  procedural conversion rather than out, so a lone parameter of a routine
+  that is not overloaded keeps its call.
 - ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
   the conversion ranking above has no say for it: with `V(var X: Double; D:
   Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a
@@ -1508,6 +1603,22 @@ type
   pointer** (`of object` = code + `Self`, 8/16 bytes), and a **reference** (an
   interface-backed closure that can capture locals). Keep the kind on the type
   node — assignment compatibility differs across them.
+- ⚠️ *Compatibility is by signature and kind, not by name.* A routine, a
+  method or a procedural value goes to a procedural type whose signature
+  matches its own: the same number of parameters, each of the same mode and
+  type, the same procedure / function kind and result type, the same
+  calling convention - the convention counts on Win64 too, where the
+  conventions share one ABI (`E2009 Incompatible types: 'Calling
+  conventions differ'` for a `stdcall` routine and a register type, `'Parameter
+  lists differ'` for `const A: Integer` against `A: Integer`). Two plain
+  types of one signature are compatible whatever their names - a distinct
+  copy `TP1d = type TP1` included - and so are two `of object` ones; a plain
+  value never goes to `of object` or back (`E2009 'regular procedure and
+  method pointer'`); a plain or method value goes to a `reference to` type of
+  its signature, never the reverse (17.1.1). A `var` parameter wants the
+  identical type (E2033). The ranking among them for an overloaded call is
+  6.3.1's procedural-types bullet. dcc64 37.0, 2026-11-06 (PasTree
+  local/type-conv-2026-11/n5).
 - ⚠️ *Writing the NAME of a procedural value in a value position CALLS it* — the
   classic Pascal rule, and the one that decides what `.Member` after it means.
   With `ValueFunc: TFunc<IValue>` (that is, `reference to function: IValue`),

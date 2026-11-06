@@ -80,7 +80,13 @@ type
   `R := C.M`, a class method `R := TC.CM`, a static class method `R :=
   TC.SM`, and an `of object` variable `R := MP` all compile (signatures
   matching). The reverse, `MP := R`, is `E2010 Incompatible types: 'TMeth'
-  and 'TProc<Integer>'`. A routine NESTED in the current one is refused with
+  and 'TProc<Integer>'`. Two `reference to` types of one signature are
+  assignment-compatible - a TR1 (`reference to procedure(A: Integer)`)
+  variable passes to a non-overloaded `H(A: TProc<Integer>)` and the reverse
+  - but an overload set takes a `reference to` value for its own type alone:
+  a lone `F(A: TProc<Integer>); overload;` is `E2250` for it (6.3.1, the
+  procedural-types bullet; dcc64 37.0, 2026-11-06, PasTree
+  local/type-conv-2026-11/n5 Sets A and C). A routine NESTED in the current one is refused with
   the capture error, `R := Nested` - `E2555 Cannot capture symbol 'Nested'`
   (17.3.1).
 - *AST:* `AnonMethodType { kind: proc|func, params[], resultType?,

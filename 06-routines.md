@@ -228,6 +228,10 @@ procedure Swap(var A, B: Integer);
   compile. A `const` parameter passed on to a `var` one is `E2197`.
   dcc64 37.0, 2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3
   Params.dpr).
+- *In an overload set* a candidate whose `var` / `out` parameter the
+  argument does not match - another type, or no variable - is out, and the
+  call goes to another overload with no E2033 (6.3.1, the parameter-modes
+  bullet; dcc64 37.0, 2026-11-06).
 
 ### 6.2.3 `const` parameters (and `const [Ref]`)
 
@@ -513,6 +517,10 @@ procedure FillZero(var Buf; Count: Integer);
   `E2197 Constant object cannot be passed as var parameter`. dcc64 37.0,
   2026-10-30 (spec audit g3, local/probe-park/spec-audit/g3 Params.dpr,
   UntypedC.dpr).
+- *In an overload set* an untyped parameter ranks just above the
+  argument's Variant line, a value that is no variable puts an untyped
+  `var` / `out` one out, and an untyped `const` one is E2036 after the
+  choice (6.3.1, the parameter-modes bullet; dcc64 37.0, 2026-11-06).
 
 ---
 
@@ -1151,7 +1159,10 @@ function Area(C: TCircle): Double; overload;
     to the own type (`array of TObject` below TObject for a TObject). It
     must be of the element type exactly: a TComponent goes to no `array of
     TObject`, a Byte to no `array of Integer`. *Observed:* a TComponent for
-    `array of TComponent` / TObject is E2251.
+    `array of TComponent` / TObject is E2251. Not only a variable: a
+    property, a function's result, an element, a dereference, a cast are
+    single values too, a literal and a true constant are not (the
+    parameter-modes bullet below).
   - *Variant* goes to a dynamic array of any element (checked at run time:
     EVariantInvalidArgError), in an overload set at the rank of its
     narrowing conversions (E2251 beside Integer, Int64 and string), below
@@ -1180,9 +1191,9 @@ function Area(C: TCircle): Double; overload;
   `ArrayIdentitySym` / `ArrayShapeSym`; `OpenArrayArgFit` scores the open
   array and the single variable; `CtorElemFit` / `CtorValueFit` /
   `SetCtorFit` place a `[...]`'s conversions by kind on one scale
-  (`CCtor*`). Not modelled: an untyped parameter's place (it gives no
-  evidence, so Variant and a record's `Implicit` are preferred to it), an
-  inline array against a named array type, Pointer, Variant (no evidence),
+  (`CCtor*`); an untyped parameter's place is the parameter-modes bullet
+  below. Not modelled: an inline array against a named array type,
+  Pointer, Variant (no evidence),
   `[]` between two open arrays (dcc prefers one by an order of its own:
   `array of Int64` over `array of Integer`, `array of Integer` over
   `array of Double`).
@@ -1250,19 +1261,9 @@ function Area(C: TCircle): Double; overload;
   - *nil* (the classes bullet above): Pointer > every typed pointer (=) >
     the procedural types > classes > ...; through `Implicit` from Pointer
     above one from a typed pointer (TRp over TRpc).
-  - *an untyped parameter* (`const A` / `var A`, 6.2.7) ranks below every
-    lossless built-in conversion of the argument except to Variant, and
-    above Variant and everything below it - the user conversions and the
-    lossy built-in ones: a Byte takes Integer, Word and Double over it, it
-    over Variant and ShortInt; a Double Extended over it, it over Single and
-    Currency; a string WideString over it, it over Variant, AnsiString and
-    ShortString; a PChar WideString over it, it over a record and
-    AnsiString; a class instance Pointer over it, it over a record; a typed
-    pointer Pointer over it, it over `Implicit` from its own type; a
-    Boolean, an enumeration value, a dynamic array: it over Variant. It
-    takes a variable, a typed constant, a function result, a cast of a
-    variable (`PI(P)`, `Pointer(O)`) and a string literal of other than one
-    character; `0`, `K0`, `'a'`, nil, `@X`, `PChar(S)`, `P + 1` are E2036.
+  - *an untyped parameter* (`const A` / `var A`, 6.2.7): Pointer over it,
+    it over `Implicit` from the pointer's own type - the parameter-modes
+    bullet below; `0`, `K0`, `'a'`, nil, `@X`, `PChar(S)`, `P + 1` are E2036.
   No choice depends on the declaration order. *Evidence:* dcc64 37.0,
   2026-11-06, runtime output of PasTree's local/type-conv-2026-11/n7: 47
   arguments (typed pointers named, aliased, distinct, inline and of System,
@@ -1279,17 +1280,113 @@ function Area(C: TCircle): Double; overload;
   `rcTyped*`, `rcClassRef*` rows and `CPtrRank*`, `ZeroPointerRank`
   (PasTree.Sema.Types); `XRefConvX` / `TypedPointersMeetX` /
   `AddrArgFitX` and `RefConvSym` / `PointeeSym` / `AddrArgSym` decide the
-  pair, `ArgCatRejects` the numbers, strings and Variant. Not modelled: an
-  untyped parameter's place (no evidence there), the E2036 of a value that
-  is no variable for an untyped or `var` parameter, `@S[1]` under `{$T+}`
-  as a PChar, a record's `Implicit` reached from a literal 0 or under
-  `{$T+}` from another typed pointer of its base, an inline `^T` variable
-  (no type).
-- ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
-  the conversion ranking above has no say for it: with `V(var X: Double; D:
-  Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a
-  Single SG and a Double D calls the Single one, although the Double
-  argument's conversion to Single ranks low. dcc64 37.0, 2026-11-05.
+  pair, `ArgCatRejects` the numbers, strings and Variant. Not modelled:
+  `@S[1]` under `{$T+}` as a PChar, a record's `Implicit` reached from a
+  literal 0 or under `{$T+}` from another typed pointer of its base, an
+  inline `^T` variable (no type).
+- ⚠️ *Parameter modes: an untyped parameter's place, and what a `var` /
+  `out` parameter takes.* (6.2.2, 6.2.6, 6.2.7.)
+  - *An untyped parameter* - `const A`, `var A` and `out A` alike - ranks
+    just above the argument's Variant line: below every lossless built-in
+    conversion of the argument except the one to Variant, above Variant and
+    everything below it - the user conversions (`class operator Implicit`)
+    and the lossy built-in ones. A Byte takes Integer, Word, Double, a
+    distinct `type Integer` over it, it over Variant, OleVariant, ShortInt
+    and a record's `Implicit(A: Integer)`; an Integer Int64, Single,
+    Currency over it, it over Cardinal, Word, Byte and a subrange `1..10`; a
+    Double Extended over it, it over Single and Currency; a Currency nothing
+    but its own type over it (Extended loses digits); a string WideString
+    over it, it over Variant, AnsiString and ShortString; a Char string and
+    WideString over it, it over Variant and the Ansi kinds; a PChar, which
+    Variant refuses, Pointer, string and WideString over it, it over a
+    record and AnsiString; a string literal or string constant (`'abc'`,
+    `KS`) PChar and WideString over it, it over Variant; a Variant its own
+    type, IDispatch and IInterface over it, it over OleVariant and every
+    number, string, enumeration and dynamic array (an OleVariant likewise
+    over Variant); a class instance its ancestors, the interfaces its chain
+    lists and Pointer over it, it over a record; an interface its ancestors
+    over it, it over Variant; a class reference its ancestors' and Pointer
+    over it; an untyped Pointer value every typed pointer, class, class
+    reference and plain procedural type over it; a dynamic array its open
+    array, the single element and Pointer over it, it over Variant; a set
+    every set type its base meets over it (`set of TE` declared twice); a
+    Boolean, an enumeration value, a static array, a procedural value its
+    built-in conversions over it, it over Variant and a record. The `var`
+    and `const` forms are the same candidate as far as the overload set
+    goes: two routines differing only by the mode of an untyped parameter,
+    or a typed `var X: T` beside a value `X: T`, are E2004 (a ShortString is
+    an exception observed: `var X: ShortString` beside `X: ShortString`
+    compiles and the value one is taken).
+  - *What an untyped `const` parameter takes:* any value as far as the
+    ranking goes, then E2036 for one that is no variable - `F(5)` beside
+    `F(A: Variant)` is E2036, not a call of the Variant overload. So no code
+    that compiles passes it a literal of a number (`5`, `1.5`), nil, a
+    one-character literal (`'a'`), an operator (`I + 1`, `S + S`, `@X`), a
+    true constant that is no string (`K5`, `True`, an enumeration value), a
+    cast that changes the size (`Integer(B)` for a Byte) or a conversion
+    (`PChar(S)`), a property read by a getter; it takes a variable, a typed
+    constant, a function's result, a property read from a field, a string
+    literal of other than one character, a string constant, a `[...]`, an
+    element, a dereference and a cast that keeps the size (`Integer(C)` for
+    a Cardinal, `TComponent(O)`). *Observed:* `@A[I]` is taken where `@X` is
+    E2036.
+  - *A `var` or `out` parameter, typed or untyped,* takes a variable alone,
+    and a typed one its own type alone (6.2.2: E2033 for a lone routine).
+    In an overload set such a candidate is OUT - the call goes to another
+    overload, no E2033 is reported: `F(B)` for a Byte beside `F(var A:
+    Integer)` and `F(A: Variant)` calls the Variant one; `F(5)`, `F(KT)` (a
+    typed constant), `F(Obj.Prop)` (a property, field-read or not), a
+    literal, nil, a `[...]`, an operator, a true constant, a size-changing
+    cast and (for an untyped parameter) a function's result reach no `var`
+    candidate. A function's result for a typed `var` one is E2197 after the
+    choice. The same type is the weak alias (`TIal = Integer`) and one type
+    under two predefined names; a distinct copy (`type Integer`), a
+    descendant class for `var A: TObject`, an AnsiString for `var A:
+    string`, a dynamic array of another declaration (`TArray<Integer>` for a
+    TDA), another set type, a record's `Implicit` are each out. A `var` open
+    array takes what the value one takes - any array of its element, a
+    single value of the element type - and, of the values that are no
+    variable, a function's result and a property read by a getter (a
+    dynamic array: TList<T>.Sort passes its `List` property to
+    `TArray.Sort<T>(var Values: array of T; ...)`), not a property read
+    from a field; a `[...]` reaches it, then E2197. SysUtils'
+    `FormatBuf(Buffer^, ...)` for a Char calls the untyped `var Buffer`
+    overload, not `var Buffer: UnicodeString`. With `V(var X: Double; D:
+    Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for
+    a Single SG and a Double D calls the Single one, although the Double
+    argument's conversion to Single ranks low (dcc64 37.0, 2026-11-05).
+  - *A single value of an open array's element type* (6.2.6) is a variable,
+    a field, a parameter, a typed constant, a property, a function's result,
+    an element, a dereference or a cast - not a literal, a true constant or
+    an operator: `GI`, `A[0]`, `P^`, `Obj.Prop`, `Integer(C)` take `array of
+    Integer` over an untyped parameter, `5`, `K5`, `I + 1` reach no `array
+    of Integer`.
+  No choice depends on the declaration order. *Evidence:* dcc64 37.0,
+  2026-11-06, runtime output of PasTree's local/type-conv-2026-11/n8: 70
+  arguments (39 variables of every kind, literals, true and typed
+  constants, results, casts, fields, properties, elements, dereferences,
+  operators) against 43 parameter types and the untyped `const`, `var`,
+  `out` alone (Set L, 3,220 calls), each typed parameter beside an untyped
+  `const` (both orders) and `var` (Set U, 9,030), `var` and `out` typed
+  parameters alone (Set V, 3,827), a `var` parameter beside Variant and
+  the modes against each other (Set W, 6,722), sets, interfaces, class
+  references, procedural copies, a static Char array, a subrange and the
+  FormatBuf shape (Set X, 150).
+  *Implementation note (PasTree):* `UntypedParamRank` (PasTree.Sema.Types)
+  places the untyped parameter on each scale - ConvRank's, where Variant
+  ranks one below its line (`ConvThreshold`), and the reference scale
+  (`CUntyped*`); `UntypedConstShapeRejects`, `ByRefShapeRejects` and
+  `ByRefFitRejects` take out the values E2036 refuses after the choice and
+  the candidates a `var` / `out` parameter puts out; `SingleElemShape` the
+  open array's single value; `VariantIntfRank` a Variant's interfaces;
+  `CSetConvRank` a set's other set types. Not modelled: a subrange variable
+  has no rank of its own (`1..10` goes to Byte, Integer, Variant
+  unranked), a static Char array's AnsiString (above an untyped parameter
+  here), a size-changing cast and a property behind `Obj.Prop` for the
+  unit's own typer (it binds members later), the ShortString mode quirk,
+  a size-changing cast to a pointer or a class (only casts between two
+  scalars are told apart: a value typed wrong here would put out a call
+  that compiles), a property read from a field for a `var` open array.
 - ⚠️ *An overload declared only in the IMPLEMENTATION section joins the interface
   section's set for the same unit.* dcc-verified: a 3-parameter `Conv` in the
   interface and a 4-parameter `Conv` in the implementation, and both call shapes

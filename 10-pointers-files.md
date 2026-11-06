@@ -112,6 +112,16 @@ type
   identical: PInteger and PInt2`). dcc64 37.0, 2026-10-30 (spec audit g4,
   local/probe-park/spec-audit/g4 PCompat.dpr, PCompat2.dpr, PCompat3.dpr,
   PCompat4.dpr).
+- ⚠️ *The `{$T}` state that decides is the one where the value is PASSED.*
+  A procedure `F(A: PI2)` declared under `{$T+}` still refuses a `PI`
+  under `{$T-}` at the call, and one declared under `{$T-}` takes it from a
+  call under `{$T+}`. In an argument a typed pointer goes to the untyped
+  Pointer and (under `{$T+}`) to the typed pointers of its base, to no
+  class, number, string or Variant; only the predefined `PChar` /
+  `PAnsiChar` are strings too (a `PC2 = ^Char` for string is E2010); a
+  literal `0` (not a named constant of value 0) goes to every pointer. The
+  ranking of all of it is 6.3.1's pointers bullet. dcc64 37.0, 2026-11-06
+  (PasTree local/type-conv-2026-11/n7 Sets C, D).
 - Of the predefined typed pointers only `PByte` and the character pointers
   (`PChar`, `PWideChar`, `PAnsiChar`) carry `{$POINTERMATH}` semantics on their
   own (ch.04 §4.8); `PWord`, `PShortInt`, `PInteger`, `PCardinal`,

@@ -1162,7 +1162,8 @@ function Area(C: TCircle): Double; overload;
     (the classes bullet above: Pointer, PByte, TProc, TNotifyEvent, TClass,
     TObject and IInterface first), then a record through `Implicit`; never
     to a static array, an open array (`E2250`; an untyped `const`: `E2036`).
-    A Pointer variable reaches no array.
+    A Pointer variable reaches no array (but the single element of `array
+    of Pointer`: the pointers bullet below).
   - a `var` array parameter takes its own type (an alias) alone.
   No choice depends on the declaration order. *Evidence:* dcc64 37.0,
   2026-11-06, runtime output of PasTree's local/type-conv-2026-11/n6: 41
@@ -1185,6 +1186,105 @@ function Area(C: TCircle): Double; overload;
   `[]` between two open arrays (dcc prefers one by an order of its own:
   `array of Int64` over `array of Integer`, `array of Integer` over
   `array of Double`).
+- ⚠️ *Pointers: what converts, and the ranking.* A typed pointer type is
+  nominal under the default `{$T-}` (10.1.2) in an argument too, and the
+  `{$T}` state that counts is the one at the CALL, not at the declarations
+  of the routine or the types. Best first (`=` a tie, E2251):
+  - *a typed pointer value* (a variable, a function result, a cast `PI(P)`,
+    `P + 1` of a PByte or a PChar) goes to its own type (a weak alias is it);
+    then to the untyped Pointer; then to an untyped parameter; then to a
+    record through `Implicit` - one from its exact type above one from
+    Pointer (TRpi over TRp for a PI). It reaches no other typed pointer
+    under `{$T-}` - not one of the same base (`PI2 = ^Integer` for a `PI =
+    ^Integer`, System's PInteger), not a distinct copy `type PI`, not an
+    inline `^Integer` - and no class, class reference, interface,
+    procedural type, array (dynamic, static or `array of Pointer`),
+    `array of const`, number, character, string, Variant (E2250). Under
+    `{$T+}` at the call it goes to every typed pointer of its base as well,
+    those all tied below its own type and above Pointer (PI > PI2 =
+    PInteger = `type PI` > Pointer for a PI; PByte > PB for a PByte); a
+    `var` parameter still wants the identical type. The character pointers
+    PChar = PWideChar and PAnsiChar also go to the strings (the ranking of
+    numbers and strings above): Pointer = string > WideString > an untyped
+    parameter > a record (`Implicit(A: PChar)` over `Implicit(A:
+    Pointer)`) > AnsiString for a PChar; Pointer = AnsiString > string for
+    a PAnsiChar. No pointer type of the program's own is a string, even to
+    a character (`PC2 = ^Char` for string: E2010), though under `{$T+}` it
+    meets PChar as a pointer of its base.
+  - *an untyped Pointer value* (a variable, a function result, a typed
+    constant, a cast `Pointer(X)`): Pointer; every typed pointer (=, PChar
+    and PAnsiChar included); the single element of `array of Pointer`; a
+    plain procedural type (not for a
+    function result: a function's name is its procedural value there,
+    E2250); a class, the deeper first, a class reference between TObject
+    and its descendants; an untyped parameter; a record through `Implicit`
+    (from Pointer above one from a typed pointer). It reaches no interface,
+    method pointer, `reference to` type, Variant, number or string.
+  - *`@X` and `Addr(X)`* under `{$T-}` are untyped Pointer values that are
+    no variables: as a Pointer variable, but no untyped `const` / `var`
+    parameter (E2036), no `var` parameter, no `array of Pointer` element
+    (`@P` of a procedural variable is the variable itself, 4.8, and takes
+    them). `Addr(X)` stays untyped under `{$T+}`. Under `{$T+}` `@X` is a
+    pointer to X's type (4.8): every typed pointer of that base (=) >
+    Pointer > a record (`@I` for PI, PI2, PInteger; `@B` for PB, PByte;
+    `@Ch` for PChar but not for string); `@` of a routine or of a
+    procedural variable goes to Pointer alone (and a record's `Implicit`
+    from Pointer). *Observed:* `@S[1]` of a string is a PChar (string >
+    PChar there), `@P[1]` of a PChar reaches Pointer alone.
+  - *an integer constant 0 written as a literal or folded from literals*
+    (`0`, `$0`, `0 + 0`) goes to every typed pointer (=) above Pointer,
+    both below every number and Variant, above a record. A named constant
+    of value 0 (`const K0 = 0`) is no such value (E2010), nor is any other
+    integer: no number goes to a pointer, no pointer to a number (E2250).
+  - *a string literal* goes to PChar and PAnsiChar (the ranking above) and
+    to no other pointer, Pointer included; a string or character variable
+    to no pointer at all.
+  - *a class instance* goes to Pointer below its ancestors and interfaces
+    (the classes bullet above), to no typed pointer; *a class reference* to
+    the class references of its ancestors, the nearer first (a
+    TComponentClass takes TPersistentClass over TClass), then to Pointer,
+    then a record through `Implicit(A: Pointer)`; to no typed pointer,
+    class, interface, procedural type, dynamic array, Variant or number.
+    *An interface* reaches no pointer. *A dynamic array* goes to Pointer
+    and to no typed pointer (the arrays bullet above).
+  - *nil* (the classes bullet above): Pointer > every typed pointer (=) >
+    the procedural types > classes > ...; through `Implicit` from Pointer
+    above one from a typed pointer (TRp over TRpc).
+  - *an untyped parameter* (`const A` / `var A`, 6.2.7) ranks below every
+    lossless built-in conversion of the argument except to Variant, and
+    above Variant and everything below it - the user conversions and the
+    lossy built-in ones: a Byte takes Integer, Word and Double over it, it
+    over Variant and ShortInt; a Double Extended over it, it over Single and
+    Currency; a string WideString over it, it over Variant, AnsiString and
+    ShortString; a PChar WideString over it, it over a record and
+    AnsiString; a class instance Pointer over it, it over a record; a typed
+    pointer Pointer over it, it over `Implicit` from its own type; a
+    Boolean, an enumeration value, a dynamic array: it over Variant. It
+    takes a variable, a typed constant, a function result, a cast of a
+    variable (`PI(P)`, `Pointer(O)`) and a string literal of other than one
+    character; `0`, `K0`, `'a'`, nil, `@X`, `PChar(S)`, `P + 1` are E2036.
+  No choice depends on the declaration order. *Evidence:* dcc64 37.0,
+  2026-11-06, runtime output of PasTree's local/type-conv-2026-11/n7: 47
+  arguments (typed pointers named, aliased, distinct, inline and of System,
+  the character pointers, Pointer variables, `@` / `@@` / `Addr` forms,
+  string and integer literals and constants, function results, nil,
+  classes, a class reference, an interface, Variant, a dynamic array, a
+  procedural variable) against 37 parameter types alone (Set A, 1,739
+  calls), 22 of them under `{$T+}` (Set T, 814), 15 more argument forms
+  (pointer arithmetic, casts, element addresses, named and folded
+  constants; Set C, 717 with the `{$T+}` position cases), every pair of
+  the types each takes in both orders (Set B, 14,788), user `^Char`
+  pointers and the untyped parameter beside each kind (Set D, 122).
+  *Implementation note (PasTree):* the ranks are `RefConvRank`'s
+  `rcTyped*`, `rcClassRef*` rows and `CPtrRank*`, `ZeroPointerRank`
+  (PasTree.Sema.Types); `XRefConvX` / `TypedPointersMeetX` /
+  `AddrArgFitX` and `RefConvSym` / `PointeeSym` / `AddrArgSym` decide the
+  pair, `ArgCatRejects` the numbers, strings and Variant. Not modelled: an
+  untyped parameter's place (no evidence there), the E2036 of a value that
+  is no variable for an untyped or `var` parameter, `@S[1]` under `{$T+}`
+  as a PChar, a record's `Implicit` reached from a literal 0 or under
+  `{$T+}` from another typed pointer of its base, an inline `^T` variable
+  (no type).
 - ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
   the conversion ranking above has no say for it: with `V(var X: Double; D:
   Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a

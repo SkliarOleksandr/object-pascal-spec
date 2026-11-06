@@ -503,6 +503,13 @@ Inc(P);         // steps by SizeOf(P^) on any typed pointer, no directive needed
   pointer type `Pointer`), while `var X := @I` then takes `PI := X` and `X^ +
   1`. The directive is positional, read where the `@` stands. dcc64 37.0,
   2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2 C5.dpr, C6.dpr).
+  `@` of a ROUTINE or of a procedural variable under `{$T+}` goes to the
+  untyped Pointer alone as an argument (no typed pointer takes it, while
+  under `{$T-}` every one does), and `Addr(X)` is the untyped Pointer
+  whatever the switch; `@S[1]`
+  of a string is a PChar there, `@P[1]` of a PChar a pointer reaching
+  Pointer alone. Arguments: 6.3.1's pointers bullet (dcc64 37.0,
+  2026-11-06, PasTree local/type-conv-2026-11/n7 Sets T, C).
   A member through such a pointer is the pointee's, by the implicit
   dereference (10.1): under `{$T+}`, with `R: TRec`, `var P := @R; P.Y := 1;
   P^.Y := 2;` compile and `P.Nope` / `P^.Nope` are `E2003 Undeclared

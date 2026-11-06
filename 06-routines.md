@@ -550,6 +550,13 @@ function Area(C: TCircle): Double; overload;
   called with these arguments`; a tie is `E2251 Ambiguous overloaded call to
   'S'` (`S(1, 1)` against `S(X: Single; Y: Integer)` and `S(X: Integer; Y:
   Single)`).
+- ⚠️ *An overload set takes less than an assignment:* a lone value
+  parameter of a routine that is NOT overloaded converts exactly as an
+  assignment does (2.6.1), but a candidate of an overload set - even the
+  only one - refuses three of those conversions: a typed pointer or a PChar
+  to a class reference (`TClass`), a PChar to a ShortString, an interface to
+  the untyped Pointer (`E2250`). dcc64 37.0, 2026-11-06
+  (local/type-conv-2026-11/m2 Set A vs n8 Set L: 6 of 2,870 pairs).
 - ⚠️ *A default can make two declarations collide only at the call:*
   `V(X: Integer; Y: Integer = 0); overload;` beside `V(X: Integer);
   overload;` declares cleanly, `V(1, 2)` calls the first, and `V(1)` is

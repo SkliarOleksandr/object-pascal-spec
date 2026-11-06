@@ -742,4 +742,66 @@ Three distinct relations the semantic layer must implement: **type identity**
     operand anywhere does too (`B := A + 300`). dcc64 and dcc32 37.0,
     2026-10-30 (spec audit g2, local/probe-park/spec-audit/g2 A5.dpr, A6.dpr,
     A9.dpr).
+  - ⚠️ *Assignment-compatibility IS the implicit conversion of a lone value
+    parameter of a routine that is not overloaded.* `d := v` and `F(v)`
+    against `procedure F(A: T)` compile for the same pairs - 2,870 of
+    2,870 (70 values - variables of 39 types, literals, constants, results,
+    casts, fields, properties, elements, operators - against 41 types), so
+    6.3.1's conversions are this relation's, and a candidate of an overload
+    set takes LESS than it (6.3.1: a typed pointer or a PChar to a class
+    reference, a PChar to a ShortString, an interface to the untyped
+    Pointer reach no overload). `Result :=`, a function's own name, `Exit(X)`,
+    a `for` counter and its bounds and a `for-in` variable from its element
+    (`for B in DA` of a Byte over `array of Integer` compiles, `for I in SE`
+    of an Integer over a `set of TE` and `for AC in S` of an AnsiChar over a
+    string are `E2010`) are this relation too. Its edges, observed:
+    - between two types: a Char and an AnsiChar VARIABLE convert neither way
+      (`E2010`), a WideChar is Char; an enumeration and its subranges, and
+      two subranges of one, convert whatever their ranges (`E := ES`, `ES :=
+      ES2` for `ES = e1..e2`, `ES2 = e2..e3`); a Variant goes to no
+      character, pointer, class, class reference, procedural type, set,
+      static array or record without `Implicit` (`E2010`), to IInterface /
+      IUnknown alone among the interfaces (a cast checked at run time; `IA :=
+      V` is `E2010`); `Integer := LongBool`, `Int64 := Currency`, `NativeInt
+      := Pointer`, `TClass := Obj`, `TObject := ClassRef`, an array or a
+      procedural type from a class, an interface or a class reference, a set
+      or a record from a class are `E2010`; ANY pointer - the untyped one, a typed one, PChar, PPointer -
+      goes to every class reference (`TClass := PI`, `TComponentClass :=
+      PI`) but a typed one to no class (`TObject := PI` is `E2010`, `TObject
+      := Ptr` compiles); an interface to the untyped Pointer (`Ptr := Intf`),
+      to no typed pointer; a typed pointer type is nominal under `{$T-}`
+      (`PI := PI2`, `PInteger := PI` are `E2010`) and meets those of its base
+      under `{$T+}` at the statement (10.1.2); a procedural value goes to
+      procedural types alone - `Pointer := P0` of a parameterless procedure
+      variable and `Variant := RP0` of a `reference to` one are `E2010`, while
+      a parameterless FUNCTION value is called (`I := F0` compiles, `Ptr :=
+      F0` is `E2010 'Pointer' and 'Integer'`, `Ptr := G1` of a procedure
+      needing an argument `E2035`); a `reference to` value goes to another
+      `reference to` type of its signature, a plain or method value to a
+      `reference to` one, a distinct copy `type TP1` and TP1 both ways; a
+      `reference to` type is an interface, so an instance of a class that
+      lists it goes to it (`R := Impl`, `R := TImpl.Create()` for `TImpl =
+      class(TInterfacedObject, TRefF)`; the paren-less `R := TImpl.Create`
+      is the constructor's method reference, `E2010`), a class, interface or
+      class reference that does not to no procedural type;
+    - by the value: a one-character literal goes to Char, WideChar and
+      AnsiChar (`AC := 'a'`, `C := Chr(65)`), a longer one to no character
+      (`C := 'ab'`, `C := #13#10` are `E2010`); a string literal or a true
+      string constant to PChar / PAnsiChar (`PC := KS`; a TYPED one is
+      `E2010`) and to a static array of Char it does not overflow (`CA :=
+      'ab'` and `CA := 'abcd'` for `array[0..3] of Char`; longer literals not
+      probed); an integer constant 0 -
+      a literal or folded from literals - to every pointer (`P := 0`, `PI :=
+      0`, `PC := 0`, `P := 0 + 0`), never to a class or a procedural type,
+      and a named `K0 = 0` to none (`E2010`); `@X` under `{$T-}` to every
+      typed pointer, under `{$T+}` to those of X's type alone (`PByte := @I`
+      is `E2010` there); a TYPE NAME is a class reference (`TClass :=
+      TComponent`, `Pointer := TComponent` compile, `TObject := TComponent`
+      and `Variant := TComponent` are `E2010`), an interface's its GUID where
+      it has one (`G := IA` without one is `E2232`); a string literal goes to
+      a TGUID only as a typed constant or an initialized global (`var G:
+      TGUID = '{...}'`), not in a statement or an inline variable (`E2010`).
+    dcc64 37.0, 2026-11-06 (local/type-conv-2026-11/m2: Set A 2,870
+    assignments, Set N the same as calls of a routine that is not
+    overloaded, Sets X and Y 377 shapes).
 - *AST:* no node; this drives the type-checker pass.

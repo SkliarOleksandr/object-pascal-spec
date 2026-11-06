@@ -71,7 +71,11 @@ PNode^.Value := 1;
   `E2197` as a `var` argument. The rule and its probe live in 6.2.2; do not
   reuse one "assignable designator" check for both contexts.
 - *Type rule:* RHS must be assignment-compatible with the LHS type (implicit
-  conversions per ch.04; otherwise error).
+  conversions per ch.04; otherwise error, `E2010`). The relation, measured,
+  is 2.6.1's: the conversion a lone value parameter of a routine that is
+  not overloaded takes, the value's own rules (literals, constants, a
+  called function, `@X`) on top - `Result :=`, a function's name, a `for`
+  counter's bounds and a `for-in` variable alike.
 - *AST:* `Assign { target: Designator, value: Expression }`.
 
 ### 5.1.2 Procedure / method call statement

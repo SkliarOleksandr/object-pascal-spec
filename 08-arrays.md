@@ -83,6 +83,13 @@ type
     `TArray<Integer>` is one type wherever it is written (16.3.1), but it is
     still not an `array of Integer` (`A1 := G1` is `E2010 'array of
     Integer' and 'TArray<Integer>'`) nor a named `TDA = array of Integer`.
+    So is every dynamic array declared in a generic type and instantiated:
+    `TG<Integer>.TDyn` for `TDyn = array of T` inside `TG<T>` is
+    TArray<Integer> (an overload pair of them is `E2004`), and no distinct
+    copy of an instance can be declared (`type TArray<Integer>` is `E2574
+    Instantiated type can not be used for TYPE'd type declaration`). What
+    each converts to in a call is 6.3.1 (*Arrays*). dcc64 37.0, 2026-11-06
+    (PasTree local/type-conv-2026-11/n6 Sets A, C).
   - *Comparison:* `=` / `<>` between two static arrays is `E2015 Operator
     not applicable to this operand type`, even of one type; between two
     dynamic arrays of ONE type it compiles (it compares the references), of

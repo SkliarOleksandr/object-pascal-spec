@@ -1004,10 +1004,9 @@ function Area(C: TCircle): Double; overload;
   expressions, ranges against bases, more element and array kinds (Set C,
   171), non-set values for a set and a set for non-set types (Set D, 66).
   *Implementation note (PasTree):* `SetsMeet`, `SetCtorElemFit`,
-  `SetCtorFit` (PasTree.Sema.Types) are the rule both scorers read; the
-  conversions' places against the arrays' conversions are not kept there -
-  the open and dynamic arrays' conversions give no evidence in `CtorElemFit`,
-  and a set's conversion gives none either.
+  `SetCtorFit` (PasTree.Sema.Types) are the rule both scorers read; a set's
+  widening and narrowing take their places among the arrays' conversions
+  through the `CCtor*` ranks (the arrays bullet below).
 - ⚠️ *Procedural types: what converts, and the ranking.* What a procedural
   parameter takes is decided by the signature (6.6.1): the same number of
   parameters, each of the same mode (value, `const`, `var`, `out`) and the
@@ -1099,6 +1098,93 @@ function Area(C: TCircle): Double; overload;
   value for another `reference to` type ranks there as the weakest
   procedural conversion rather than out, so a lone parameter of a routine
   that is not overloaded keeps its call.
+- ⚠️ *Arrays: what converts, and the ranking.* An array type is NOMINAL
+  (8.1.1): a typed array value - a variable, a field, a call's result -
+  goes to its own type alone among the array types, and its own type is any
+  name of it (a weak alias `TDAal = TDA`). Each of these is another type and
+  `E2250` in an overload set (`E2010` alone): a second declaration with the
+  same element (`TDA2 = array of Integer` for a TDA), a distinct copy
+  (`TDAd = type TDA`), a static array of the same bounds and element (`TSA2
+  = array[0..1] of Integer` for a TSA), a static array for a dynamic one and
+  the reverse, an array of another element (`TArray<TComponent>` for
+  `TArray<TObject>`, a TBytes for `TArray<Integer>`), and an array whose
+  type is written inline (`var A: array of Integer`, `array[0..1] of
+  Integer`, `array of array of Integer`), which no named type takes. The
+  exception is the GENERIC instance: a dynamic array declared in a generic
+  type and instantiated - `TArray<Integer>`, `TG<Integer>.TItems` for `TItems
+  = TArray<T>`, and `TG<Integer>.TDyn` for `TDyn = array of T` alike - is one
+  type with every other such instance of its element, so TArray<Integer>,
+  TIntegerDynArray (System.Types, `TArray<Integer>`), TG<Integer>.TDyn and a
+  TAI = TArray<Integer> are one type (two overloads of them are `E2004
+  Identifier redeclared`, as an open array and a `var` open array of one
+  element are), while TDA stays apart from all of them. A distinct copy of
+  an instance is refused at its declaration (`type TArray<Integer>` is
+  `E2574 Instantiated type can not be used for TYPE'd type declaration`).
+  - *a dynamic array value* goes to its own type, then to an open array of
+    its element (value, `const` and `var` alike - 6.2.6), to an open array
+    of its own type as the single element (`array of TDA` for a TDA, `array
+    of TArray<Integer>` for a TArray<Integer>: E2251 beside `array of
+    Integer`) and to Pointer, then to Variant = OleVariant (any element: a
+    `TArray<TObject>` compiles and raises EVariantTypeCastError at run
+    time), then to a record through an `Implicit` from its type
+    (`TRa.Implicit(const A: TArray<Integer>)`, below Variant); nothing else -
+    no TObject, interface, number, string or set. An untyped parameter
+    (6.2.7) ranks below Pointer and above Variant and the record.
+    *Observed:* a value open array ties Pointer (E2251) while a `var` one
+    is preferred to it.
+  - *a static array value* goes to its own type, then to an open array of
+    its element (every mode alike), then an untyped parameter, then a record
+    through `Implicit` - never to Pointer or Variant. A static array of Char
+    is a string too (4.2.1): `array[0..2] of Char` and `array[1..3] of
+    Char` go to string and AnsiString, the zero-based one to PChar as well,
+    `array[0..2] of AnsiChar` to string, AnsiString and PAnsiChar - each
+    below `array of Char` (`array of AnsiChar`), string above PChar; none
+    reaches Pointer, Variant or TArray<Char>. A dynamic `TArray<Char>` is no
+    string (`E2250` for string, PChar), though it goes to Pointer and
+    Variant.
+  - *a single VARIABLE of the element type* (6.2.6) ranks just below its
+    own type and above every conversion of it: a Byte takes `array of Byte`
+    over Integer, Variant and an untyped parameter; an Integer `array of
+    Integer` over Int64, Double and Variant; a TObject `array of TObject`
+    over Pointer; a string `array of string` over AnsiString, PChar and
+    Variant; a Variant `array of Variant` over TArray<Integer> - and loses
+    to the own type (`array of TObject` below TObject for a TObject). It
+    must be of the element type exactly: a TComponent goes to no `array of
+    TObject`, a Byte to no `array of Integer`. *Observed:* a TComponent for
+    `array of TComponent` / TObject is E2251.
+  - *Variant* goes to a dynamic array of any element (checked at run time:
+    EVariantInvalidArgError), in an overload set at the rank of its
+    narrowing conversions (E2251 beside Integer, Int64 and string), below
+    OleVariant, IInterface and `array of Variant` (its single element),
+    above a record through `Implicit` from the array; never to a static
+    array, an open array other than `array of Variant`, Pointer or TObject.
+  - *nil* goes to every dynamic array alike, last among the reference types
+    (the classes bullet above: Pointer, PByte, TProc, TNotifyEvent, TClass,
+    TObject and IInterface first), then a record through `Implicit`; never
+    to a static array, an open array (`E2250`; an untyped `const`: `E2036`).
+    A Pointer variable reaches no array.
+  - a `var` array parameter takes its own type (an alias) alone.
+  No choice depends on the declaration order. *Evidence:* dcc64 37.0,
+  2026-11-06, runtime output of PasTree's local/type-conv-2026-11/n6: 41
+  arguments (named, aliased, distinct, generic and inline dynamic arrays,
+  static arrays of one shape under several declarations, nested arrays, a
+  TArray<TVarRec>, Integer, Byte, Variant, Pointer, TObject, string, set,
+  TVarRec variables, nil) against 54 parameter types alone (Set A, 2,214
+  calls), every pair of the types each takes in both orders (Set B, 3,764),
+  static Char arrays, generic aliases, nested arrays and single elements
+  beside conversions (Set C, 223). The `[...]` against arrays and sets is
+  the open-array, dynamic-array and sets bullets above.
+  *Implementation note (PasTree):* `ArrayArgFit` (PasTree.Sema.Types) is
+  the rule both scorers read, over `ArrayIdentityX` / `ArrayConvX` and
+  `ArrayIdentitySym` / `ArrayShapeSym`; `OpenArrayArgFit` scores the open
+  array and the single variable; `CtorElemFit` / `CtorValueFit` /
+  `SetCtorFit` place a `[...]`'s conversions by kind on one scale
+  (`CCtor*`). Not modelled: an untyped parameter's place (it gives no
+  evidence, so Variant and a record's `Implicit` are preferred to it), an
+  inline array against a named array type, Pointer, Variant (no evidence),
+  `[]` between two open arrays (dcc prefers one by an order of its own:
+  `array of Int64` over `array of Integer`, `array of Integer` over
+  `array of Double`).
 - ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
   the conversion ranking above has no say for it: with `V(var X: Double; D:
   Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a

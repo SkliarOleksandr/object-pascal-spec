@@ -581,6 +581,17 @@ end;
   syntactically with array indexing — disambiguated by position.
 - Operators: `+` (union), `-` (difference), `*` (intersection), `in`,
   `=`/`<>`/`<=`/`>=` (subset/superset). See ch.04.
+- *Compatibility:* two set types are assignment-compatible when their base
+  types are of one ordinal family - the integers (`set of Byte`, `set of
+  0..5`, `set of 10..20` all meet), the characters (`set of Char` is a set
+  of AnsiChar and meets `set of AnsiChar` and `set of 'a'..'z'`), Boolean,
+  or one enumeration with its subranges and distinct copies (`type TE`); the
+  bases' ranges do not matter.
+  Sets of two enumerations, or an integer and a character set, do not
+  meet. A set converts to nothing but a set (and a record through its
+  `Implicit`) - no Variant, no array - and a `[...]` converts to no Variant.
+  How a set argument and a `[...]` rank among overloads, and the type of a
+  set expression, are 6.3.1 (*Sets*). dcc64 37.0, 2026-11-06.
 - *AST:* `SetType { baseType }`.
 
 ---

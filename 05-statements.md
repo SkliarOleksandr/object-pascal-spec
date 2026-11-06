@@ -904,6 +904,18 @@ end;
   the `with` targets, **then** against the enclosing scope. With multiple targets
   `with A, B do`, resolution goes **right-to-left** (the last/innermost target
   wins). This silently shadows locals/fields and is the classic `with` bug.
+- ⚠️ *A target member the code cannot SEE is passed over* (3.3.2's visibility
+  filter): a `private` member of a class declared in another unit, a `strict
+  private` one outside its class, and the lookup goes on in the declaring
+  class's ancestor, then in the next target, then in the enclosing scopes.
+  dcc64 37.0, 2026-11-06 (PasTree local/type-conv-2026-11/n4 W1.dpr): with
+  `TCv = class(TBase) private State: Integer; strict private Hid: Integer;
+  end` in unit WA and `TBase` declaring a public `State: string`, `with C do
+  Writeln(State)` in another unit prints TBase's string, and `Hid` there is
+  the enclosing routine's parameter. The VCL relies on it: `with Canvas do
+  ... ColorToBorderColor(..., State)` in a TCustomColorBox method of
+  Vcl.ExtCtrls passes the method's `State` parameter, not TCanvas's private
+  `State` field of Vcl.Graphics.
 - ⚠️ *A target member outranks EVERYTHING else in scope* — "first" above is
   absolute, not merely "before the unit scope". dcc-verified: a member wins
   over an enclosing class's own field, a routine local, a **parameter**, a

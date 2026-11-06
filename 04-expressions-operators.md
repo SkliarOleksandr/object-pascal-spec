@@ -436,6 +436,12 @@ Both := S1 * S2;
   2026-09-26). Write `(X in S) and C`.
 - `not in` (13.0) is the negated membership test, parsed as the `not`+`in` pair at
   relational level.
+- *The type of `+`, `-`, `*` over two sets* is the operands' when they are of
+  one type, else the one whose base holds the other's (`S05 * SB` is a `set
+  of Byte`), the left one when the bases are equal, a new anonymous set
+  when neither holds the other or the left operand is a `[...]` - what
+  decides an overload call it is passed to (6.3.1, *Sets*; dcc64 37.0,
+  2026-11-06).
 - *The set relations are `=`, `<>`, `<=`, `>=` only:* `S1 < S2` and `S1 > S2`
   are `E2008 Incompatible types` (not E2015).
 - *`in` with a left operand outside the set's range is simply False* - no

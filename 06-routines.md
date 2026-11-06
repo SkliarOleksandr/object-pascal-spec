@@ -903,6 +903,107 @@ function Area(C: TCircle): Double; overload;
   `RefUserRank` (PasTree.Sema.Types); two unrelated interfaces, or two
   classes off one chain, rank by depth there - a tie in dcc, so no code
   that compiles meets the pair.
+- ⚠️ *Sets: what converts, and the ranking.* A set parameter takes a set,
+  a set constructor `[...]` (`[]` included) or a true constant whose value
+  is one (`const KS = [e1, e2]`) - nothing else: no number, character,
+  string, enumeration value, Variant, pointer, `nil`, array or class (E2250
+  for each). A set goes nowhere else either: not to Variant, OleVariant, an
+  array of any kind, TObject, IInterface, a number or a class reference -
+  only to a set, to a record through an `Implicit` that takes it, and as the
+  element of an open array of its own type (`array of TSE` takes a TSE). A
+  `[...]` never reaches Variant either (E2250, `[]` included).
+  - *Two set types meet* when their base types are of one ordinal family:
+    the integers (`set of Byte`, `set of 0..5`, `set of 10..20`), the
+    characters (`set of Char`, `set of AnsiChar`, `set of 'a'..'z'` - a set
+    of Char is a set of AnsiChar, 2.4.1), Boolean, or ONE enumeration with
+    its subranges and distinct copies (`set of TE`, `set of TESub` for `TESub
+    = e1..e3`, `set of TEd` for `TEd = type TE`, a second `TSE2 = set of TE`,
+    a distinct `type TSE`, an anonymous `set of TE`; System.Math passes a
+    TArithmeticExceptionMask for a TFPUExceptionMask, `set of TFPUException`
+    with `TFPUException = type TArithmeticException`).
+    Sets of two enumerations do not meet (`set of TF` for a `set of TE`
+    parameter is E2250), nor an integer set and a character set. The base's
+    range does not matter: a `set of 0..5` value goes to `set of 10..20`.
+  - *A set VALUE* (a variable, a typed constant, a function result, an
+    expression) takes the overload of its own type (an alias is its own type)
+    over any other that meets it, and every other that meets it is one
+    conversion of one rank: a TSE2 for TSE / TSESub / TSEd is E2251, a
+    `set of 0..5` for `set of Byte` / `set of 10..20` too, a `set of Char`
+    for `set of AnsiChar` / `set of 'a'..'z'` too. Any of them beats a record
+    through `Implicit` (a TSE2 takes F(TSE) over F(TRs) whose `Implicit`
+    takes TSE).
+  - *A `[...]` has no type of its own*: every set it fits ranks the same, so
+    two sets of one family are always E2251 for it (`[e1]` for TSE /
+    TSESub, `[5]` for `set of Byte` / `set of 0..5`, `['a']` for `set of
+    Char` / `set of AnsiChar`, `[]` for ANY two sets, even of two
+    enumerations). An element of another family puts the set out (`[f0]`
+    takes F(TSF) beside F(TSE), `[5]` F(TSB) beside F(TSE)), and so does an
+    integer constant outside 0..255 for an integer set (`[B, 300]` takes
+    `array of Integer` beside `set of Byte`; alone, `[300]` for `set of Byte`
+    is `E1012 Constant expression violates subrange bounds`). Any other
+    constant outside the base's range is taken (`[5]` for `set of 10..20`,
+    `[e0]` for `set of TESub`, `[#$100]` for `set of Char`).
+  - *Against an array or `array of const`* (the open-array rows above), a
+    `[...]` for a set ranks by its WORST element, read against the set's
+    base type:
+    - a value of the base type itself (a Byte variable for `set of Byte`, a
+      TE variable for `set of TE`, an AnsiChar for any set of characters, a
+      Boolean variable for `set of Boolean`) is exact: above `array of
+      const` (`[B]` takes `set of Byte`, `[AC]` `set of Char`, `[BB]` `set
+      of Boolean` over it), level with the open array and the dynamic array
+      of that type (`[B]` for `set of Byte` / `array of Byte` and `set of
+      Byte` / TArray<Byte> is E2251; `[E]` for TSE / `array of TE`, TSE /
+      TArray<TE> too);
+    - an integer or character constant the base's range holds, True, an
+      enumeration value of the base type: below `array of const` and the
+      open array of that type, above the dynamic array's exact constant
+      (`[5]` takes `array of const` and `array of Byte` over `set of Byte`,
+      `set of Byte` and `set of 0..5` over TArray<Byte>; `[True]` `array of
+      Boolean` over `set of Boolean` over TArray<Boolean>; `['a']` `set of
+      AnsiChar` over TArray<AnsiChar>);
+    - anything else is a conversion: a wider or narrower variable (an
+      Integer or a Word for `set of Byte`, a Byte for `set of 0..5`, a Char
+      for `set of Char`, a TESub for `set of TE`, a TE value for `set of
+      TESub`) or a constant outside the base's range (`[15]` for `set of
+      0..5`). A set's widening ranks below the open array's and above the
+      dynamic array's (`[ES]` takes `array of TE` over `set of TE` over
+      TArray<TE>), its narrowing below the dynamic array's and above the
+      open array's (`[I]` takes TArray<Byte> over `set of Byte` over `array
+      of Byte`), and a constant outside the range below the dynamic array's
+      exact constant (`[15]` takes TArray<Byte> over `set of 0..5`).
+    Because a `[...]` ranks the same for every set it fits, the order is not
+    one scale: `[B]` for `set of Byte` / `set of 0..5` is E2251, though the
+    first ranks above TArray<Integer> and the second below it.
+  - *A range* in the brackets (`[e1..e3]`, `['a'..'z']`) or parentheses
+    around them (`([e1])`) make a set constructor no array takes; a true
+    constant holding a `[...]` is a set too - `KS`, `KB = [1, 2]`, `KE = []`
+    reach no open array, dynamic array or `array of const`. A `[...]` (or
+    such a constant) beats a record through `Implicit` for every set it fits,
+    `[]` too; to a `var` set parameter only the identical type goes (an alias
+    included), E2033 otherwise.
+  - *The type of a set expression* (4.6) is its operands' when they are of
+    one type; of two set types it is the one whose base holds the other's
+    (`vS05 * vSB` is a `set of Byte`, `vSESub + vSE` a TSE), the LEFT one
+    when the bases are equal (`vSE * vSE2` a TSE, `vSE2 * vSE` a TSE2, `vSC +
+    vSAC` a `set of Char`), and a new anonymous set when neither holds the
+    other (`vS05 + vS1020` is E2251 for `set of 0..5` / `set of 10..20`); a
+    `[...]` on the left gives the anonymous set too (`[e1] + vSE` is E2251
+    for TSE / TSESub, `vSE + [e1]` takes TSE).
+  - *observed, not derived:* beside `array of AnsiChar`, `[C]` for a Char C
+    is E2250 although `set of Char` alone takes it.
+  No choice depends on the declaration order. *Evidence:* dcc64 37.0,
+  2026-11-06, PasTree's local/type-conv-2026-11/n4: 46 arguments (set
+  variables of 14 set types, constructors of enumeration, integer,
+  character and Boolean elements, ranges, true and typed constants, set
+  expressions) against 27 parameter types alone (Set A, 1,242 calls), every
+  pair of the types each takes in both orders (Set B, 1,872), set
+  expressions, ranges against bases, more element and array kinds (Set C,
+  171), non-set values for a set and a set for non-set types (Set D, 66).
+  *Implementation note (PasTree):* `SetsMeet`, `SetCtorElemFit`,
+  `SetCtorFit` (PasTree.Sema.Types) are the rule both scorers read; the
+  conversions' places against the arrays' conversions are not kept there -
+  the open and dynamic arrays' conversions give no evidence in `CtorElemFit`,
+  and a set's conversion gives none either.
 - ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
   the conversion ranking above has no say for it: with `V(var X: Double; D:
   Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a
@@ -1158,8 +1259,9 @@ function Area(C: TCircle): Double; overload;
     elements both fit: `set of Byte` over `array of Integer` a Byte or a
     Cardinal variable, over `array of Byte` an Integer, a Word, a ShortInt
     or a SmallInt one; `TSysCharSet` over `array of Char` an AnsiChar,
-    while `['a']` and `[C]` take `array of Char`. Observed, not derived
-    further.
+    while `['a']` and `[C]` take `array of Char`. The rule is the sets
+    bullet above (*Sets: what converts, and the ranking*): a set ranks a
+    `[...]` by its worst element against its base type.
   - *In an argument the brackets are an open-array constructor:* a range in
     them is `E2029 ']' expected but '..' found` for a routine with one
     open-array parameter and fits no overload of a family (`Split(['a'..

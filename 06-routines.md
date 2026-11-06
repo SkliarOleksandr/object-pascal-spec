@@ -837,6 +837,72 @@ function Area(C: TCircle): Double; overload;
   *Implementation note (PasTree):* the line is `ConvThreshold`, the levels
   `CConvUserLevels` (generated from Set V), the tiers `CRankLossless` /
   `CRankUser` / `CRankLossy` (PasTree.Sema.Types).
+- ⚠️ *Classes, interfaces and nil: what converts, and the ranking.* Each of
+  these is a built-in conversion that loses nothing (tier 1 of the bullet
+  above: it wins over every user conversion of the same value); among
+  themselves, best first (`=` a tie, E2251):
+  - *a class instance* goes to its own class; to its ancestors, the NEARER
+    first (TObject last: with `T3 < T2 < T1 < TInterfacedObject`, an
+    argument of T3 takes F(T2) over F(T1) over F(TObject)); then to the
+    interfaces it implements - every class beats every interface, TObject
+    included (`F(TObject)` over `F(IB)` for a T1 that lists IB) - an
+    interface over its own ancestor (IB over IA over IInterface), two
+    unrelated ones `=` however far up their classes list them (T4 lists IA,
+    T2 lists IX: IA = IX for a T4); then to the untyped Pointer. It
+    reaches an interface only when its class or an ancestor class LISTS
+    that interface - not the listed one's ancestors (14.2.1): a T1 that
+    lists IB is E2250 for F(IA), a class listing IA on a TObject base is
+    E2250 for F(IInterface). It never reaches an unrelated class, a typed
+    pointer (`PGUID`), Variant, TGUID or a class reference (TClass).
+  - *an interface* goes to its own type; to its ancestors, the nearer first
+    (an IC takes IB over IA over IInterface); then Variant = OleVariant. It
+    never reaches a class (not even TObject), a pointer, a descendant or an
+    unrelated interface, TGUID.
+  - *an interface TYPE NAME* (`Supports(X, IFoo)`) is its GUID: it goes to
+    TGUID, and through TGUID to a record whose `Implicit` takes one
+    (TGUID over that), to nothing else - not to the interface itself, an
+    ancestor, Pointer, string or Variant. A name of an interface with no GUID
+    is `E2232 Interface 'INg' has no interface identification` in ANY
+    argument position, whatever the parameter - even beside an overload
+    taking TObject.
+  - *nil* goes to Pointer; a typed pointer (PChar = PByte = PGUID); a plain
+    or `of object` procedural type (=); a class, the deeper first (T1 over
+    TInterfacedObject over TObject; two off one chain `=`); an interface or
+    a `reference to` type (one), the deeper first (IA over IInterface, IA =
+    TProcRef = IX); a class reference; a dynamic array (TBytes = TIntDyn).
+    It never reaches Variant, OleVariant, a string or TGUID, nor a record
+    but through an `Implicit` from a pointer, a class or an interface (a
+    record whose `Implicit` takes a TGUID is E2250).
+  - *an untyped Pointer variable* goes to Pointer; a typed pointer (=); a
+    plain procedural type; a class - the deeper first, TClass between
+    TObject and its descendants; it reaches no interface, no method pointer
+    or `reference to` type.
+  - *through `Implicit`* (9.3.1) the built-in part ranks as a level of its
+    own: a class to its ancestor and a class to an interface are one level
+    (`Implicit(A: TObject)` = `Implicit(A: IInterface)` for a T1), a class to
+    Pointer below them; an interface to itself above an interface to its
+    ancestor; nil to Pointer above nil to a class above nil to an interface
+    (TRp over TRo over TRa = TRu). The built-in route always wins: a T1
+    takes F(Pointer) over F(TRo).
+  - *observed, not derived:* an instance of a GENERIC interface ranks
+    unlike an ordinary one - for a TG listing IG<Integer>, F(IG<Integer>)
+    = F(IInterface) and = F(TObject); for nil F(IG<Integer>) =
+    F(IInterface). A strong alias `type IA` is a new interface whose
+    ancestor is IA's ancestor: an IA variable does not reach it, and it does
+    not reach IA.
+  - *a heritage list must start with a class:* `TAOnly = class(IA)` is
+    `E2021 Class type required`, so the first item of a class's list is its
+    ancestor and the rest its interfaces.
+  No choice depends on the declaration order. *Evidence:* dcc64 37.0,
+  2026-11-06, runtime output of PasTree's local/type-conv-2026-11/n3: 24
+  arguments against 27 parameter types alone (Set A, 648 calls), every pair
+  of the types each takes in both orders (Set B, 1,502), nil, pointers,
+  procedural types, dynamic arrays, generic interfaces, aliases and
+  `implements` delegation (Sets C and D, 198 + 352).
+  *Implementation note (PasTree):* `TSemaRefConv`, `RefConvRank`,
+  `RefUserRank` (PasTree.Sema.Types); two unrelated interfaces, or two
+  classes off one chain, rank by depth there - a tie in dcc, so no code
+  that compiles meets the pair.
 - ⚠️ *A `var` or `out` parameter takes its own type only* (6.2.2, E2033), so
   the conversion ranking above has no say for it: with `V(var X: Double; D:
   Double)` declared before `V(var X: Single; D: Single)`, `V(SG, D)` for a

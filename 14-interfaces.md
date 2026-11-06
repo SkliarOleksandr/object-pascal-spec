@@ -110,6 +110,14 @@ type
   class or a descendant interface) or by a hard cast `INoGuid(I)`, which
   compiles. dcc64 37.0, 2026-10-30 (spec audit g5,
   local/probe-park/spec-audit/g5 I01.dpr, I01b.dpr).
+- ⚠️ *An interface TYPE NAME as a value is its GUID:* `Supports(X, IFoo)`
+  passes IFoo to `const IID: TGUID`. It converts to TGUID and, through it,
+  to a record whose `Implicit` takes a TGUID - to nothing else, not to the
+  interface type itself or IInterface (an interface VARIABLE converts to
+  neither TGUID nor such a record). The name of an interface without a GUID
+  is `E2232` in every argument position, even where the overload set offers
+  a TObject or a Pointer parameter. dcc64 37.0, 2026-11-06 (PasTree
+  local/type-conv-2026-11/n3 Set A; the ranking is 6.3.1).
 - Default ancestor of an `interface` is `IInterface` (≡ `IUnknown`); a
   `dispinterface` has `IDispatch` instead (14.1.2).
 - *AST:* `InterfaceType { ancestor, guid?, members[] }`.
@@ -194,6 +202,19 @@ type
   interface needs no QueryInterface). Listing `IDer, IBase` makes all three
   work. dcc64 37.0, 2026-10-30 (spec audit g5,
   local/probe-park/spec-audit/g5 I02.dpr).
+  - *The lists of the ANCESTOR classes count:* a class reaches every
+    interface its own list or any ancestor class's list names, through any
+    number of classes that list nothing (`T3 = class(T2)` with `T2 =
+    class(T1, IX)` and `T1 = class(TInterfacedObject, IB)` passes to IX, IB
+    and TInterfacedObject's IInterface); a class whose chain lists no
+    IInterface - `class(TObject, IA)` with its own `QueryInterface`,
+    `_AddRef`, `_Release` - does not pass to IInterface (E2250 for a lone
+    `F(IInterface)`), though IA descends from it. An `implements`
+    delegation (14.4.1) is still a listed interface. The first item of the
+    list must be a class (`class(IA)` is `E2021 Class type required`).
+    How these conversions rank against a class ancestor, Pointer, Variant
+    and each other is 6.3.1. dcc64 37.0, 2026-11-06 (PasTree
+    local/type-conv-2026-11/n3, Sets A and C).
 - *AST:* `interfaces[]` on the `ClassType`.
 
 ### 14.2.2 Method resolution clauses
